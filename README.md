@@ -1,4 +1,4 @@
-A Commandable SAL Component (SCS) that runs Python scripts.
+A Commandable SAL Component (SCS) that loads SAL Scripts.
 
 - `scons` to build the package and run unit tests. Note that at present most of the unit tests rely on SAL libraries for component `Test` that are specific to unix that are included in the package. We hope to manage those libraries better in the future. On macOS most tests will be skipped.
 - `setup -r .` to setup the package and dependencies

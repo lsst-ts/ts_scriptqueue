@@ -24,7 +24,6 @@ import os
 import time
 import unittest
 
-import salobj
 from scriptrunner.loader_model import LoaderModel
 
 
@@ -49,8 +48,7 @@ class LoaderModelTestCase(unittest.TestCase):
 
     def test_load(self):
         async def doit():
-            id_data = salobj.topics.CommandIdData(1, None)
-            script_info = await self.model.load(id_data=id_data, path="script1", is_standard=True)
+            script_info = await self.model.load(cmd_id=1, path="script1", is_standard=True)
             stdout, stderr = await script_info.process.communicate()
             await script_info.process.wait()
             self.assertEqual(script_info.process.returncode, 0)

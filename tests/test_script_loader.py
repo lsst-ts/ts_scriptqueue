@@ -34,7 +34,7 @@ class ScriptLoaderTestCase(unittest.TestCase):
         standardpath = os.path.join(self.datadir, "standard")
         externalpath = os.path.join(self.datadir, "external")
         self.loader = scriptrunner.ScriptLoader(standardpath=standardpath, externalpath=externalpath)
-        self.remote = salobj.Remote(SALPY_ScriptLoader, "ScriptLoader:0")
+        self.remote = salobj.Remote(SALPY_ScriptLoader)
 
     def test_load(self):
         async def doit():

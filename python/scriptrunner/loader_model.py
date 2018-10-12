@@ -115,7 +115,7 @@ class LoaderModel:
             external=utils.findscripts(self.externalpath),
         )
 
-    async def load(self, id_data, path, is_standard, callback=None):
+    async def load(self, cmd_id, path, is_standard, callback=None):
         """Load a script.
 
         Start a script in a subprocess, set ``self.process`` to the
@@ -125,8 +125,8 @@ class LoaderModel:
 
         Parameters
         ----------
-        id_data : `salobj.topics.CommandIdData` (optional)
-            Command ID and data. Ignored.
+        cmd_id : `int`
+            Command ID; recorded in the script info.
         path : `str`, `bytes` or `os.PathLike`
             Path to script, relative to standard or external root dir.
         is_standard : `bool`
@@ -155,7 +155,7 @@ class LoaderModel:
                                                            stdout=asyncio.subprocess.PIPE,
                                                            stderr=asyncio.subprocess.PIPE)
             task = asyncio.ensure_future(process.wait())
-            script_info = ScriptInfo(cmd_id=id_data.id, index=index,
+            script_info = ScriptInfo(cmd_id=cmd_id, index=index,
                                      process=process, task=task,
                                      path=path, is_standard=is_standard,
                                      timefunc=self.timefunc)

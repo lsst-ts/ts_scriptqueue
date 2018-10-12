@@ -71,41 +71,26 @@ class ScriptLoader(salobj.BaseCsc):
         if not os.path.isdir(externalpath):
             raise ValueError(f"No such dir externalpath={externalpath}")
 
-        super().__init__(SALPY_ScriptLoader, "ScriptLoader:0")
+        super().__init__(SALPY_ScriptLoader, 0)
         self.model = LoaderModel(standardpath=standardpath, externalpath=externalpath,
-                                 timefunc=self.controller.salinfo.manager.getCurrentTime)
+                                 timefunc=self.salinfo.manager.getCurrentTime)
+        # only allow one list_loaded command at a time,
+        # to avoid a confusing mess of interleaved script_info events
+        self.cmd_list_loaded.allow_multiple_callbacks = False
+
         self.do_list_available()
 
-    def do_load(self, id_data):
+    async def do_load(self, id_data):
         """Load a script.
 
         Start a script SAL component, but don't run the script.
         """
-        AckType = self.controller.cmd_load.AckType
         data = id_data.data
-
-        async def load(id_data):
-            """Load a script and report command completion."""
-            ack = AckType()
-            load_coro = self.model.load(id_data=id_data,
-                                        path=data.path,
-                                        is_standard=data.is_standard,
-                                        callback=self.put_script_info)
-            try:
-                await asyncio.wait_for(load_coro, timeout=_LOAD_TIMEOUT)
-                ack.ack = self.controller.salinfo.lib.SAL__CMD_COMPLETE
-            except TimeoutError:
-                ack.ack = self.controller.salinfo.lib.SAL__CMD_TIMEOUT
-            except Exception as e:
-                ack.ack = self.controller.salinfo.lib.SAL__CMD_FAILED
-                ack.result = str(e)
-            self.controller.cmd_load.ack(id_data, ack.ack, ack.error, ack.result)
-
-        asyncio.ensure_future(load(id_data))
-
-        ack = AckType()
-        ack.ack = self.controller.salinfo.lib.SAL__CMD_INPROGRESS
-        return ack
+        coro = self.model.load(cmd_id=id_data.cmd_id,
+                               path=data.path,
+                               is_standard=data.is_standard,
+                               callback=self.put_script_info)
+        await asyncio.wait_for(coro, timeout=_LOAD_TIMEOUT)
 
     def do_terminate(self, id_data):
         """Terminate the specified script by sending SIGTERM.
@@ -117,45 +102,27 @@ class ScriptLoader(salobj.BaseCsc):
 
         Parameters
         ----------
-        id_data : `salobj.topics.CommandIdData` (optional)
+        id_data : `salobj.CommandIdData` (optional)
             Command ID and data. Ignored.
         """
         scripts = self.model.findscripts()
-        evtdata = self.controller.evt_available_scripts.DataType()
+        evtdata = self.evt_available_scripts.DataType()
         evtdata.standard = ":".join(scripts.standard)
         evtdata.external = ":".join(scripts.external)
-        self.controller.evt_available_scripts.put(evtdata, 1)
+        self.evt_available_scripts.put(evtdata, 1)
 
-    def do_list_loaded(self, id_data):
+    async def do_list_loaded(self, id_data):
         """List loaded scripts.
 
         Parameters
         ----------
-        id_data : `salobj.topics.CommandIdData` (optional)
+        id_data : `salobj.CommandIdData` (optional)
             Command ID and data. Ignored.
         """
-        asyncio.ensure_future(self.list_loaded(id_data))
-        ack = self.controller.cmd_list_loaded.AckType()
-        ack.ack = self.controller.salinfo.lib.SAL__CMD_INPROGRESS
-        return ack
-
-    async def list_loaded(self, id_data):
-        """Asynchronous implementation of list_loaded command.
-
-        Release the event loop after putting information for each script,
-        in case there are a lot of scripts.
-        """
-        ack = self.controller.cmd_list_loaded.AckType()
-        try:
-            for script_info in self.model.info.values():
-                self.put_script_info(script_info)
-                await asyncio.sleep(0)
-            ack.ack = self.controller.salinfo.lib.SAL__CMD_COMPLETE
-        except Exception as e:
-            ack.ack = self.controller.salinfo.lib.SAL__CMD_FAILED
-            ack.result = str(e)
-        finally:
-            self.controller.cmd_list_loaded.ack(id_data, ack=ack.ack, error=ack.error, result=ack.result)
+        self.cmd_list_loaded.ackInProgress()
+        for script_info in self.model.info.values():
+            self.put_script_info(script_info)
+            await asyncio.sleep(0)  # allow other events to run
 
     def put_script_info(self, script_info, returncode=None):
         """Output information about a script using the script_info event.
@@ -173,8 +140,8 @@ class ScriptLoader(salobj.BaseCsc):
         if script_info is None:
             return
 
-        sallib = self.controller.salinfo.lib
-        evtdata = self.controller.evt_script_info.DataType()
+        sallib = self.salinfo.lib
+        evtdata = self.evt_script_info.DataType()
         evtdata.cmd_id = script_info.cmd_id
         evtdata.index = script_info.index
         evtdata.path = script_info.path
@@ -193,4 +160,4 @@ class ScriptLoader(salobj.BaseCsc):
                 evtdata.process_state = sallib.script_info_FAILED
             else:
                 evtdata.process_state = sallib.script_info_TERMINATED
-        self.controller.evt_script_info.put(evtdata, 1)
+        self.evt_script_info.put(evtdata, 1)

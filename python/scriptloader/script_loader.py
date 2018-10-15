@@ -1,4 +1,4 @@
-# This file is part of scriptrunner.
+# This file is part of scriptloader.
 #
 # Developed for the LSST Telescope and Site Systems.
 # This product includes software developed by the LSST Project
@@ -28,7 +28,7 @@ import SALPY_ScriptLoader
 import salobj
 from .loader_model import LoaderModel
 
-_LOAD_TIMEOUT = 5  # seconds
+_LOAD_TIMEOUT = 20  # seconds
 
 
 class ScriptLoader(salobj.BaseCsc):
@@ -37,9 +37,9 @@ class ScriptLoader(salobj.BaseCsc):
     Parameters
     ----------
     standardpath : `str`, `bytes` or `os.PathLike`
-        Path to standard modules.
+        Path to standard SAL scripts.
     externalpath : `str`, `bytes` or `os.PathLike`
-        Path to external modules.
+        Path to external SAL scripts.
 
     Notes
     -----
@@ -59,8 +59,8 @@ class ScriptLoader(salobj.BaseCsc):
     * TO DO (this will be implemented as part of TSS-3148):
       Once the script is fully loaded, the loader will send the
       configuration specified in the ``load`` command.
-    * Configuring the script causes it to output an estimate of its
-      duration and puts the script into the CONFIGURED state,
+    * Configuring the script causes it to output metadata and puts
+      the script into the `ScriptState.CONFIGURED` state,
       which enables it to be run.
     * To run the script issue the ``run`` command to the ``Script`` SAL
       component (not the `ScriptLoader`).
@@ -72,23 +72,20 @@ class ScriptLoader(salobj.BaseCsc):
             raise ValueError(f"No such dir externalpath={externalpath}")
 
         super().__init__(SALPY_ScriptLoader, 0)
-        self.model = LoaderModel(standardpath=standardpath, externalpath=externalpath,
-                                 timefunc=self.salinfo.manager.getCurrentTime)
-        # only allow one list_loaded command at a time,
-        # to avoid a confusing mess of interleaved script_info events
-        self.cmd_list_loaded.allow_multiple_callbacks = False
+        self.model = LoaderModel(standardpath=standardpath, externalpath=externalpath)
+        self.cmd_load.allow_multiple_callbacks = True
 
         self.do_list_available()
 
     async def do_load(self, id_data):
         """Load a script.
 
-        Start a script SAL component, but don't run the script.
+        Start and configure a script SAL component, but don't run it.
         """
-        data = id_data.data
         coro = self.model.load(cmd_id=id_data.cmd_id,
-                               path=data.path,
-                               is_standard=data.is_standard,
+                               is_standard=id_data.data.is_standard,
+                               path=id_data.data.path,
+                               config=id_data.data.config,
                                callback=self.put_script_info)
         await asyncio.wait_for(coro, timeout=_LOAD_TIMEOUT)
 
@@ -127,12 +124,12 @@ class ScriptLoader(salobj.BaseCsc):
     def put_script_info(self, script_info, returncode=None):
         """Output information about a script using the script_info event.
 
-        Intended as a callback for self.model.task,
+        Intended as a callback for ``self.model.task``,
         and only if the script is successfully loaded.
 
         Parameters
         ----------
-        script_info : `scriptrunner.ScriptInfo`
+        script_info : `scriptloader.ScriptInfo`
             Information about the script
         returncode : `int` (optional)
             Ignored, but needed for use as a callback.

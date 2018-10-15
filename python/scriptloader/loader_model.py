@@ -1,4 +1,4 @@
-# This file is part of scriptrunner.
+# This file is part of scriptloader.
 #
 # Developed for the LSST Telescope and Site Systems.
 # This product includes software developed by the LSST Project
@@ -26,10 +26,13 @@ import functools
 import os
 import pathlib
 
+import SALPY_Script
+import salobj
 from . import utils
 
-
-_MaxIndex = (2 << 30) - 1
+_LOAD_TIMEOUT = 2  # seconds
+_STATE_TIMEOUT = 15  # seconds; includes time to make Script SAL component
+_CONFIGURE_TIMEOUT = 15  # seconds
 
 
 class Scripts:
@@ -38,9 +41,9 @@ class Scripts:
     Parameters
     ----------
     standard : `iterable` of `str`
-        Relative paths to standard scripts
+        Relative paths to standard SAL scripts
     external : `iterable` of `str`
-        Relative paths to external scripts
+        Relative paths to external SAL scripts
     """
     def __init__(self, standard, external):
         self.standard = standard
@@ -49,21 +52,41 @@ class Scripts:
 
 class ScriptInfo:
     """Information about a loaded script.
+
+    Parameters
+    ----------
+    cmd_id : `int`
+        ID of ``load`` command.
+    is_standard : `bool`
+        Is this a standard (True) or external (False) script?
+    path : `str`, `bytes` or `os.PathLike`
+        Path to script, relative to standard or external root dir.
+    index : `int`
+        Index of script. This must be unique among all Script SAL
+        components that are currently running.
+    remote : `salobj.Remote`
+        Remote which talks to the ``Script`` SAL component.
+    process : `asyncio.subprocess.Process`
+        Process in which the ``Script`` SAL component is loaded.
+    task : `asyncio.Task`
+        Task awaiting ``process.wait()``
     """
-    def __init__(self, cmd_id, index, path, is_standard, process, task, timefunc):
-        self.cmd_id = int(cmd_id)  # command ID
-        self.index = int(index)  # index of Script SAL component
-        self.path = str(path)  # relative path to script
-        self.is_standard = bool(is_standard)  # is this a standard script?
-        self.process = process  # script process
-        self.task = task  # task on process.wait()
-        self.timefunc = timefunc
-        self.timestamp_start = timefunc()
+    def __init__(self, cmd_id, is_standard, path, index, remote, process, task):
+        self.cmd_id = int(cmd_id)
+        self.is_standard = bool(is_standard)
+        self.path = str(path)
+        self.index = int(index)
+        self.remote = remote
+        self.process = process
+        self.task = task
+        self.timestamp_start = self.remote.salinfo.manager.getCurrentTime()
+        """Time at which this ``ScriptInfo`` was constructed."""
         self.timestamp_end = 0
+        """Time at which ``task`` ended, or 0 if still running."""
         self.task.add_done_callback(self._set_timestamp_end)
 
     def _set_timestamp_end(self, returncode=None):
-        self.timestamp_end = self.timefunc()
+        self.timestamp_end = self.remote.salinfo.manager.getCurrentTime()
 
 
 class LoaderModel:
@@ -72,35 +95,26 @@ class LoaderModel:
     Parameters
     ----------
     standardpath : `str`, `bytes` or `os.PathLike`
-        Path to standard modules.
+        Path to standard SAL scripts.
     externalpath : `str`, `bytes` or `os.PathLike`
-        Path to external modules.
-    timefunc : `callable`
-        A function that returns the current SAL standard time as a float.
-        It will be called with no arguments.
+        Path to external SAL scripts.
 
     Raises
     ------
     ValueError
         If ``standardpath`` or ``externalpath`` does not exist.
-    TypeError
-        If ``timefunc`` is not callable.
     """
-    _previous_index = 0
-
-    def __init__(self, standardpath, externalpath, timefunc):
+    def __init__(self, standardpath, externalpath):
         if not os.path.isdir(standardpath):
             raise ValueError(f"No such dir standardpath={standardpath}")
         if not os.path.isdir(externalpath):
             raise ValueError(f"No such dir externalpath={externalpath}")
-        if not callable(timefunc):
-            raise TypeError(f"timefunc={timefunc} is not callable")
 
         self.standardpath = standardpath
         self.externalpath = externalpath
-        self.timefunc = timefunc
         # dict of script index: script info
         self.info = {}
+        self._index_generator = salobj.index_generator()
 
     def findscripts(self):
         """Find available scripts.
@@ -115,28 +129,38 @@ class LoaderModel:
             external=utils.findscripts(self.externalpath),
         )
 
-    async def load(self, cmd_id, path, is_standard, callback=None):
-        """Load a script.
+    async def load(self, cmd_id, path, is_standard, config, callback=None):
+        """Load and optionally configure a script.
 
         Start a script in a subprocess, set ``self.process`` to the
-        resulting ``asyncio.Process``, set ``self.task`` to an
-        ``asyncio.Task`` that waits for the process to finish,
-        then wait for the process to start.
+        resulting ``asyncio.Process``, and set ``self.task`` to an
+        ``asyncio.Task`` that waits for the process to finish.
+        Wait for the process to start.
+        Configure the script.
 
         Parameters
         ----------
         cmd_id : `int`
             Command ID; recorded in the script info.
-        path : `str`, `bytes` or `os.PathLike`
-            Path to script, relative to standard or external root dir.
         is_standard : `bool`
             Is this a standard (True) or external (False) script?
+        path : `str`, `bytes` or `os.PathLike`
+            Path to script, relative to standard or external root dir.
+        config : `str` (optional)
+            Configuration data as a YAML encoded string.
+            If None then do not configure the script.
         callback : `callable`
             A function that will be called when the process starts
             and finishes. It receives two argument:
 
             * The script info (a `ScriptInfo`).
             * The final return code, or None if not done
+
+        Returns
+        -------
+        remote : `salobj.Remote`
+            A remote that talks to the script; note that
+            remote.salinfo.index contains the script index.
 
         Raises
         ------
@@ -145,38 +169,66 @@ class LoaderModel:
         """
         if callback and not callable(callback):
             raise TypeError(f"callback={callback} not callable")
-        fullpath = self.makefullpath(path, is_standard)
+        fullpath = self.makefullpath(is_standard=is_standard, path=path)
         initialpath = os.environ["PATH"]
         scriptdir, scriptname = os.path.split(fullpath)
         try:
-            index = self.next_index()
             os.environ["PATH"] = scriptdir + ":" + initialpath
-            process = await asyncio.create_subprocess_exec(scriptname, str(index),
-                                                           stdout=asyncio.subprocess.PIPE,
-                                                           stderr=asyncio.subprocess.PIPE)
+            index = next(self._index_generator)
+            remote = salobj.Remote(SALPY_Script, index)
+            process = await asyncio.create_subprocess_exec(scriptname, str(index))
             task = asyncio.ensure_future(process.wait())
-            script_info = ScriptInfo(cmd_id=cmd_id, index=index,
-                                     process=process, task=task,
-                                     path=path, is_standard=is_standard,
-                                     timefunc=self.timefunc)
+            script_info = ScriptInfo(cmd_id=cmd_id,
+                                     is_standard=is_standard,
+                                     path=path,
+                                     index=index,
+                                     remote=remote,
+                                     process=process,
+                                     task=task)
+            task.add_done_callback(functools.partial(self._delete_script_info, index))
             self.info[index] = script_info
             if callback:
                 callback(script_info, None)  # call for initial state
                 task.add_done_callback(functools.partial(callback, script_info))
+
+            if config is not None:
+                try:
+                    await remote.evt_state.next(timeout=_STATE_TIMEOUT)
+
+                    config_data = remote.cmd_configure.DataType()
+                    config_data.config = config
+                    id_ack = await remote.cmd_configure.start(config_data, timeout=_CONFIGURE_TIMEOUT)
+                    if id_ack.ack.ack != remote.salinfo.lib.SAL__CMD_COMPLETE:
+                        raise salobj.ExpectedError(f"Configure command failed")
+                except Exception as e:
+                    self.terminate(script_info.index)
+                    script_info.remote = None
+                    raise
+
             return script_info
         finally:
             os.environ["PATH"] = initialpath
 
-    def makefullpath(self, path, is_standard):
+    def _delete_script_info(self, index, returncode):
+        if returncode is None:
+            return
+
+        async def delete_shortly(index):
+            await asyncio.sleep(0.1)
+            del self.info[index]
+
+        asyncio.ensure_future(delete_shortly(index))
+
+    def makefullpath(self, is_standard, path):
         """Make a full path from path and is_standard and check that
         it points to a runnable script.
 
         Parameters
         ----------
-        path : `str`, `bytes` or `os.PathLike`
-            Path to script, relative to standard or external root dir.
         is_standard : `bool`
             Is this a standard (True) or external (False) script?
+        path : `str`, `bytes` or `os.PathLike`
+            Path to script, relative to standard or external root dir.
 
         Returns
         -------
@@ -230,14 +282,11 @@ class LoaderModel:
             return
         script_info.process.terminate()
 
-    @classmethod
-    def next_index(cls):
-        """Get the next index for a Script SAL component.
-
-        Starts at 1 and Wraps around to 1 after the maximum positive index.
-        """
-        cls._previous_index += 1
-        if cls._previous_index > _MaxIndex:
-            cls._previous_index = 1
-
-        return cls._previous_index
+    def terminate_all(self):
+        """Terminate all subprocesses and return the number killed."""
+        nkilled = 0
+        for script_info in self.info.values():
+            if script_info.process.returncode is None:
+                nkilled += 1
+                script_info.process.terminate()
+        return nkilled

@@ -1,4 +1,4 @@
-# This file is part of scriptrunner.
+# This file is part of scriptloader.
 #
 # Developed for the LSST Telescope and Site Systems.
 # This product includes software developed by the LSST Project
@@ -21,68 +21,88 @@
 
 import asyncio
 import os
-import time
 import unittest
+import warnings
 
-from scriptrunner.loader_model import LoaderModel
+import salobj
+import scriptloader
 
 
 class LoaderModelTestCase(unittest.TestCase):
     def setUp(self):
+        salobj.test_utils.set_random_lsst_dds_domain()
         self.datadir = os.path.abspath(os.path.join(os.path.dirname(__file__), "data"))
         self.standardpath = os.path.join(self.datadir, "standard")
         self.externalpath = os.path.join(self.datadir, "external")
-        self.model = LoaderModel(standardpath=self.standardpath, externalpath=self.externalpath,
-                                 timefunc=time.time)
+        self.model = scriptloader.LoaderModel(standardpath=self.standardpath, externalpath=self.externalpath)
+
+    def tearDown(self):
+        nkilled = self.model.terminate_all()
+        if nkilled > 0:
+            warnings.warn(f"Killed {nkilled} subprocesses")
 
     def test_constructor_errors(self):
         nonexistentpath = os.path.join(self.datadir, "garbage")
         with self.assertRaises(ValueError):
-            LoaderModel(standardpath=self.standardpath, externalpath=nonexistentpath, timefunc=time.time)
+            scriptloader.LoaderModel(standardpath=self.standardpath, externalpath=nonexistentpath)
         with self.assertRaises(ValueError):
-            LoaderModel(standardpath=nonexistentpath, externalpath=self.externalpath, timefunc=time.time)
+            scriptloader.LoaderModel(standardpath=nonexistentpath, externalpath=self.externalpath)
         with self.assertRaises(ValueError):
-            LoaderModel(standardpath=nonexistentpath, externalpath=nonexistentpath, timefunc=time.time)
-        with self.assertRaises(TypeError):
-            LoaderModel(standardpath=self.standardpath, externalpath=self.externalpath, timefunc=5)
+            scriptloader.LoaderModel(standardpath=nonexistentpath, externalpath=nonexistentpath)
 
-    def test_load(self):
+    def test_load_without_config(self):
         async def doit():
-            script_info = await self.model.load(cmd_id=1, path="script1", is_standard=True)
-            stdout, stderr = await script_info.process.communicate()
+            script_path = os.path.join("subdir", "subsubdir", "script4")
+            load_coro = self.model.load(cmd_id=1, path=script_path, is_standard=True, config=None)
+            script_info = await asyncio.wait_for(load_coro, 20)
             await script_info.process.wait()
             self.assertEqual(script_info.process.returncode, 0)
-            self.assertEqual(stdout.decode(), "script1 done\n")
-            self.assertEqual(stderr.decode(), "")
             self.assertGreater(script_info.timestamp_start, 0)
             # the callback that sets timestamp_end hasn't been called yet,
             # so sleep to give it a chance
-            await asyncio.sleep(0)
+            await asyncio.sleep(0.1)
             self.assertGreater(script_info.timestamp_end, script_info.timestamp_start)
 
         asyncio.get_event_loop().run_until_complete(doit())
 
-    def test_makefullpath(self):
-        for badpath, is_standard in (
-            ("../script5", True),  # file is in external, not standard
-            ("subdir/nonex2", True),  # file is not executable
-            ("doesnotexist", True),  # file does not exist
-            ("subdir/_private", False),  # file is private
-            ("subdir/.invisible", False),  # file is invisible
-            ("subdir", False),  # not a file
-        ):
-            with self.subTest(badpath=badpath, is_standard=is_standard):
-                with self.assertRaises(RuntimeError):
-                    self.model.makefullpath(path=badpath, is_standard=is_standard)
+    def test_load_and_configure(self):
+        async def doit():
+            script_path = os.path.join("subdir", "script6")
+            config = "wait_time: 0.1"
+            load_coro = self.model.load(cmd_id=1, path=script_path, is_standard=False, config=config)
+            script_info = await asyncio.wait_for(load_coro, 20)
+            self.assertIsNone(script_info.process.returncode)
 
-        for goodpath, is_standard in (
-            ("subdir/subsubdir/script4", True),
-            ("subdir/script3", False),
-            ("script2", True),
+            remote = script_info.remote
+            state = remote.evt_state.get()
+            self.assertEqual(state.state, scriptloader.ScriptState.CONFIGURED)
+
+            await remote.cmd_run.start(remote.cmd_run.DataType(), 2)
+            await asyncio.wait_for(script_info.process.wait(), 2)
+
+        asyncio.get_event_loop().run_until_complete(doit())
+
+    def test_makefullpath(self):
+        for is_standard, badpath in (
+            (True, "../script5"),  # file is in external, not standard
+            (True, "subdir/nonex2"),  # file is not executable
+            (True, "doesnotexist"),  # file does not exist
+            (False, "subdir/_private"),  # file is private
+            (False, "subdir/.invisible"),  # file is invisible
+            (False, "subdir"),  # not a file
         ):
-            with self.subTest(path=goodpath, is_standard=is_standard):
+            with self.subTest(is_standard=is_standard, badpath=badpath):
+                with self.assertRaises(RuntimeError):
+                    self.model.makefullpath(is_standard=is_standard, path=badpath)
+
+        for is_standard, goodpath in (
+            (True, "subdir/subsubdir/script4"),
+            (False, "subdir/script3"),
+            (True, "script2"),
+        ):
+            with self.subTest(is_standard=is_standard, path=goodpath):
                 root = self.standardpath if is_standard else self.externalpath
-                fullpath = self.model.makefullpath(path=goodpath, is_standard=is_standard)
+                fullpath = self.model.makefullpath(is_standard=is_standard, path=goodpath)
                 expected_fullpath = os.path.join(root, goodpath)
                 self.assertTrue(fullpath.samefile(expected_fullpath))
 

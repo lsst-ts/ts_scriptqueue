@@ -90,11 +90,11 @@ class BaseScriptTestCase(unittest.TestCase):
         self.assertEqual(script.fail_cleanup, kwargs.get("fail_cleanup", False))
         self.assertEqual(script.state.state, ScriptState.CONFIGURED)
 
-    def test_set_checkpoints(self):
+    def test_setCheckpoints(self):
         script = TestScript(index=self.index)
 
         # try valid values
-        checkpoints_data = script.cmd_set_checkpoints.DataType()
+        checkpoints_data = script.cmd_setCheckpoints.DataType()
         id_data = salobj.CommandIdData(1, checkpoints_data)
         for pause, stop in (
             ("something", ""),
@@ -103,17 +103,17 @@ class BaseScriptTestCase(unittest.TestCase):
         ):
             id_data.data.pause = pause
             id_data.data.stop = stop
-            script.do_set_checkpoints(id_data)
+            script.do_setCheckpoints(id_data)
             self.assertEqual(script.checkpoints.pause, pause)
             self.assertEqual(script.checkpoints.stop, stop)
 
         # try with at least one checkpoint not a valid regex;
-        # do_set_checkpoints should raise and not change the checkpoints
+        # do_setCheckpoints should raise and not change the checkpoints
         initial_pause = "initial_pause"
         initial_stop = "initial_stop"
         id_data.data.pause = initial_pause
         id_data.data.stop = initial_stop
-        script.do_set_checkpoints(id_data)
+        script.do_setCheckpoints(id_data)
         for bad_pause, bad_stop in (
             ("(", ""),
             ("", "("),
@@ -122,7 +122,7 @@ class BaseScriptTestCase(unittest.TestCase):
             id_data.data.pause = bad_pause
             id_data.data.stop = bad_stop
             with self.assertRaises(salobj.ExpectedError):
-                script.do_set_checkpoints(id_data)
+                script.do_setCheckpoints(id_data)
             self.assertEqual(script.checkpoints.pause, initial_pause)
             self.assertEqual(script.checkpoints.stop, initial_stop)
 
@@ -221,13 +221,13 @@ class BaseScriptTestCase(unittest.TestCase):
             self.configure_script(script, wait_time=wait_time)
 
             # set a pause checkpoint
-            set_checkpoint_id_data = salobj.CommandIdData(cmd_id=2,
-                                                          data=script.cmd_set_checkpoints.DataType())
+            setCheckpoints_id_data = salobj.CommandIdData(cmd_id=2,
+                                                          data=script.cmd_setCheckpoints.DataType())
             checkpoint_named_start = "start"
             checkpoint_that_does_not_exist = "nonexistent checkpoint"
-            set_checkpoint_id_data.data.pause = checkpoint_named_start
-            set_checkpoint_id_data.data.stop = checkpoint_that_does_not_exist
-            script.do_set_checkpoints(set_checkpoint_id_data)
+            setCheckpoints_id_data.data.pause = checkpoint_named_start
+            setCheckpoints_id_data.data.stop = checkpoint_that_does_not_exist
+            script.do_setCheckpoints(setCheckpoints_id_data)
             self.assertEqual(script.checkpoints.pause, checkpoint_named_start)
             self.assertEqual(script.checkpoints.stop, checkpoint_that_does_not_exist)
 
@@ -238,7 +238,7 @@ class BaseScriptTestCase(unittest.TestCase):
             while script.state.state != ScriptState.PAUSED:
                 niter += 1
                 await asyncio.sleep(0)
-            self.assertEqual(script.state.last_checkpoint, checkpoint_named_start)
+            self.assertEqual(script.state.lastCheckpoint, checkpoint_named_start)
             self.assertEqual(script.checkpoints.pause, checkpoint_named_start)
             self.assertEqual(script.checkpoints.stop, checkpoint_that_does_not_exist)
             resume_id_data = salobj.CommandIdData(cmd_id=4, data=script.cmd_resume.DataType())
@@ -259,11 +259,11 @@ class BaseScriptTestCase(unittest.TestCase):
             self.configure_script(script, wait_time=wait_time)
 
             # set a stop checkpoint
-            set_checkpoint_id_data = salobj.CommandIdData(cmd_id=2,
-                                                          data=script.cmd_set_checkpoints.DataType())
+            setCheckpoints_id_data = salobj.CommandIdData(cmd_id=2,
+                                                          data=script.cmd_setCheckpoints.DataType())
             checkpoint_named_end = "end"
-            set_checkpoint_id_data.data.stop = checkpoint_named_end
-            script.do_set_checkpoints(set_checkpoint_id_data)
+            setCheckpoints_id_data.data.stop = checkpoint_named_end
+            script.do_setCheckpoints(setCheckpoints_id_data)
             self.assertEqual(script.checkpoints.pause, "")
             self.assertEqual(script.checkpoints.stop, checkpoint_named_end)
 
@@ -271,7 +271,7 @@ class BaseScriptTestCase(unittest.TestCase):
             run_id_data = salobj.CommandIdData(cmd_id=3, data=script.cmd_run.DataType())
             await asyncio.wait_for(script.do_run(run_id_data), 2)
             final_state = await asyncio.wait_for(script.final_state_future, 2)
-            self.assertEqual(script.state.last_checkpoint, checkpoint_named_end)
+            self.assertEqual(script.state.lastCheckpoint, checkpoint_named_end)
             self.assertEqual(final_state.state, ScriptState.STOPPED)
             self.assertEqual(script.state.state, ScriptState.STOPPED)
             duration = time.time() - start_time
@@ -289,24 +289,24 @@ class BaseScriptTestCase(unittest.TestCase):
             self.configure_script(script, wait_time=wait_time)
 
             # set a stop checkpoint
-            set_checkpoint_id_data = salobj.CommandIdData(cmd_id=2,
-                                                          data=script.cmd_set_checkpoints.DataType())
+            setCheckpoints_id_data = salobj.CommandIdData(cmd_id=2,
+                                                          data=script.cmd_setCheckpoints.DataType())
             checkpoint_named_start = "start"
-            set_checkpoint_id_data.data.pause = checkpoint_named_start
-            script.do_set_checkpoints(set_checkpoint_id_data)
+            setCheckpoints_id_data.data.pause = checkpoint_named_start
+            script.do_setCheckpoints(setCheckpoints_id_data)
             self.assertEqual(script.checkpoints.pause, checkpoint_named_start)
             self.assertEqual(script.checkpoints.stop, "")
 
             start_time = time.time()
             run_id_data = salobj.CommandIdData(cmd_id=3, data=script.cmd_run.DataType())
             asyncio.ensure_future(script.do_run(run_id_data))
-            while script.state.last_checkpoint != "start":
+            while script.state.lastCheckpoint != "start":
                 await asyncio.sleep(0)
             self.assertEqual(script.state.state, ScriptState.PAUSED)
             stop_id_data = salobj.CommandIdData(cmd_id=4, data=script.cmd_stop.DataType())
             await script.do_stop(stop_id_data)
             final_state = await asyncio.wait_for(script.final_state_future, 2)
-            self.assertEqual(script.state.last_checkpoint, checkpoint_named_start)
+            self.assertEqual(script.state.lastCheckpoint, checkpoint_named_start)
             self.assertEqual(final_state.state, ScriptState.STOPPED)
             self.assertEqual(script.state.state, ScriptState.STOPPED)
             duration = time.time() - start_time
@@ -331,14 +331,14 @@ class BaseScriptTestCase(unittest.TestCase):
             start_time = time.time()
             run_id_data = salobj.CommandIdData(cmd_id=3, data=script.cmd_run.DataType())
             asyncio.ensure_future(script.do_run(run_id_data))
-            while script.state.last_checkpoint != checkpoint_named_start:
+            while script.state.lastCheckpoint != checkpoint_named_start:
                 await asyncio.sleep(0)
             self.assertEqual(script.state.state, ScriptState.RUNNING)
             await asyncio.sleep(pause_time)
             stop_id_data = salobj.CommandIdData(cmd_id=4, data=script.cmd_stop.DataType())
             await script.do_stop(stop_id_data)
             final_state = await asyncio.wait_for(script.final_state_future, 2)
-            self.assertEqual(script.state.last_checkpoint, checkpoint_named_start)
+            self.assertEqual(script.state.lastCheckpoint, checkpoint_named_start)
             self.assertEqual(final_state.state, ScriptState.STOPPED)
             self.assertEqual(script.state.state, ScriptState.STOPPED)
             duration = time.time() - start_time
@@ -365,7 +365,7 @@ class BaseScriptTestCase(unittest.TestCase):
                 run_id_data = salobj.CommandIdData(cmd_id=3, data=script.cmd_run.DataType())
                 await asyncio.wait_for(script.do_run(run_id_data), 2)
                 final_state = await asyncio.wait_for(script.final_state_future, 2)
-                self.assertEqual(script.state.last_checkpoint, desired_checkpoint)
+                self.assertEqual(script.state.lastCheckpoint, desired_checkpoint)
                 self.assertEqual(final_state.state, ScriptState.FAILED)
                 self.assertEqual(script.state.state, ScriptState.FAILED)
                 duration = time.time() - start_time
@@ -388,11 +388,11 @@ class BaseScriptTestCase(unittest.TestCase):
             self.assertIsNone(self.process.returncode)
 
             state = await remote.evt_state.next(flush=False, timeout=20)
-            self.assertEqual(state.state, SALPY_Script.state_UNCONFIGURED)
+            self.assertEqual(state.state, ScriptState.UNCONFIGURED)
 
-            set_logging_data = remote.cmd_set_logging.DataType()
-            set_logging_data.level = logging.INFO
-            ack_id = await remote.cmd_set_logging.start(set_logging_data, timeout=2)
+            setLogging_data = remote.cmd_setLogging.DataType()
+            setLogging_data.level = logging.INFO
+            ack_id = await remote.cmd_setLogging.start(setLogging_data, timeout=2)
             self.assertEqual(ack_id.ack.ack, remote.salinfo.lib.SAL__CMD_COMPLETE)
 
             configure_data = remote.cmd_configure.DataType()
@@ -402,7 +402,7 @@ class BaseScriptTestCase(unittest.TestCase):
 
             metadata = remote.evt_metadata.get()
             self.assertEqual(metadata.duration, 1)
-            log_msg = remote.evt_log_message.get()
+            log_msg = remote.evt_logMessage.get()
             self.assertEqual(log_msg.message, "Configure succeeded")
 
             run_data = remote.cmd_run.DataType()

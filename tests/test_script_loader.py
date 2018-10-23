@@ -48,28 +48,28 @@ class ScriptLoaderTestCase(unittest.TestCase):
     def test_load(self):
         async def doit():
             load_data = self.remote.cmd_load.DataType()
-            load_data.is_standard = False
+            load_data.isStandard = False
             load_data.path = "script1"
             load_data.config = "wait_time: 1"
-            info_coro = self.remote.evt_script_info.next(timeout=2)
+            info_coro = self.remote.evt_scriptInfo.next(timeout=2)
             id_ack = await self.remote.cmd_load.start(load_data, timeout=30)
             self.assertEqual(id_ack.ack.ack, self.remote.salinfo.lib.SAL__CMD_COMPLETE)
             script_info1 = await info_coro
-            self.assertEqual(script_info1.process_state, 1)
+            self.assertEqual(script_info1.processState, 1)
             self.assertGreater(script_info1.timestamp_start, 0)
             self.assertEqual(script_info1.timestamp_end, 0)
-            self.assertEqual(script_info1.cmd_id, id_ack.cmd_id)
+            self.assertEqual(script_info1.cmdId, id_ack.cmd_id)
 
-            info_coro2 = self.remote.evt_script_info.next(timeout=3)
-            remote = salobj.Remote(SALPY_Script, script_info1.index)
+            info_coro2 = self.remote.evt_scriptInfo.next(timeout=3)
+            remote = salobj.Remote(SALPY_Script, script_info1.ind)
             id_ack = await remote.cmd_run.start(remote.cmd_run.DataType(), timeout=2)
             self.assertEqual(id_ack.ack.ack, remote.salinfo.lib.SAL__CMD_COMPLETE)
 
             script_info2 = await info_coro2
-            self.assertEqual(script_info2.process_state, 2)
+            self.assertEqual(script_info2.processState, 2)
             self.assertEqual(script_info2.timestamp_start, script_info1.timestamp_start)
             self.assertGreater(script_info2.timestamp_end, script_info2.timestamp_start)
-            self.assertEqual(script_info2.cmd_id, script_info1.cmd_id)
+            self.assertEqual(script_info2.cmdId, script_info1.cmdId)
 
         asyncio.get_event_loop().run_until_complete(doit())
 

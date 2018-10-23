@@ -75,7 +75,7 @@ class ScriptLoader(salobj.BaseCsc):
         self.model = LoaderModel(standardpath=standardpath, externalpath=externalpath)
         self.cmd_load.allow_multiple_callbacks = True
 
-        self.do_list_available()
+        self.do_listAvailable()
 
     async def do_load(self, id_data):
         """Load a script.
@@ -83,7 +83,7 @@ class ScriptLoader(salobj.BaseCsc):
         Start and configure a script SAL component, but don't run it.
         """
         coro = self.model.load(cmd_id=id_data.cmd_id,
-                               is_standard=id_data.data.is_standard,
+                               is_standard=id_data.data.isStandard,
                                path=id_data.data.path,
                                config=id_data.data.config,
                                callback=self.put_script_info)
@@ -92,9 +92,9 @@ class ScriptLoader(salobj.BaseCsc):
     def do_terminate(self, id_data):
         """Terminate the specified script by sending SIGTERM.
         """
-        self.model.terminate(id_data.data.index)
+        self.model.terminate(id_data.data.ind)
 
-    def do_list_available(self, id_data=None):
+    def do_listAvailable(self, id_data=None):
         """List available scripts.
 
         Parameters
@@ -103,12 +103,12 @@ class ScriptLoader(salobj.BaseCsc):
             Command ID and data. Ignored.
         """
         scripts = self.model.findscripts()
-        evtdata = self.evt_available_scripts.DataType()
+        evtdata = self.evt_availableScripts.DataType()
         evtdata.standard = ":".join(scripts.standard)
         evtdata.external = ":".join(scripts.external)
-        self.evt_available_scripts.put(evtdata, 1)
+        self.evt_availableScripts.put(evtdata, 1)
 
-    async def do_list_loaded(self, id_data):
+    async def do_listLoaded(self, id_data):
         """List loaded scripts.
 
         Parameters
@@ -116,7 +116,7 @@ class ScriptLoader(salobj.BaseCsc):
         id_data : `salobj.CommandIdData` (optional)
             Command ID and data. Ignored.
         """
-        self.cmd_list_loaded.ackInProgress()
+        self.cmd_listLoaded.ackInProgress()
         for script_info in self.model.info.values():
             self.put_script_info(script_info)
             await asyncio.sleep(0)  # allow other events to run
@@ -138,23 +138,23 @@ class ScriptLoader(salobj.BaseCsc):
             return
 
         sallib = self.salinfo.lib
-        evtdata = self.evt_script_info.DataType()
-        evtdata.cmd_id = script_info.cmd_id
-        evtdata.index = script_info.index
+        evtdata = self.evt_scriptInfo.DataType()
+        evtdata.cmdId = script_info.cmd_id
+        evtdata.ind = script_info.index
         evtdata.path = script_info.path
-        evtdata.is_standard = script_info.is_standard
+        evtdata.isStandard = script_info.is_standard
         evtdata.timestamp_start = script_info.timestamp_start
         evtdata.timestamp_end = script_info.timestamp_end
         returncode = script_info.process.returncode
         if returncode is None:
-            evtdata.process_state = sallib.script_info_LOADED
+            evtdata.processState = sallib.scriptInfo_Loaded
         else:
             # the process is finished; delete the information
             del self.model.info[script_info.index]
             if returncode == 0:
-                evtdata.process_state = sallib.script_info_COMPLETE
+                evtdata.processState = sallib.scriptInfo_Complete
             elif returncode > 0:
-                evtdata.process_state = sallib.script_info_FAILED
+                evtdata.processState = sallib.scriptInfo_Failed
             else:
-                evtdata.process_state = sallib.script_info_TERMINATED
-        self.evt_script_info.put(evtdata, 1)
+                evtdata.processState = sallib.scriptInfo_Terminated
+        self.evt_scriptInfo.put(evtdata, 1)

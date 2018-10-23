@@ -1,4 +1,4 @@
-# This file is part of scriptrunner.
+# This file is part of scriptloader.
 #
 # Developed for the LSST Telescope and Site Systems.
 # This product includes software developed by the LSST Project
@@ -22,28 +22,37 @@
 import asyncio
 import os
 import unittest
+import warnings
 
 import SALPY_ScriptLoader
+import SALPY_Script
 import salobj
-import scriptrunner
+import scriptloader
 
 
 class ScriptLoaderTestCase(unittest.TestCase):
     def setUp(self):
+        salobj.test_utils.set_random_lsst_dds_domain()
         self.datadir = os.path.abspath(os.path.join(os.path.dirname(__file__), "data"))
         standardpath = os.path.join(self.datadir, "standard")
         externalpath = os.path.join(self.datadir, "external")
-        self.loader = scriptrunner.ScriptLoader(standardpath=standardpath, externalpath=externalpath)
-        self.remote = salobj.Remote(SALPY_ScriptLoader, "ScriptLoader:0")
+        self.loader = scriptloader.ScriptLoader(standardpath=standardpath, externalpath=externalpath)
+        self.remote = salobj.Remote(SALPY_ScriptLoader)
+        self.process = None
+
+    def tearDown(self):
+        nkilled = self.loader.model.terminate_all()
+        if nkilled > 0:
+            warnings.warn(f"Killed {nkilled} subprocesses")
 
     def test_load(self):
         async def doit():
             load_data = self.remote.cmd_load.DataType()
+            load_data.is_standard = False
             load_data.path = "script1"
-            load_data.is_standard = True
-            script_info_data = self.remote.evt_script_info.DataType()
-            info_coro = self.remote.evt_script_info.next(script_info_data)
-            id_ack = await self.remote.cmd_load.start(load_data, timeout=5)
+            load_data.config = "wait_time: 1"
+            info_coro = self.remote.evt_script_info.next(timeout=2)
+            id_ack = await self.remote.cmd_load.start(load_data, timeout=30)
             self.assertEqual(id_ack.ack.ack, self.remote.salinfo.lib.SAL__CMD_COMPLETE)
             script_info1 = await info_coro
             self.assertEqual(script_info1.process_state, 1)
@@ -51,11 +60,16 @@ class ScriptLoaderTestCase(unittest.TestCase):
             self.assertEqual(script_info1.timestamp_end, 0)
             self.assertEqual(script_info1.cmd_id, id_ack.cmd_id)
 
-            script_info2 = await self.remote.evt_script_info.next(script_info_data)
+            info_coro2 = self.remote.evt_script_info.next(timeout=3)
+            remote = salobj.Remote(SALPY_Script, script_info1.index)
+            id_ack = await remote.cmd_run.start(remote.cmd_run.DataType(), timeout=2)
+            self.assertEqual(id_ack.ack.ack, remote.salinfo.lib.SAL__CMD_COMPLETE)
+
+            script_info2 = await info_coro2
             self.assertEqual(script_info2.process_state, 2)
             self.assertEqual(script_info2.timestamp_start, script_info1.timestamp_start)
             self.assertGreater(script_info2.timestamp_end, script_info2.timestamp_start)
-            self.assertEqual(script_info2.cmd_id, id_ack.cmd_id)
+            self.assertEqual(script_info2.cmd_id, script_info1.cmd_id)
 
         asyncio.get_event_loop().run_until_complete(doit())
 

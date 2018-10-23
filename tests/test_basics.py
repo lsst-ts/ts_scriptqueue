@@ -1,4 +1,4 @@
-# This file is part of scriptrunner.
+# This file is part of scriptloader.
 #
 # Developed for the LSST Telescope and Site Systems.
 # This product includes software developed by the LSST Project
@@ -22,13 +22,13 @@
 import os
 import unittest
 
-import scriptrunner.utils
+import scriptloader.utils
 
 
 class FindScriptsTestCase(unittest.TestCase):
     def test_findscripts(self):
         root = os.path.join(os.path.dirname(__file__), "data/standard")
-        scripts = scriptrunner.utils.findscripts(root)
+        scripts = scriptloader.utils.findscripts(root)
         expectedscripts = set(("script1", "script2", "subdir/script3", "subdir/subsubdir/script4"))
         self.assertEqual(set(scripts), expectedscripts)
 

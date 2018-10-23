@@ -1,4 +1,6 @@
 setupRequired(salobj)
 setupOptional(pipelines_lsst_io)
 
+envPrepend(PATH, ${PRODUCT_DIR}/bin)
+
 envPrepend(PYTHONPATH, ${PRODUCT_DIR}/python)

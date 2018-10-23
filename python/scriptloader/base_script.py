@@ -22,27 +22,27 @@ LOG_MESSAGES_INTERVAL = 0.2  # seconds
 class ScriptState(enum.IntEnum):
     """ScriptState constants.
     """
-    UNCONFIGURED = SALPY_Script.state_UNCONFIGURED
+    UNCONFIGURED = SALPY_Script.state_Unconfigured
     """Script is not configured and so cannot be run."""
-    CONFIGURED = SALPY_Script.state_CONFIGURED
+    CONFIGURED = SALPY_Script.state_Configured
     """Script is configured and so can be run."""
-    RUNNING = SALPY_Script.state_RUNNING
+    RUNNING = SALPY_Script.state_Running
     """Script is running."""
-    PAUSED = SALPY_Script.state_PAUSED
+    PAUSED = SALPY_Script.state_Paused
     """Script has paused, by request."""
-    ENDING = SALPY_Script.state_ENDING
+    ENDING = SALPY_Script.state_Ending
     """Script is cleaning up after running successfully
     (though it can still fail if there is an error in cleanup)."""
-    STOPPING = SALPY_Script.state_STOPPING
+    STOPPING = SALPY_Script.state_Stopping
     """Script is cleaning up after being asked to stop
     (though it can still fail if there is an error in cleanup)."""
-    FAILING = SALPY_Script.state_FAILING
+    FAILING = SALPY_Script.state_Failing
     """Script is cleaning up after an error."""
-    DONE = SALPY_Script.state_DONE
+    DONE = SALPY_Script.state_Done
     """Script exiting after successfully running."""
-    STOPPED = SALPY_Script.state_STOPPED
+    STOPPED = SALPY_Script.state_Stopped
     """Script exiting after being asked to stop."""
-    FAILED = SALPY_Script.state_FAILED
+    FAILED = SALPY_Script.state_Failed
     """Script exiting after an error."""
 
 
@@ -181,7 +181,7 @@ class BaseScript(salobj.Controller, abc.ABC):
         else:
             self._state.reason = "" if reason is None else reason
         if last_checkpoint is not None:
-            self._state.last_checkpoint = last_checkpoint
+            self._state.lastCheckpoint = last_checkpoint
         self.evt_state.put(self._state)
 
     async def checkpoint(self, name=""):
@@ -338,10 +338,10 @@ class BaseScript(salobj.Controller, abc.ABC):
 
         metadata = self.evt_metadata.DataType()
         # initialize to vaguely reasonable values
-        metadata.coordinate_system = SALPY_Script.metadata_CSYS_NONE
-        metadata.rotation_system = SALPY_Script.metadata_ROT_NONE
+        metadata.coordinateSystem = SALPY_Script.metadata_CSys_None
+        metadata.rotationSystem = SALPY_Script.metadata_Rot_None
         metadata.filters = ""  # any
-        metadata.dome = SALPY_Script.metadata_DOME_EITHER
+        metadata.dome = SALPY_Script.metadata_Dome_Either
         metadata.duration = 0
         self.set_metadata(metadata)
         self.evt_metadata.put(metadata)
@@ -381,7 +381,7 @@ class BaseScript(salobj.Controller, abc.ABC):
         self.assert_state("resume", [ScriptState.PAUSED])
         self._pause_future.set_result(None)
 
-    def do_set_checkpoints(self, id_data):
+    def do_setCheckpoints(self, id_data):
         """Set or clear the checkpoints at which to pause and stop.
 
         Parameters
@@ -395,7 +395,7 @@ class BaseScript(salobj.Controller, abc.ABC):
         salobj.ExpectedError
             If state is not UNCONFIGURED, CONFIGURED, RUNNING or PAUSED.
         """
-        self.assert_state("set_checkpoint", [ScriptState.UNCONFIGURED, ScriptState.CONFIGURED,
+        self.assert_state("setCheckpoints", [ScriptState.UNCONFIGURED, ScriptState.CONFIGURED,
                           ScriptState.RUNNING, ScriptState.PAUSED])
         try:
             re.compile(id_data.data.stop)
@@ -409,7 +409,7 @@ class BaseScript(salobj.Controller, abc.ABC):
         self.checkpoints.stop = id_data.data.stop
         self.evt_checkpoints.put(self.checkpoints)
 
-    def do_set_logging(self, id_data):
+    def do_setLogging(self, id_data):
         """Set logging level.
 
         Parameters
@@ -459,10 +459,10 @@ class BaseScript(salobj.Controller, abc.ABC):
             try:
                 while not self._log_queue.empty():
                     msg = self._log_queue.get_nowait()
-                    data = self.evt_log_message.DataType()
+                    data = self.evt_logMessage.DataType()
                     data.level = msg.levelno
                     data.message = msg.message
-                    self.evt_log_message.put(data)
+                    self.evt_logMessage.put(data)
                     await asyncio.sleep(0)
                 await asyncio.sleep(LOG_MESSAGES_INTERVAL)
             except asyncio.CancelledError:

@@ -40,9 +40,9 @@ class Scripts:
 
     Parameters
     ----------
-    standard : `iterable` of `str`
+    standard : ``iterable`` of `str`
         Relative paths to standard SAL scripts
-    external : `iterable` of `str`
+    external : ``iterable`` of `str`
         Relative paths to external SAL scripts
     """
     def __init__(self, standard, external):

@@ -5,5 +5,6 @@ pytest_session.txt
 .scon*
 *.log
 __pycache__
-python/lsst
+python/scriptloader/version.py
 tests/.tests
+bin/*.py

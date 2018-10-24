@@ -4,10 +4,10 @@ This configuration only affects single-package Sphinx documenation builds.
 """
 
 from documenteer.sphinxconfig.stackconf import build_package_configs
-import lsst.scriptrunner.version
+import scriptloader.version
 
 
 _g = globals()
 _g.update(build_package_configs(
-    project_name='scriptrunner',
-    version=lsst.scriptrunner.version.__version__))
+    project_name='scriptloader',
+    version=scriptloader.version.__version__))

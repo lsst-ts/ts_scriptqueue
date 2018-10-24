@@ -200,7 +200,7 @@ class LoaderModel:
                     id_ack = await remote.cmd_configure.start(config_data, timeout=_CONFIGURE_TIMEOUT)
                     if id_ack.ack.ack != remote.salinfo.lib.SAL__CMD_COMPLETE:
                         raise salobj.ExpectedError(f"Configure command failed")
-                except Exception as e:
+                except Exception:
                     self.terminate(script_info.index)
                     script_info.remote = None
                     raise

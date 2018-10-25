@@ -55,8 +55,8 @@ Then make your script executable using ``chmod +x <path>`` and put it in an appr
 
 Your script code should be a subclass of `BaseScript` with the following methods:
 
-run (required)
---------------
+run method (required)
+---------------------
 
 Define asynchronous function to implement the main functionality of your script::
 
@@ -79,8 +79,22 @@ or if you wish to do other things while you wait:
 
 .. _run_in_executor: https://docs.python.org/3/library/asyncio-eventloop.html#id14
 
-configure (optional)
---------------------
+checkpoints
+^^^^^^^^^^^
+
+In your run method you may call ``await self.checkpoint([name])`` to specify a point at which users can pause or stop the script.
+By providing a name for each checkpoint you allow users to specify exactly where they would like the script to pause or stop.
+In addition, each checkpoint is reported as the ``last_checkpoint`` attribute of the ``state`` event, so providing checkpoints with informative names can be helpful in tracking the progress of a script.
+We suggest you make checkpoint names fairly short, obvious and unique, but none of these rules is enforced.
+If you have a checkpoint in a loop you may wish to modify the name for each iteration, e.g.::
+
+    for iter in range(self.num_iter):  # num_iter is probably a configuration parameter
+        await self.checkpoint(f"start_loop{iter}")
+
+This allows the user to stop at any particular iteration and makes the reported state more informative.
+
+configure method (optional)
+---------------------------
 
 If your script can be configured, define the configure method::
 
@@ -92,12 +106,13 @@ This method can then set attributes or perform actions accordingly.
 However, if at all possible please make it synchronous and reasonably quick.
 
 Note that ``configure`` cannot be called once the script is running.
-However, BaseScript enforces this automatically; you don't need to do anything to prevent it.
+However, `BaseScript` enforces this automatically; you don't need to do anything to prevent it.
 
-cleanup (optional)
-------------------
+cleanup method (optional)
+-------------------------
 
-When your script is ending, after ``run`` is done, ``BaseScript`` calls ``cleanup`` for final cleanup.
+When your script is ending, after ``run`` finishes, is stopped early, or raises an exception, ``BaseScript`` calls ``cleanup`` for final cleanup.
+In some sense ``configure`` is like the ``finally`` clause of a ``try/finally`` block.
 The default implementation does nothing, but you are free to override it.::
 
     async def cleanup(self):

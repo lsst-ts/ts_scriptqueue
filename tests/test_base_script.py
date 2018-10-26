@@ -1,4 +1,4 @@
-# This file is part of scriptloader.
+# This file is part of ts_scriptqueue.
 #
 # Developed for the LSST Telescope and Site Systems.
 # This product includes software developed by the LSST Project
@@ -30,8 +30,8 @@ import yaml
 
 import SALPY_Script
 import salobj
-from scriptloader import ScriptState
-from scriptloader.test_utils import TestScript
+from ts_scriptqueue import ScriptState
+from ts_scriptqueue.test_utils import TestScript
 
 index_gen = salobj.index_generator()
 
@@ -48,12 +48,12 @@ class BaseScriptTestCase(unittest.TestCase):
             self.process.terminate()
             warnings.warn("A process was not properly terminated")
 
-    def configure_script(self, script, **kwargs):
+    async def configure_script(self, script, **kwargs):
         """Configure a script by calling do_configure
 
         Parameters
         ----------
-        script : `scriptloader.TestScript`
+        script : `ts_scriptqueue.TestScript`
             A test script
         kwargs : `dict`
             A dict with one or more of the following keys:
@@ -84,7 +84,7 @@ class BaseScriptTestCase(unittest.TestCase):
             config = ""
         configure_id_data = salobj.CommandIdData(cmd_id=1, data=script.cmd_configure.DataType())
         configure_id_data.data.config = config
-        script.do_configure(configure_id_data)
+        await script.do_configure(configure_id_data)
         self.assertEqual(script.wait_time, kwargs.get("wait_time", 0))
         self.assertEqual(script.fail_run, kwargs.get("fail_run", False))
         self.assertEqual(script.fail_cleanup, kwargs.get("fail_cleanup", False))
@@ -189,36 +189,33 @@ class BaseScriptTestCase(unittest.TestCase):
             configure_id_data = salobj.CommandIdData(cmd_id=1, data=script.cmd_configure.DataType())
             configure_id_data.data.config = "no_such_arg: 1"
             with self.assertRaises(salobj.ExpectedError):
-                script.do_configure(configure_id_data)
+                await script.do_configure(configure_id_data)
             self.assertEqual(script.state.state, ScriptState.UNCONFIGURED)
 
             # test configure with invalid yaml
             configure_id_data = salobj.CommandIdData(cmd_id=1, data=script.cmd_configure.DataType())
             configure_id_data.data.config = "a : : 2"
             with self.assertRaises(salobj.ExpectedError):
-                script.do_configure(configure_id_data)
+                await script.do_configure(configure_id_data)
             self.assertEqual(script.state.state, ScriptState.UNCONFIGURED)
 
             # test configure with yaml that makes a string, not a dict
             configure_id_data = salobj.CommandIdData(cmd_id=1, data=script.cmd_configure.DataType())
             configure_id_data.data.config = "just_a_string"
             with self.assertRaises(salobj.ExpectedError):
-                script.do_configure(configure_id_data)
+                await script.do_configure(configure_id_data)
             self.assertEqual(script.state.state, ScriptState.UNCONFIGURED)
 
             # test configure with yaml that makes a list, not a dict
             configure_id_data = salobj.CommandIdData(cmd_id=1, data=script.cmd_configure.DataType())
             configure_id_data.data.config = "['not', 'a', 'dict']"
             with self.assertRaises(salobj.ExpectedError):
-                script.do_configure(configure_id_data)
+                await script.do_configure(configure_id_data)
             self.assertEqual(script.state.state, ScriptState.UNCONFIGURED)
-
-            # test configure with no configuration data
-            self.configure_script(script)
 
             # now real configuration
             wait_time = 0.5
-            self.configure_script(script, wait_time=wait_time)
+            await self.configure_script(script, wait_time=wait_time)
 
             # set a pause checkpoint
             setCheckpoints_id_data = salobj.CommandIdData(cmd_id=2,
@@ -256,7 +253,7 @@ class BaseScriptTestCase(unittest.TestCase):
 
         async def doit():
             wait_time = 0.1
-            self.configure_script(script, wait_time=wait_time)
+            await self.configure_script(script, wait_time=wait_time)
 
             # set a stop checkpoint
             setCheckpoints_id_data = salobj.CommandIdData(cmd_id=2,
@@ -286,7 +283,7 @@ class BaseScriptTestCase(unittest.TestCase):
 
         async def doit():
             wait_time = 5
-            self.configure_script(script, wait_time=wait_time)
+            await self.configure_script(script, wait_time=wait_time)
 
             # set a stop checkpoint
             setCheckpoints_id_data = salobj.CommandIdData(cmd_id=2,
@@ -325,7 +322,7 @@ class BaseScriptTestCase(unittest.TestCase):
         async def doit():
             wait_time = 5
             pause_time = 0.5
-            self.configure_script(script, wait_time=wait_time)
+            await self.configure_script(script, wait_time=wait_time)
 
             checkpoint_named_start = "start"
             start_time = time.time()
@@ -356,9 +353,9 @@ class BaseScriptTestCase(unittest.TestCase):
 
             async def doit():
                 if fail_run:
-                    self.configure_script(script, fail_run=True)
+                    await self.configure_script(script, fail_run=True)
                 else:
-                    self.configure_script(script, fail_cleanup=True)
+                    await self.configure_script(script, fail_cleanup=True)
 
                 desired_checkpoint = "start" if fail_run else "end"
                 start_time = time.time()
@@ -402,6 +399,7 @@ class BaseScriptTestCase(unittest.TestCase):
 
             metadata = remote.evt_metadata.get()
             self.assertEqual(metadata.duration, 1)
+            await asyncio.sleep(0.2)
             log_msg = remote.evt_logMessage.get()
             self.assertEqual(log_msg.message, "Configure succeeded")
 

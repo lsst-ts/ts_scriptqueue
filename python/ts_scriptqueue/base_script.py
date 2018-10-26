@@ -15,8 +15,8 @@ import SALPY_Script
 import salobj
 
 
-HEARTBEAT_INTERVAL = 1  # seconds
-LOG_MESSAGES_INTERVAL = 0.2  # seconds
+HEARTBEAT_INTERVAL = 2000  # seconds
+LOG_MESSAGES_INTERVAL = 0.05  # seconds
 
 
 class ScriptState(enum.IntEnum):
@@ -245,7 +245,7 @@ class BaseScript(salobj.Controller, abc.ABC):
         raise NotImplementedError()
 
     @abc.abstractmethod
-    async def set_metadata(self, metadata):
+    def set_metadata(self, metadata):
         """Set metadata fields in the provided struct, given the
         current configuration.
 
@@ -255,7 +255,7 @@ class BaseScript(salobj.Controller, abc.ABC):
         then the metadata is automatically broadcast as an event
         and the script's state is set to `ScriptState.CONFIGURED`.
 
-        THis method will only be called if the script state is
+        This method will only be called if the script state is
         `ScriptState.UNCONFIGURED`. or `ScriptState.CONFIGURED`.
         """
         raise NotImplementedError()
@@ -304,7 +304,7 @@ class BaseScript(salobj.Controller, abc.ABC):
             raise salobj.ExpectedError(
                 f"Cannot {action}: state={self.state_name} instead of {states_str}")
 
-    def do_configure(self, id_data):
+    async def do_configure(self, id_data):
         """Configure the currently loaded script.
 
         This method does the following:
@@ -319,22 +319,21 @@ class BaseScript(salobj.Controller, abc.ABC):
         Raises
         ------
         salobj.ExpectedError
-            If state is not UNCONFIGURED or CONFIGURED.
+            If state is not UNCONFIGURED.
         """
-        self.assert_state("configure", [ScriptState.UNCONFIGURED, ScriptState.CONFIGURED])
+        self.assert_state("configure", [ScriptState.UNCONFIGURED])
         try:
             config = yaml.safe_load(id_data.data.config)
         except yaml.scanner.ScannerError as e:
             raise salobj.ExpectedError(f"Could not parse config={id_data.data.config}: {e}") from e
         if config and not isinstance(config, dict):
             raise salobj.ExpectedError(f"Could not parse config={id_data.data.config} as a dict")
-        if config:
-            try:
-                self.configure(**config)
-            except TypeError as e:
-                raise salobj.ExpectedError(f"config({config}) failed: {e}") from e
-        else:
-            self.configure()
+        if not config:
+            config = {}
+        try:
+            await self.configure(**config)
+        except Exception as e:
+            raise salobj.ExpectedError(f"config({config}) failed: {e}") from e
 
         metadata = self.evt_metadata.DataType()
         # initialize to vaguely reasonable values
@@ -457,13 +456,12 @@ class BaseScript(salobj.Controller, abc.ABC):
         """
         while not self._is_exiting:
             try:
-                while not self._log_queue.empty():
+                if not self._log_queue.empty():
                     msg = self._log_queue.get_nowait()
                     data = self.evt_logMessage.DataType()
                     data.level = msg.levelno
                     data.message = msg.message
                     self.evt_logMessage.put(data)
-                    await asyncio.sleep(0)
                 await asyncio.sleep(LOG_MESSAGES_INTERVAL)
             except asyncio.CancelledError:
                 break

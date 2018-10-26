@@ -1,12 +1,13 @@
 __all__ = ["TestScript"]
 
 import asyncio
+import logging
 
 import salobj
-import scriptloader
+import ts_scriptqueue
 
 
-class TestScript(scriptloader.BaseScript):
+class TestScript(ts_scriptqueue.BaseScript):
     """Test script to allow testing BaseScript.
 
     Parameters
@@ -23,8 +24,9 @@ class TestScript(scriptloader.BaseScript):
         self.wait_time = 0
         self.fail_run = False
         self.fail_cleanup = False
+        self.log.setLevel(logging.INFO)
 
-    def configure(self, wait_time=0, fail_run=False, fail_cleanup=False):
+    async def configure(self, wait_time=0, fail_run=False, fail_cleanup=False):
         """Configure the script.
 
         Parameters
@@ -43,6 +45,9 @@ class TestScript(scriptloader.BaseScript):
             If ``wait_time < 0``. This can be used to make config fail.
         """
         self.log.info("Configure started")
+        # wait a short time so unit tests can reliably start a queue
+        # before the first script has been configured
+        await asyncio.sleep(0.1)
         self.wait_time = float(wait_time)
         if self.wait_time < 0:
             raise salobj.ExpectedError(f"wait_time={self.wait_time} must be >= 0")

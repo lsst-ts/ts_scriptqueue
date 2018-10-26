@@ -24,20 +24,20 @@ import os
 import unittest
 import warnings
 
-import SALPY_ScriptLoader
+import SALPY_ScriptQueue
 import SALPY_Script
 import salobj
 import scriptloader
 
 
-class ScriptLoaderTestCase(unittest.TestCase):
+class ScriptQueueTestCase(unittest.TestCase):
     def setUp(self):
         salobj.test_utils.set_random_lsst_dds_domain()
         self.datadir = os.path.abspath(os.path.join(os.path.dirname(__file__), "data"))
         standardpath = os.path.join(self.datadir, "standard")
         externalpath = os.path.join(self.datadir, "external")
-        self.loader = scriptloader.ScriptLoader(standardpath=standardpath, externalpath=externalpath)
-        self.remote = salobj.Remote(SALPY_ScriptLoader)
+        self.loader = scriptloader.ScriptQueue(standardpath=standardpath, externalpath=externalpath)
+        self.remote = salobj.Remote(SALPY_ScriptQueue)
         self.process = None
 
     def tearDown(self):

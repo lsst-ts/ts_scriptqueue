@@ -28,13 +28,13 @@ import salobj
 import scriptloader
 
 
-class LoaderModelTestCase(unittest.TestCase):
+class QueueModelTestCase(unittest.TestCase):
     def setUp(self):
         salobj.test_utils.set_random_lsst_dds_domain()
         self.datadir = os.path.abspath(os.path.join(os.path.dirname(__file__), "data"))
         self.standardpath = os.path.join(self.datadir, "standard")
         self.externalpath = os.path.join(self.datadir, "external")
-        self.model = scriptloader.LoaderModel(standardpath=self.standardpath, externalpath=self.externalpath)
+        self.model = scriptloader.QueueModel(standardpath=self.standardpath, externalpath=self.externalpath)
 
     def tearDown(self):
         nkilled = self.model.terminate_all()
@@ -44,11 +44,11 @@ class LoaderModelTestCase(unittest.TestCase):
     def test_constructor_errors(self):
         nonexistentpath = os.path.join(self.datadir, "garbage")
         with self.assertRaises(ValueError):
-            scriptloader.LoaderModel(standardpath=self.standardpath, externalpath=nonexistentpath)
+            scriptloader.QueueModel(standardpath=self.standardpath, externalpath=nonexistentpath)
         with self.assertRaises(ValueError):
-            scriptloader.LoaderModel(standardpath=nonexistentpath, externalpath=self.externalpath)
+            scriptloader.QueueModel(standardpath=nonexistentpath, externalpath=self.externalpath)
         with self.assertRaises(ValueError):
-            scriptloader.LoaderModel(standardpath=nonexistentpath, externalpath=nonexistentpath)
+            scriptloader.QueueModel(standardpath=nonexistentpath, externalpath=nonexistentpath)
 
     def test_load_without_config(self):
         async def doit():

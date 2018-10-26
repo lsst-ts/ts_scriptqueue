@@ -19,7 +19,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-__all__ = ["LoaderModel", "ScriptInfo"]
+__all__ = ["QueueModel", "ScriptInfo"]
 
 import asyncio
 import functools
@@ -89,8 +89,8 @@ class ScriptInfo:
         self.timestamp_end = self.remote.salinfo.manager.getCurrentTime()
 
 
-class LoaderModel:
-    """Code to load and configure scripts; implementation for ScriptLoader.
+class QueueModel:
+    """Code to load and configure scripts; implementation for ScriptQueue.
 
     Parameters
     ----------

@@ -19,19 +19,19 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-__all__ = ["ScriptLoader"]
+__all__ = ["ScriptQueue"]
 
 import asyncio
 import os.path
 
-import SALPY_ScriptLoader
+import SALPY_ScriptQueue
 import salobj
-from .loader_model import LoaderModel
+from .queue_model import QueueModel
 
 _LOAD_TIMEOUT = 20  # seconds
 
 
-class ScriptLoader(salobj.BaseCsc):
+class ScriptQueue(salobj.BaseCsc):
     """CSC to load and configure scripts, so they can be run.
 
     Parameters
@@ -43,13 +43,13 @@ class ScriptLoader(salobj.BaseCsc):
 
     Notes
     -----
-    Use the `ScriptLoader` as follows:
+    Use the `ScriptQueue` as follows:
 
-    * Send the ``load`` command to the ``ScriptLoader`` to load
+    * Send the ``load`` command to the ``ScriptQueue`` to load
       and configure a script.
     * The loaded script will come up as a ``Script`` SAL component
       with a unique index.
-    * `ScriptLoader` will output a ``script_info`` message which includes
+    * `ScriptQueue` will output a ``script_info`` message which includes
       the ID of the ``load`` command and the index of the ``Script``
       SAL component.
     * It is crucial to pay attention to the command ID in the
@@ -62,7 +62,7 @@ class ScriptLoader(salobj.BaseCsc):
       the script into the `ScriptState.CONFIGURED` state,
       which enables it to be run.
     * To run the script issue the ``run`` command to the ``Script`` SAL
-      component (not the `ScriptLoader`).
+      component (not the `ScriptQueue`).
     """
     def __init__(self, standardpath, externalpath):
         if not os.path.isdir(standardpath):
@@ -70,8 +70,8 @@ class ScriptLoader(salobj.BaseCsc):
         if not os.path.isdir(externalpath):
             raise ValueError(f"No such dir externalpath={externalpath}")
 
-        super().__init__(SALPY_ScriptLoader, 0)
-        self.model = LoaderModel(standardpath=standardpath, externalpath=externalpath)
+        super().__init__(SALPY_ScriptQueue, 0)
+        self.model = QueueModel(standardpath=standardpath, externalpath=externalpath)
         self.cmd_load.allow_multiple_callbacks = True
 
         self.do_listAvailable()

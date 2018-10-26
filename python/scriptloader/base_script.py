@@ -15,7 +15,7 @@ import SALPY_Script
 import salobj
 
 
-HEARTBEAT_INTERVAL = 1  # seconds
+HEARTBEAT_INTERVAL = 2000  # seconds
 LOG_MESSAGES_INTERVAL = 0.2  # seconds
 
 
@@ -319,9 +319,9 @@ class BaseScript(salobj.Controller, abc.ABC):
         Raises
         ------
         salobj.ExpectedError
-            If state is not UNCONFIGURED or CONFIGURED.
+            If state is not UNCONFIGURED.
         """
-        self.assert_state("configure", [ScriptState.UNCONFIGURED, ScriptState.CONFIGURED])
+        self.assert_state("configure", [ScriptState.UNCONFIGURED])
         try:
             config = yaml.safe_load(id_data.data.config)
         except yaml.scanner.ScannerError as e:

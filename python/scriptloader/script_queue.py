@@ -21,12 +21,11 @@
 
 __all__ = ["ScriptQueue"]
 
-import asyncio
 import os.path
 
 import SALPY_ScriptQueue
 import salobj
-from .queue_model import QueueModel
+from .queue_model import MIN_SAL_INDEX, QueueModel, ScriptInfo
 
 _LOAD_TIMEOUT = 20  # seconds
 
@@ -40,91 +39,178 @@ class ScriptQueue(salobj.BaseCsc):
         Path to standard SAL scripts.
     externalpath : `str`, `bytes` or `os.PathLike`
         Path to external SAL scripts.
+    min_sal_index : `int` (optional)
+        Minimum SAL index for Script SAL components
+    max_sal_index : `int` (optional)
+        Maximum SAL index for Script SAL components
 
     Notes
     -----
-    Use the `ScriptQueue` as follows:
+    Basic usage:
 
-    * Send the ``load`` command to the ``ScriptQueue`` to load
-      and configure a script.
-    * The loaded script will come up as a ``Script`` SAL component
-      with a unique index.
-    * `ScriptQueue` will output a ``script_info`` message which includes
-      the ID of the ``load`` command and the index of the ``Script``
-      SAL component.
-    * It is crucial to pay attention to the command ID in the
-      ``script_info`` block, in order to reliably determine the index
-      of the newly loaded script.
-    * TO DO (this will be implemented as part of TSS-3148):
-      Once the script is fully loaded, the loader will send the
-      configuration specified in the ``load`` command.
-    * Configuring the script causes it to output metadata and puts
-      the script into the `ScriptState.CONFIGURED` state,
-      which enables it to be run.
-    * To run the script issue the ``run`` command to the ``Script`` SAL
-      component (not the `ScriptQueue`).
+    * Send the ``add`` command to the ``ScriptQueue`` to add a script
+      to the queue.
+    * The added script will be loaded in a subprocess as a new ``Script``
+      SAL component with a unique index. The first script loaded
+      has index ``min_sal_index``, and each script after has the next
+      index until it wraps around after ``max_sal_index``.
+    * `ScriptQueue` will output a ``script_info`` event which includes
+      the the index of the ``Script`` SAL component and the command ID
+      of the add command. If you wish to reliably know which script your
+      ``add`` command added then pay attention to the command ID.
+    * Once the script is ready (reports a state of UNCONFIGURED),
+      the queue will configure it, using the configuration specified in
+      the ``add`` command. Configuring the script causes it to output
+      metadata and puts the script into the `ScriptState.CONFIGURED` state,
+      which means it can be run.
+    * Provided the queue is running (not paused) the first script
+      in the queue will be moved to the current script slot
+      (as reported in the ``queue`` event). The current script be run
+      as soon as it is configured.
+    * Once a script has finished running its information is moved to
+      a history buffer; history is output as part of the ``queue`` event.
+      The history buffer allows ``requeue`` to work with scripts that
+      have already run. Eventually support for history can probably
+      be done better using the Engineering Facilities Database,
+      in which case the history buffer will be eliminated.
     """
-    def __init__(self, standardpath, externalpath):
+    def __init__(self, standardpath, externalpath,
+                 min_sal_index=MIN_SAL_INDEX, max_sal_index=salobj.MAX_SAL_INDEX):
         if not os.path.isdir(standardpath):
             raise ValueError(f"No such dir standardpath={standardpath}")
         if not os.path.isdir(externalpath):
             raise ValueError(f"No such dir externalpath={externalpath}")
 
         super().__init__(SALPY_ScriptQueue, 0)
-        self.model = QueueModel(standardpath=standardpath, externalpath=externalpath)
-        self.cmd_load.allow_multiple_callbacks = True
+        self.model = QueueModel(standardpath=standardpath, externalpath=externalpath,
+                                queue_callback=self.put_queue,
+                                script_callback=self.put_script)
 
-        self.do_listAvailable()
+        self.put_queue()
+        self.do_showAvailableScripts()
 
-    async def do_load(self, id_data):
-        """Load a script.
-
-        Start and configure a script SAL component, but don't run it.
-        """
-        coro = self.model.load(cmd_id=id_data.cmd_id,
-                               is_standard=id_data.data.isStandard,
-                               path=id_data.data.path,
-                               config=id_data.data.config,
-                               callback=self.put_script_info)
-        await asyncio.wait_for(coro, timeout=_LOAD_TIMEOUT)
-
-    def do_terminate(self, id_data):
-        """Terminate the specified script by sending SIGTERM.
-        """
-        self.model.terminate(id_data.data.ind)
-
-    def do_listAvailable(self, id_data=None):
-        """List available scripts.
+    def do_showAvailableScripts(self, id_data=None):
+        """Output a list of available scripts.
 
         Parameters
         ----------
         id_data : `salobj.CommandIdData` (optional)
             Command ID and data. Ignored.
         """
-        scripts = self.model.findscripts()
+        scripts = self.model.find_available_scripts()
         evtdata = self.evt_availableScripts.DataType()
         evtdata.standard = ":".join(scripts.standard)
         evtdata.external = ":".join(scripts.external)
         self.evt_availableScripts.put(evtdata, 1)
 
-    async def do_listLoaded(self, id_data):
-        """List loaded scripts.
+    def do_showQueue(self, id_data):
+        """Output a list of queued scripts.
 
         Parameters
         ----------
         id_data : `salobj.CommandIdData` (optional)
             Command ID and data. Ignored.
         """
-        self.cmd_listLoaded.ackInProgress()
-        for script_info in self.model.info.values():
-            self.put_script_info(script_info)
-            await asyncio.sleep(0)  # allow other events to run
+        self.put_queue()
 
-    def put_script_info(self, script_info, returncode=None):
-        """Output information about a script using the script_info event.
+    def do_showScriptInfo(self, id_data):
+        """Output information for one script.
 
-        Intended as a callback for ``self.model.task``,
-        and only if the script is successfully loaded.
+        Parameters
+        ----------
+        id_data : `salobj.CommandIdData` (optional)
+            Command ID and data. Ignored.
+        """
+        script_info = self.model.get_script_info(id_data.data.salIndex)
+        self.put_script(script_info)
+
+    def do_pause(self, id_data):
+        """Pause the queue. A no-op if already paused.
+
+        Parameters
+        ----------
+        id_data : `salobj.CommandIdData` (optional)
+            Command ID and data. Ignored.
+        """
+        self.assert_enabled("pause")
+        self.model.running = False
+
+    def do_resume(self, id_data):
+        """Run the queue. A no-op if already running.
+
+        Parameters
+        ----------
+        id_data : `salobj.CommandIdData` (optional)
+            Command ID and data. Ignored.
+        """
+        self.assert_enabled("resume")
+        self.model.running = True
+
+    async def do_add(self, id_data):
+        """Add a script to the queue.
+
+        Start and configure a script SAL component, but don't run it.
+        """
+        script_info = ScriptInfo(
+            index=self.model.next_sal_index,
+            cmd_id=id_data.cmd_id,
+            is_standard=id_data.data.isStandard,
+            path=id_data.data.path,
+            config=id_data.data.config,
+            descr=id_data.data.descr,
+        )
+        await self.model.add(
+            script_info=script_info,
+            location=id_data.data.location,
+            location_sal_index=id_data.data.locationSalIndex,
+        )
+
+    def do_move(self, id_data):
+        """Move a script within the queue.
+        """
+        self.model.move(sal_index=id_data.data.salIndex,
+                        location=id_data.data.location,
+                        location_sal_index=id_data.data.locationSalIndex)
+
+    def do_remove(self, id_data):
+        """Remove a script from the queue and terminate it.
+        """
+        self.model.remove(id_data.data.salIndex)
+
+    def do_requeue(self, id_data):
+        """Put a script back on the queue with the same configuration.
+        """
+        self.model.requeue(
+            index=id_data.data.salIndex,
+            cmd_id=id_data.cmd_id,
+            location=id_data.data.location,
+            location_sal_index=id_data.data.locationSalIndex,
+        )
+
+    def put_queue(self):
+        """Output the queued scripts as a ``queue`` event.
+        """
+        evtdata = self.evt_queue.DataType()
+
+        evtdata.running = self.model.running
+
+        evtdata.currentSalIndex = self.model.current_script.index if self.model.current_script else 0
+
+        evtdata.length = min(len(self.model.queue), len(evtdata.salIndices))
+        evtdata.salIndices[0:evtdata.length] = [info.index for info in self.model.queue][0:evtdata.length]
+        evtdata.salIndices[evtdata.length:] = 0
+
+        evtdata.pastLength = len(self.model.history)
+        evtdata.pastSalIndices[0:evtdata.pastLength] = \
+            [info.index for info in self.model.history][0:evtdata.pastLength]
+        evtdata.pastSalIndices[evtdata.pastLength:] = 0
+
+        self.evt_queue.put(evtdata, 1)
+
+    def put_script(self, script_info, returncode=None):
+        """Output information about a script as a ``script`` event.
+
+        Can be used as a callback for ``self.model.task``.
 
         Parameters
         ----------
@@ -137,23 +223,22 @@ class ScriptQueue(salobj.BaseCsc):
             return
 
         sallib = self.salinfo.lib
-        evtdata = self.evt_scriptInfo.DataType()
+        evtdata = self.evt_script.DataType()
         evtdata.cmdId = script_info.cmd_id
-        evtdata.ind = script_info.index
+        evtdata.salIndex = script_info.index
         evtdata.path = script_info.path
         evtdata.isStandard = script_info.is_standard
-        evtdata.timestamp_start = script_info.timestamp_start
-        evtdata.timestamp_end = script_info.timestamp_end
+        evtdata.timestamp = script_info.timestamp
+        evtdata.duration = script_info.duration
         returncode = script_info.process.returncode
         if returncode is None:
-            evtdata.processState = sallib.scriptInfo_Loaded
+            evtdata.processState = sallib.script_Alive  # TODO differentiate between Alive and Starting
         else:
             # the process is finished; delete the information
-            del self.model.info[script_info.index]
             if returncode == 0:
-                evtdata.processState = sallib.scriptInfo_Complete
+                evtdata.processState = sallib.script_Complete
             elif returncode > 0:
-                evtdata.processState = sallib.scriptInfo_Failed
+                evtdata.processState = sallib.script_Failed
             else:
-                evtdata.processState = sallib.scriptInfo_Terminated
-        self.evt_scriptInfo.put(evtdata, 1)
+                evtdata.processState = sallib.script_Terminated
+        self.evt_script.put(evtdata, 1)

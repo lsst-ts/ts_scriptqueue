@@ -1,6 +1,7 @@
 __all__ = ["TestScript"]
 
 import asyncio
+import logging
 
 import salobj
 import scriptloader
@@ -23,6 +24,7 @@ class TestScript(scriptloader.BaseScript):
         self.wait_time = 0
         self.fail_run = False
         self.fail_cleanup = False
+        self.log.setLevel(logging.INFO)
 
     def configure(self, wait_time=0, fail_run=False, fail_cleanup=False):
         """Configure the script.

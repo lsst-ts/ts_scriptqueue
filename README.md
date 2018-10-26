@@ -1,8 +1,8 @@
-Code to load and run scripts as [Service Abstraction Layer (SAL) components](https://docushare.lsstcorp.org/docushare/dsweb/Get/Document-21527/).
+Code to run scripts as [Service Abstraction Layer (SAL) components](https://docushare.lsstcorp.org/docushare/dsweb/Get/Document-21527/).
 
 The primary classes are:
-* `scriptloader.ScriptLoader`: a Commandable SAL Component (SCS) that loads and configures Scripts that are SAL components.
-* `scriptloader.BaseScript`: a base class for scripts loaded by `scriptloader.ScriptLoader`.
+* `scriptloader.ScriptQueue`: a Commandable SAL Component (SCS) that runs SAL scripts.
+* `scriptloader.BaseScript`: a base class for SAL scripts.
 
 The package is compatible with LSST DM's `scons` build system and `eups` package management system.
 Assuming you have the basic LSST DM stack installed you can do the following, from within the package directory:

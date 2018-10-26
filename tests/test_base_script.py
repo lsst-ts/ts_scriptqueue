@@ -213,9 +213,6 @@ class BaseScriptTestCase(unittest.TestCase):
                 script.do_configure(configure_id_data)
             self.assertEqual(script.state.state, ScriptState.UNCONFIGURED)
 
-            # test configure with no configuration data
-            self.configure_script(script)
-
             # now real configuration
             wait_time = 0.5
             self.configure_script(script, wait_time=wait_time)

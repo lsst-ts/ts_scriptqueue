@@ -6,6 +6,9 @@ import os
 def findscripts(root):
     """Find all public scripts in the specified root path.
 
+    Public scripts are executable files whose names do not start
+    with "." or "_".
+
     Parameters
     ----------
     root : `str`, `bytes` or `os.PathLike`
@@ -13,10 +16,8 @@ def findscripts(root):
 
     Returns
     -------
-    scripts : `iterable` of `str`
+    scripts : `list` of `str`
         Relative path of each public script found in ``root``.
-        Public scripts are executable files whose names do not start
-        with "." or "_".
     """
     paths = []
     for dirpath, dirnames, filenames in os.walk(root, topdown=True, followlinks=False):

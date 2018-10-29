@@ -43,7 +43,6 @@ class ScriptLoader(salobj.BaseCsc):
 
     Notes
     -----
-
     Use the `ScriptLoader` as follows:
 
     * Send the ``load`` command to the ``ScriptLoader`` to load

@@ -224,7 +224,7 @@ class BaseScript(salobj.Controller, abc.ABC):
         """Configure the script.
 
         Subclasses should use named keyword arguments for clarity
-        and automatic checking of configuration parameters.
+        and so that parameter names are automatically checked.
         In other words, do this::
 
             async def configure(self, arg_a, arg_b=default_b)  # good

@@ -1,4 +1,4 @@
-# This file is part of scriptloader.
+# This file is part of ts_scriptqueue.
 #
 # Developed for the LSST Telescope and Site Systems.
 # This product includes software developed by the LSST Project
@@ -30,8 +30,8 @@ import yaml
 
 import SALPY_Script
 import salobj
-from scriptloader import ScriptState
-from scriptloader.test_utils import TestScript
+from ts_scriptqueue import ScriptState
+from ts_scriptqueue.test_utils import TestScript
 
 index_gen = salobj.index_generator()
 
@@ -53,7 +53,7 @@ class BaseScriptTestCase(unittest.TestCase):
 
         Parameters
         ----------
-        script : `scriptloader.TestScript`
+        script : `ts_scriptqueue.TestScript`
             A test script
         kwargs : `dict`
             A dict with one or more of the following keys:

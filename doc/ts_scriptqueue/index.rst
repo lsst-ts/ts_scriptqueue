@@ -1,10 +1,10 @@
-.. py:currentmodule:: scriptloader
+.. py:currentmodule:: ts_scriptqueue
 
-.. scriptloader:
+.. ts_scriptqueue:
 
-############
-scriptloader
-############
+##############
+ts_scriptqueue
+##############
 
 Suppport for running `SAL Scripts`_.
 
@@ -127,7 +127,7 @@ You may define other methods as well, but please be careful not to shadow `BaseS
 Classes
 =======
 
-The primary classes in scriptloader are:
+The primary classes in ts_scriptqueue are:
 
 * `BaseScript` base class for Python SAL scripts.
 * `ScriptQueue`: a `Commandable SAL Component`_ (CSC) to queue and run SAL scripts.
@@ -136,13 +136,13 @@ The primary classes in scriptloader are:
 Python API reference
 ====================
 
-.. automodapi:: scriptloader
+.. automodapi:: ts_scriptqueue
     :no-main-docstr:
     :no-inheritance-diagram:
-.. automodapi:: scriptloader.utils
+.. automodapi:: ts_scriptqueue.utils
     :no-main-docstr:
     :no-inheritance-diagram:
-.. automodapi:: scriptloader.test_utils
+.. automodapi:: ts_scriptqueue.test_utils
     :no-main-docstr:
     :no-inheritance-diagram:
 

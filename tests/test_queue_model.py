@@ -1,4 +1,4 @@
-# This file is part of scriptloader.
+# This file is part of ts_scriptqueue.
 #
 # Developed for the LSST Telescope and Site Systems.
 # This product includes software developed by the LSST Project
@@ -26,7 +26,7 @@ import warnings
 
 import SALPY_ScriptQueue
 import salobj
-import scriptloader
+import ts_scriptqueue
 
 
 class QueueModelTestCase(unittest.TestCase):
@@ -35,9 +35,9 @@ class QueueModelTestCase(unittest.TestCase):
         self.datadir = os.path.abspath(os.path.join(os.path.dirname(__file__), "data"))
         self.standardpath = os.path.join(self.datadir, "standard")
         self.externalpath = os.path.join(self.datadir, "external")
-        self.model = scriptloader.QueueModel(standardpath=self.standardpath,
-                                             externalpath=self.externalpath,
-                                             min_sal_index=1000)
+        self.model = ts_scriptqueue.QueueModel(standardpath=self.standardpath,
+                                               externalpath=self.externalpath,
+                                               min_sal_index=1000)
 
     def tearDown(self):
         nkilled = self.model.terminate_all()
@@ -61,11 +61,11 @@ class QueueModelTestCase(unittest.TestCase):
     def test_constructor_errors(self):
         nonexistentpath = os.path.join(self.datadir, "garbage")
         with self.assertRaises(ValueError):
-            scriptloader.QueueModel(standardpath=self.standardpath, externalpath=nonexistentpath)
+            ts_scriptqueue.QueueModel(standardpath=self.standardpath, externalpath=nonexistentpath)
         with self.assertRaises(ValueError):
-            scriptloader.QueueModel(standardpath=nonexistentpath, externalpath=self.externalpath)
+            ts_scriptqueue.QueueModel(standardpath=nonexistentpath, externalpath=self.externalpath)
         with self.assertRaises(ValueError):
-            scriptloader.QueueModel(standardpath=nonexistentpath, externalpath=nonexistentpath)
+            ts_scriptqueue.QueueModel(standardpath=nonexistentpath, externalpath=nonexistentpath)
 
     def test_add_last(self):
         """Test adding scripts to the end of the queue.
@@ -80,7 +80,7 @@ class QueueModelTestCase(unittest.TestCase):
 
         async def doit():
             info_list = [
-                scriptloader.ScriptInfo(
+                ts_scriptqueue.ScriptInfo(
                     index=self.model.next_sal_index,
                     cmd_id=i + 10,  # arbitrary
                     is_standard=False,
@@ -160,7 +160,7 @@ class QueueModelTestCase(unittest.TestCase):
 
         async def doit():
             info_list = [
-                scriptloader.ScriptInfo(
+                ts_scriptqueue.ScriptInfo(
                     index=self.model.next_sal_index,
                     cmd_id=i + 10,  # arbitrary
                     is_standard=False,
@@ -197,7 +197,7 @@ class QueueModelTestCase(unittest.TestCase):
 
         async def doit():
             info_list = [
-                scriptloader.ScriptInfo(
+                ts_scriptqueue.ScriptInfo(
                     index=self.model.next_sal_index,
                     cmd_id=i + 10,  # arbitrary
                     is_standard=False,
@@ -290,7 +290,7 @@ class QueueModelTestCase(unittest.TestCase):
 
         async def doit():
             info_list = [
-                scriptloader.ScriptInfo(
+                ts_scriptqueue.ScriptInfo(
                     index=self.model.next_sal_index,
                     cmd_id=i + 10,  # arbitrary
                     is_standard=False,
@@ -370,7 +370,7 @@ class QueueModelTestCase(unittest.TestCase):
 
         async def doit():
             info_list = [
-                scriptloader.ScriptInfo(
+                ts_scriptqueue.ScriptInfo(
                     index=self.model.next_sal_index,
                     cmd_id=i + 10,  # arbitrary
                     is_standard=False,
@@ -410,7 +410,7 @@ class QueueModelTestCase(unittest.TestCase):
             self.model.running = True
             while True:
                 state = await script_1000.remote.evt_state.next(flush=False, timeout=2)
-                if state.state == scriptloader.ScriptState.RUNNING:
+                if state.state == ts_scriptqueue.ScriptState.RUNNING:
                     break
 
             # check that get_script_info works for the current script
@@ -440,7 +440,7 @@ class QueueModelTestCase(unittest.TestCase):
 
         async def doit():
             info_list = [
-                scriptloader.ScriptInfo(
+                ts_scriptqueue.ScriptInfo(
                     index=self.model.next_sal_index,
                     cmd_id=i + 10,  # arbitrary
                     is_standard=False,

@@ -1,4 +1,4 @@
-# This file is part of scriptloader.
+# This file is part of ts_scriptqueue.
 #
 # Developed for the LSST Telescope and Site Systems.
 # This product includes software developed by the LSST Project
@@ -26,7 +26,7 @@ import warnings
 
 import SALPY_ScriptQueue
 import salobj
-import scriptloader
+import ts_scriptqueue
 
 
 class ScriptQueueTestCase(unittest.TestCase):
@@ -35,9 +35,9 @@ class ScriptQueueTestCase(unittest.TestCase):
         self.datadir = os.path.abspath(os.path.join(os.path.dirname(__file__), "data"))
         standardpath = os.path.join(self.datadir, "standard")
         externalpath = os.path.join(self.datadir, "external")
-        self.queue = scriptloader.ScriptQueue(standardpath=standardpath,
-                                              externalpath=externalpath,
-                                              min_sal_index=1000)
+        self.queue = ts_scriptqueue.ScriptQueue(standardpath=standardpath,
+                                                externalpath=externalpath,
+                                                min_sal_index=1000)
         self.queue.summary_state = salobj.State.ENABLED
         self.remote = salobj.Remote(SALPY_ScriptQueue)
         self.process = None

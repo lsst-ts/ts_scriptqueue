@@ -1,4 +1,4 @@
-# This file is part of scriptloader.
+# This file is part of ts_scriptqueue.
 #
 # Developed for the LSST Telescope and Site Systems.
 # This product includes software developed by the LSST Project
@@ -214,7 +214,7 @@ class ScriptQueue(salobj.BaseCsc):
 
         Parameters
         ----------
-        script_info : `scriptloader.ScriptInfo`
+        script_info : `ts_scriptqueue.ScriptInfo`
             Information about the script
         returncode : `int` (optional)
             Ignored, but needed for use as a callback.

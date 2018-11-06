@@ -1,4 +1,4 @@
-# This file is part of ts_scriptqueue.
+# This file is part of scriptqueue.
 #
 # Developed for the LSST Telescope and Site Systems.
 # This product includes software developed by the LSST Project
@@ -27,7 +27,7 @@ import warnings
 
 import SALPY_ScriptQueue
 import salobj
-import ts_scriptqueue
+from ts import scriptqueue
 
 
 class QueueModelTestCase(unittest.TestCase):
@@ -36,12 +36,12 @@ class QueueModelTestCase(unittest.TestCase):
         self.datadir = os.path.abspath(os.path.join(os.path.dirname(__file__), "data"))
         self.standardpath = os.path.join(self.datadir, "standard")
         self.externalpath = os.path.join(self.datadir, "external")
-        self.model = ts_scriptqueue.QueueModel(standardpath=self.standardpath,
-                                               externalpath=self.externalpath,
-                                               queue_callback=self.queue_callback,
-                                               script_callback=self.script_callback,
-                                               min_sal_index=1000,
-                                               )
+        self.model = scriptqueue.QueueModel(standardpath=self.standardpath,
+                                            externalpath=self.externalpath,
+                                            queue_callback=self.queue_callback,
+                                            script_callback=self.script_callback,
+                                            min_sal_index=1000,
+                                            )
         # support assert_next_queue using a future and a queue callback
         self.queue_task = asyncio.Future()
         self.model.queue_callback = self.queue_callback
@@ -121,7 +121,7 @@ class QueueModelTestCase(unittest.TestCase):
         def make_add_kwargs(location, location_sal_index=0):
             sal_index = self.model.next_sal_index
             return dict(
-                script_info=ts_scriptqueue.ScriptInfo(
+                script_info=scriptqueue.ScriptInfo(
                     index=sal_index,
                     cmd_id=sal_index*2,  # arbitrary
                     is_standard=False,
@@ -252,11 +252,11 @@ class QueueModelTestCase(unittest.TestCase):
     def test_constructor_errors(self):
         nonexistentpath = os.path.join(self.datadir, "garbage")
         with self.assertRaises(ValueError):
-            ts_scriptqueue.QueueModel(standardpath=self.standardpath, externalpath=nonexistentpath)
+            scriptqueue.QueueModel(standardpath=self.standardpath, externalpath=nonexistentpath)
         with self.assertRaises(ValueError):
-            ts_scriptqueue.QueueModel(standardpath=nonexistentpath, externalpath=self.externalpath)
+            scriptqueue.QueueModel(standardpath=nonexistentpath, externalpath=self.externalpath)
         with self.assertRaises(ValueError):
-            ts_scriptqueue.QueueModel(standardpath=nonexistentpath, externalpath=nonexistentpath)
+            scriptqueue.QueueModel(standardpath=nonexistentpath, externalpath=nonexistentpath)
 
     def test_get_script_info(self):
         async def doit():
@@ -271,7 +271,7 @@ class QueueModelTestCase(unittest.TestCase):
 
             info_dict = {}
             for i in range(3):
-                script_info = ts_scriptqueue.ScriptInfo(
+                script_info = scriptqueue.ScriptInfo(
                     index=self.model.next_sal_index,
                     cmd_id=i + 10,  # arbitrary
                     is_standard=False,
@@ -346,7 +346,7 @@ class QueueModelTestCase(unittest.TestCase):
             sal_indices = [1000, 1001, 1002]
             for i, index in enumerate(sal_indices):
                 sal_index = self.model.next_sal_index
-                script_info = ts_scriptqueue.ScriptInfo(
+                script_info = scriptqueue.ScriptInfo(
                     index=sal_index,
                     cmd_id=sal_index*2,  # arbitrary
                     is_standard=True,
@@ -470,7 +470,7 @@ class QueueModelTestCase(unittest.TestCase):
             await self.assert_next_queue(running=False)
 
             for i in range(3):
-                script_info = ts_scriptqueue.ScriptInfo(
+                script_info = scriptqueue.ScriptInfo(
                     index=self.model.next_sal_index,
                     cmd_id=i + 10,  # arbitrary
                     is_standard=False,
@@ -523,7 +523,7 @@ class QueueModelTestCase(unittest.TestCase):
             await self.assert_next_queue(running=False)
 
             info_list = [
-                ts_scriptqueue.ScriptInfo(
+                scriptqueue.ScriptInfo(
                     index=self.model.next_sal_index,
                     cmd_id=i + 10,  # arbitrary
                     is_standard=False,
@@ -606,7 +606,7 @@ class QueueModelTestCase(unittest.TestCase):
             self.model.running = False
             await self.assert_next_queue(running=False)
 
-            script_info = ts_scriptqueue.ScriptInfo(
+            script_info = scriptqueue.ScriptInfo(
                 index=self.model.next_sal_index,
                 cmd_id=25,  # arbitrary
                 is_standard=False,
@@ -638,7 +638,7 @@ class QueueModelTestCase(unittest.TestCase):
             self.model.enabled = True
             await self.assert_next_queue(enabled=True, running=True)
 
-            script_info = ts_scriptqueue.ScriptInfo(
+            script_info = scriptqueue.ScriptInfo(
                 index=self.model.next_sal_index,
                 cmd_id=25,  # arbitrary
                 is_standard=False,

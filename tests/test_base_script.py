@@ -30,8 +30,8 @@ import yaml
 
 import SALPY_Script
 import salobj
-from ts_scriptqueue import ScriptState
-from ts_scriptqueue.test_utils import TestScript
+from ts.scriptqueue import ScriptState
+from ts.scriptqueue.test_utils import TestScript
 
 index_gen = salobj.index_generator()
 
@@ -53,7 +53,7 @@ class BaseScriptTestCase(unittest.TestCase):
 
         Parameters
         ----------
-        script : `ts_scriptqueue.TestScript`
+        script : `ts.scriptqueue.TestScript`
             A test script
         kwargs : `dict`
             A dict with one or more of the following keys:

@@ -4,10 +4,10 @@ import asyncio
 import logging
 
 import salobj
-import ts_scriptqueue
+from .base_script import BaseScript
 
 
-class TestScript(ts_scriptqueue.BaseScript):
+class TestScript(BaseScript):
     """Test script to allow testing BaseScript.
 
     Parameters

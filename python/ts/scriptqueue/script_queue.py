@@ -228,7 +228,7 @@ class ScriptQueue(salobj.BaseCsc):
 
         Parameters
         ----------
-        script_info : `ts_scriptqueue.ScriptInfo`
+        script_info : `ScriptInfo`
             Information about the script
         returncode : `int` (optional)
             Ignored, but needed for use as a callback.

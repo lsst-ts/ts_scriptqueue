@@ -1,10 +1,10 @@
-.. py:currentmodule:: ts_scriptqueue
+.. py:currentmodule:: ts.scriptqueue
 
-.. ts_scriptqueue:
+.. scriptqueue:
 
-##############
-ts_scriptqueue
-##############
+###########
+scriptqueue
+###########
 
 Suppport for running `SAL Scripts`_.
 
@@ -136,10 +136,10 @@ The primary classes in ts_scriptqueue are:
 Python API reference
 ====================
 
-.. automodapi:: ts_scriptqueue
+.. automodapi:: ts.scriptqueue
     :no-main-docstr:
     :no-inheritance-diagram:
-.. automodapi:: ts_scriptqueue.test_utils
+.. automodapi:: ts.scriptqueue.test_utils
     :no-main-docstr:
     :no-inheritance-diagram:
 

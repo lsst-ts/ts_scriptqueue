@@ -125,6 +125,7 @@ class QueueModel:
         self.history = collections.deque(maxlen=MAX_HISTORY)
         self.current_script = None
         self._running = True
+        self._enabled = False
         self._index_generator = salobj.index_generator(imin=min_sal_index, imax=max_sal_index)
 
     async def add(self, script_info, location, location_sal_index):
@@ -393,6 +394,21 @@ class QueueModel:
         return script_info
 
     @property
+    def enabled(self):
+        """Get or set enabled state.
+
+        True if ScriptQueue is in the enabled state, False otherwise.
+        """
+        return self._enabled
+
+    @enabled.setter
+    def enabled(self, enabled):
+        was_enabled = self._enabled
+        self._enabled = bool(enabled)
+        if self.enabled != was_enabled:
+            self._update_queue()
+
+    @property
     def running(self):
         """Get or set running state.
 
@@ -402,9 +418,9 @@ class QueueModel:
 
     @running.setter
     def running(self, run):
-        change = bool(run) != self._running
+        was_running = self._running
         self._running = bool(run)
-        if change:
+        if self._running != was_running:
             self._update_queue()
 
     def terminate_all(self):
@@ -490,8 +506,10 @@ class QueueModel:
 
         if script_info.done:
             self._remove_script(script_info.index)
-        elif self.running and self.current_script is None and script_info.runnable \
+        elif self.enabled and self.running \
+                and self.current_script is None and script_info.runnable \
                 and self.queue and self.queue[0].index == script_info.index:
+            # this script is next in line and ready to run
             self._update_queue(force_callback=False)
 
     def _update_queue(self, force_callback=True):
@@ -514,7 +532,7 @@ class QueueModel:
             elif not force_callback:
                 return
 
-        if self.running and not self.current_script:
+        if self.enabled and self.running and not self.current_script:
             # it is unlikely done scripts are on the queue,
             # but it can happen
             while self.queue:

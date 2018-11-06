@@ -85,9 +85,7 @@ class ScriptQueue(salobj.BaseCsc):
         self.model = QueueModel(standardpath=standardpath, externalpath=externalpath,
                                 queue_callback=self.put_queue,
                                 script_callback=self.put_script)
-
         self.put_queue()
-        self.do_showAvailableScripts()
 
     def do_showAvailableScripts(self, id_data=None):
         """Output a list of available scripts.
@@ -97,6 +95,7 @@ class ScriptQueue(salobj.BaseCsc):
         id_data : `salobj.CommandIdData` (optional)
             Command ID and data. Ignored.
         """
+        self.assert_enabled("showAvailableScripts")
         scripts = self.model.find_available_scripts()
         evtdata = self.evt_availableScripts.DataType()
         evtdata.standard = ":".join(scripts.standard)
@@ -111,6 +110,7 @@ class ScriptQueue(salobj.BaseCsc):
         id_data : `salobj.CommandIdData` (optional)
             Command ID and data. Ignored.
         """
+        self.assert_enabled("showQueue")
         self.put_queue()
 
     def do_showScript(self, id_data):
@@ -121,18 +121,20 @@ class ScriptQueue(salobj.BaseCsc):
         id_data : `salobj.CommandIdData` (optional)
             Command ID and data. Ignored.
         """
+        self.assert_enabled("showScript")
         script_info = self.model.get_script_info(id_data.data.salIndex)
         self.put_script(script_info)
 
     def do_pause(self, id_data):
         """Pause the queue. A no-op if already paused.
 
+        Unlike most commands, this can be issued in any state.
+
         Parameters
         ----------
         id_data : `salobj.CommandIdData` (optional)
             Command ID and data. Ignored.
         """
-        self.assert_enabled("pause")
         self.model.running = False
 
     def do_resume(self, id_data):
@@ -151,6 +153,7 @@ class ScriptQueue(salobj.BaseCsc):
 
         Start and configure a script SAL component, but don't run it.
         """
+        self.assert_enabled("add")
         script_info = ScriptInfo(
             index=self.model.next_sal_index,
             cmd_id=id_data.cmd_id,
@@ -168,6 +171,7 @@ class ScriptQueue(salobj.BaseCsc):
     def do_move(self, id_data):
         """Move a script within the queue.
         """
+        self.assert_enabled("move")
         self.model.move(sal_index=id_data.data.salIndex,
                         location=id_data.data.location,
                         location_sal_index=id_data.data.locationSalIndex)
@@ -175,11 +179,13 @@ class ScriptQueue(salobj.BaseCsc):
     def do_remove(self, id_data):
         """Remove a script from the queue and terminate it.
         """
+        self.assert_enabled("remove")
         self.model.remove(id_data.data.salIndex)
 
     async def do_requeue(self, id_data):
         """Put a script back on the queue with the same configuration.
         """
+        self.assert_enabled("requeue")
         await self.model.requeue(
             sal_index=id_data.data.salIndex,
             cmd_id=id_data.cmd_id,
@@ -187,11 +193,19 @@ class ScriptQueue(salobj.BaseCsc):
             location_sal_index=id_data.data.locationSalIndex,
         )
 
+    def report_summary_state(self):
+        super().report_summary_state()
+        enabled = self.summary_state == salobj.State.ENABLED
+        self.model.enabled = enabled
+        if enabled:
+            self.do_showAvailableScripts()
+
     def put_queue(self):
         """Output the queued scripts as a ``queue`` event.
         """
         evtdata = self.evt_queue.DataType()
 
+        evtdata.enabled = self.model.enabled
         evtdata.running = self.model.running
 
         evtdata.currentSalIndex = self.model.current_index

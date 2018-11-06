@@ -45,24 +45,26 @@ class QueueModelTestCase(unittest.TestCase):
         # support assert_next_queue using a future and a queue callback
         self.queue_task = asyncio.Future()
         self.model.queue_callback = self.queue_callback
+        self.model.enabled = True
 
     def tearDown(self):
         nkilled = len(self.model.terminate_all())
         if nkilled > 0:
             warnings.warn(f"Killed {nkilled} subprocesses")
 
-    async def assert_next_queue(self, running=False, current_sal_index=0,
-                                sal_indices=(), past_sal_indices=(),
-                                wait=False):
+    async def assert_next_queue(self, enabled=True, running=False, current_sal_index=0,
+                                sal_indices=(), past_sal_indices=(), wait=False):
         """Assert that the queue is in a particular state.
 
         If wait is True then wait for the next update before checking.
 
-        The defaults are appropriate to a paused queue with no current
-        script and no scripts on the queue or in the history.
+        The defaults are appropriate to an enabled, paused queue
+        with no scripts.
 
         Parameters
         ----------
+        enabled : `bool`
+            Is the queue enabled?
         running : `bool`
             Is the queue running?
         current_sal_index : `int`
@@ -101,7 +103,8 @@ class QueueModelTestCase(unittest.TestCase):
         self.assertEqual(info1.descr, info2.descr)
 
     def queue_callback(self):
-        print(f"queue_callback(): running={self.model.running}; "
+        print(f"queue_callback(): enabled={self.model.enabled}; "
+              f"running={self.model.running}; "
               f"current={self.model.current_index}; "
               f"queue={[info.index for info in self.model.queue]}; "
               f"history={[info.index for info in self.model.history]}")
@@ -131,7 +134,10 @@ class QueueModelTestCase(unittest.TestCase):
             )
 
         async def doit():
-            await self.assert_next_queue(running=True)
+            await self.assert_next_queue(enabled=False, running=True)
+
+            self.model.enable = True
+            await self.assert_next_queue(enabled=True, running=True)
 
             # pause the queue so we know what to expect of queue state
             self.model.running = False
@@ -220,8 +226,15 @@ class QueueModelTestCase(unittest.TestCase):
             # may start up with no script running)
             await self.wait_runnable(1001, 1002, 1003)
 
-            self.model.running = True
+            # disable the queue, then set running True and check that
+            # the queue does not start running until we enable it again
+            self.model.enabled = False
+            await self.assert_next_queue(enabled=False, running=False, sal_indices=[1002, 1001, 1003])
 
+            self.model.running = True
+            await self.assert_next_queue(enabled=False, running=True, sal_indices=[1002, 1001, 1003])
+
+            self.model.enabled = True
             await self.assert_next_queue(running=True, current_sal_index=1002,
                                          sal_indices=[1001, 1003], past_sal_indices=[], wait=True)
 
@@ -247,7 +260,10 @@ class QueueModelTestCase(unittest.TestCase):
 
     def test_get_script_info(self):
         async def doit():
-            await self.assert_next_queue(running=True)
+            await self.assert_next_queue(enabled=False, running=True)
+
+            self.model.enabled = True
+            await self.assert_next_queue(enabled=True, running=True)
 
             # pause the queue so we know what to expect of queue state
             self.model.running = False
@@ -317,7 +333,10 @@ class QueueModelTestCase(unittest.TestCase):
         """Test move, pause and showQueue
         """
         async def doit():
-            await self.assert_next_queue(running=True)
+            await self.assert_next_queue(enabled=False, running=True)
+
+            self.model.enabled = True
+            await self.assert_next_queue(enabled=True, running=True)
 
             # pause the queue so we know what to expect of queue state
             self.model.running = False
@@ -441,7 +460,10 @@ class QueueModelTestCase(unittest.TestCase):
 
     def test_remove(self):
         async def doit():
-            await self.assert_next_queue(running=True)
+            await self.assert_next_queue(enabled=False, running=True)
+
+            self.model.enabled = True
+            await self.assert_next_queue(enabled=True, running=True)
 
             # pause the queue so we know what to expect of queue state
             self.model.running = False
@@ -491,7 +513,10 @@ class QueueModelTestCase(unittest.TestCase):
         """Test requeue
         """
         async def doit():
-            await self.assert_next_queue(running=True)
+            await self.assert_next_queue(enabled=False, running=True)
+
+            self.model.enabled = True
+            await self.assert_next_queue(enabled=True, running=True)
 
             # pause the queue so we know what to expect of queue state
             self.model.running = False
@@ -572,7 +597,10 @@ class QueueModelTestCase(unittest.TestCase):
 
     def test_resume_before_first_script_runnable(self):
         async def doit():
-            await self.assert_next_queue(running=True)
+            await self.assert_next_queue(enabled=False, running=True)
+
+            self.model.enabled = True
+            await self.assert_next_queue(enabled=True, running=True)
 
             # pause the queue so we know what to expect of queue state
             self.model.running = False
@@ -605,6 +633,11 @@ class QueueModelTestCase(unittest.TestCase):
 
     def test_run_immediately(self):
         async def doit():
+            await self.assert_next_queue(enabled=False, running=True)
+
+            self.model.enabled = True
+            await self.assert_next_queue(enabled=True, running=True)
+
             script_info = ts_scriptqueue.ScriptInfo(
                 index=self.model.next_sal_index,
                 cmd_id=25,  # arbitrary

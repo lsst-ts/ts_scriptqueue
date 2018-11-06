@@ -38,7 +38,7 @@ class ScriptQueueTestCase(unittest.TestCase):
         self.queue = ts_scriptqueue.ScriptQueue(standardpath=standardpath,
                                                 externalpath=externalpath,
                                                 min_sal_index=1000)
-        self.queue.summary_state = salobj.State.ENABLED
+        self.queue.summary_state = salobj.State.DISABLED
         self.remote = salobj.Remote(SALPY_ScriptQueue)
         self.process = None
 
@@ -47,13 +47,34 @@ class ScriptQueueTestCase(unittest.TestCase):
         if nkilled > 0:
             warnings.warn(f"Killed {nkilled} subprocesses")
 
-    async def assert_next_queue(self, running=False, currentSalIndex=0, salIndices=(), pastSalIndices=()):
+    async def assert_next_queue(self, enabled=True, running=False,
+                                currentSalIndex=0, salIndices=(), pastSalIndices=()):
         """Get the next queue event and check values.
 
-        The defaults are for a paused queue with nothing on it.
+        If wait is True then wait for the next update before checking.
+
+        The defaults are appropriate to an enabled, paused queue
+        with no scripts.
+
+        Parameters
+        ----------
+        enabled : `bool`
+            Is the queue enabled?
+        running : `bool`
+            Is the queue running?
+        current_sal_index : `int`
+            SAL index of current script, or 0 if no current script.
+        sal_indices : ``sequence`` of `int`
+            SAL indices of scripts on the queue.
+        past_sal_indices : ``sequence`` of `int`
+            SAL indices of scripts in history.
         """
         queue_data = await self.remote.evt_queue.next(flush=False, timeout=20)
         self.assertIsNotNone(queue_data)
+        if enabled:
+            self.assertTrue(queue_data.enabled)
+        else:
+            self.assertFalse(queue_data.enabled)
         if running:
             self.assertTrue(queue_data.running)
         else:
@@ -71,7 +92,7 @@ class ScriptQueueTestCase(unittest.TestCase):
         config = "wait_time: 1"  # give showScript time to run
 
         async def doit():
-            await self.assert_next_queue(running=True)
+            await self.assert_next_queue(enabled=False, running=True)
 
             def make_add_data(location, locationSalIndex=0):
                 add_data = self.remote.cmd_add.DataType()
@@ -83,6 +104,15 @@ class ScriptQueueTestCase(unittest.TestCase):
                 add_data.locationSalIndex = locationSalIndex
                 add_data.descr = "test_add"
                 return add_data
+
+            # check that add fails when the queue is not enabled
+            add_data = make_add_data(location=SALPY_ScriptQueue.add_Last)
+            id_ack = await self.remote.cmd_add.start(add_data, timeout=2)
+            self.assertEqual(id_ack.ack.ack, self.remote.salinfo.lib.SAL__CMD_FAILED)
+
+            id_ack = await self.remote.cmd_enable.start(self.remote.cmd_enable.DataType(), timeout=2)
+            self.assertEqual(id_ack.ack.ack, self.remote.salinfo.lib.SAL__CMD_COMPLETE)
+            await self.assert_next_queue(enabled=True, running=True)
 
             # pause the queue so we know what to expect of queue state
             id_ack = await self.remote.cmd_pause.start(self.remote.cmd_pause.DataType(), timeout=10)
@@ -283,12 +313,17 @@ class ScriptQueueTestCase(unittest.TestCase):
         """Test move, pause and showQueue
         """
         async def doit():
-            await self.assert_next_queue(running=True)
+            await self.assert_next_queue(enabled=False, running=True)
 
             # pause the queue so we know what to expect of queue state
+            # also check that pause works while not enabled
             id_ack = await self.remote.cmd_pause.start(self.remote.cmd_pause.DataType(), timeout=10)
             self.assertEqual(id_ack.ack.ack, self.remote.salinfo.lib.SAL__CMD_COMPLETE)
-            await self.assert_next_queue(running=False)
+            await self.assert_next_queue(enabled=False, running=False)
+
+            id_ack = await self.remote.cmd_enable.start(self.remote.cmd_enable.DataType(), timeout=2)
+            self.assertEqual(id_ack.ack.ack, self.remote.salinfo.lib.SAL__CMD_COMPLETE)
+            await self.assert_next_queue(enabled=True, running=False)
 
             # queue scripts 1000, 1001 and 1002
             sal_indices = [1000, 1001, 1002]
@@ -429,15 +464,18 @@ class ScriptQueueTestCase(unittest.TestCase):
         asyncio.get_event_loop().run_until_complete(doit())
 
     def test_requeue(self):
-        """Test requeue and remove
+        """Test requeue and move
         """
         async def doit():
-            await self.assert_next_queue(running=True)
+            await self.assert_next_queue(enabled=False, running=True)
+
+            id_ack = await self.remote.cmd_enable.start(self.remote.cmd_enable.DataType(), timeout=2)
+            self.assertEqual(id_ack.ack.ack, self.remote.salinfo.lib.SAL__CMD_COMPLETE)
+            await self.assert_next_queue(enabled=True, running=True)
 
             # pause the queue so we know what to expect of queue state
             id_ack = await self.remote.cmd_pause.start(self.remote.cmd_pause.DataType(), timeout=10)
             self.assertEqual(id_ack.ack.ack, self.remote.salinfo.lib.SAL__CMD_COMPLETE)
-
             await self.assert_next_queue(running=False)
 
             # queue scripts 1000, 1001 and 1002
@@ -452,6 +490,33 @@ class ScriptQueueTestCase(unittest.TestCase):
                 id_ack = await self.remote.cmd_add.start(add_data, timeout=10)
                 self.assertEqual(id_ack.ack.ack, self.remote.salinfo.lib.SAL__CMD_COMPLETE)
                 await self.assert_next_queue(salIndices=sal_indices[0:i+1])
+
+            # disable the queue and make sure requeue, move and resume fail
+            # (I added some jobs before disabling so we have scripts
+            # to try to requeue and move).
+            id_ack = await self.remote.cmd_disable.start(self.remote.cmd_disable.DataType(), timeout=2)
+            self.assertEqual(id_ack.ack.ack, self.remote.salinfo.lib.SAL__CMD_COMPLETE)
+            await self.assert_next_queue(enabled=False, running=False, salIndices=sal_indices)
+
+            requeue_data = self.remote.cmd_requeue.DataType()
+            requeue_data.salIndex = 1000
+            requeue_data.location = SALPY_ScriptQueue.requeue_Last
+            id_ack = await self.remote.cmd_requeue.start(requeue_data, timeout=10)
+            self.assertEqual(id_ack.ack.ack, self.remote.salinfo.lib.SAL__CMD_FAILED)
+
+            move_data = self.remote.cmd_move.DataType()
+            move_data.salIndex = 1002
+            move_data.location = SALPY_ScriptQueue.add_First
+            id_ack = await self.remote.cmd_move.start(move_data)
+            self.assertEqual(id_ack.ack.ack, self.remote.salinfo.lib.SAL__CMD_FAILED)
+
+            id_ack = await self.remote.cmd_resume.start(self.remote.cmd_resume.DataType())
+            self.assertEqual(id_ack.ack.ack, self.remote.salinfo.lib.SAL__CMD_FAILED)
+
+            # re-enable the queue and proceed with the rest of the test
+            id_ack = await self.remote.cmd_enable.start(self.remote.cmd_enable.DataType(), timeout=2)
+            self.assertEqual(id_ack.ack.ack, self.remote.salinfo.lib.SAL__CMD_COMPLETE)
+            await self.assert_next_queue(enabled=True, running=False, salIndices=sal_indices)
 
             # requeue 1000 to last
             requeue_data = self.remote.cmd_requeue.DataType()
@@ -564,16 +629,73 @@ class ScriptQueueTestCase(unittest.TestCase):
 
     def test_showAvailableScripts(self):
         async def doit():
+            # make sure showAvailableScripts fails when not enabled
+            id_ack = await self.remote.cmd_showAvailableScripts.start(
+                self.remote.cmd_showAvailableScripts.DataType(), timeout=10)
+            self.assertEqual(id_ack.ack.ack, self.remote.salinfo.lib.SAL__CMD_FAILED)
+
+            id_ack = await self.remote.cmd_enable.start(self.remote.cmd_enable.DataType(), timeout=2)
+            self.assertEqual(id_ack.ack.ack, self.remote.salinfo.lib.SAL__CMD_COMPLETE)
+
+            # this should output available scripts without sending the command
+            available_scripts0 = await self.remote.evt_availableScripts.next(flush=False, timeout=2)
+            with self.assertRaises(asyncio.TimeoutError):
+                await self.remote.evt_availableScripts.next(flush=False, timeout=0.1)
+
             id_ack = await self.remote.cmd_showAvailableScripts.start(
                 self.remote.cmd_showAvailableScripts.DataType(), timeout=10)
             self.assertEqual(id_ack.ack.ack, self.remote.salinfo.lib.SAL__CMD_COMPLETE)
-            available_scripts = self.remote.evt_availableScripts.get()
-            standard_set = set(available_scripts.standard.split(":"))
-            external_set = set(available_scripts.external.split(":"))
+
+            available_scripts1 = await self.remote.evt_availableScripts.next(flush=False, timeout=2)
+
             expected_std_set = set(["script1", "script2", "subdir/script3", "subdir/subsubdir/script4"])
             expected_ext_set = set(["script1", "script5", "subdir/script3", "subdir/script6"])
-            self.assertEqual(standard_set, expected_std_set)
-            self.assertEqual(external_set, expected_ext_set)
+            for available_scripts in (available_scripts0, available_scripts1):
+                standard_set = set(available_scripts.standard.split(":"))
+                external_set = set(available_scripts.external.split(":"))
+                self.assertEqual(standard_set, expected_std_set)
+                self.assertEqual(external_set, expected_ext_set)
+
+            # disable and again make sure showAvailableScripts fails
+            id_ack = await self.remote.cmd_disable.start(self.remote.cmd_disable.DataType(), timeout=2)
+            self.assertEqual(id_ack.ack.ack, self.remote.salinfo.lib.SAL__CMD_COMPLETE)
+
+            id_ack = await self.remote.cmd_showAvailableScripts.start(
+                self.remote.cmd_showAvailableScripts.DataType(), timeout=10)
+            self.assertEqual(id_ack.ack.ack, self.remote.salinfo.lib.SAL__CMD_FAILED)
+
+        asyncio.get_event_loop().run_until_complete(doit())
+
+    def test_showQueue(self):
+        async def doit():
+            await self.assert_next_queue(enabled=False, running=True)
+
+            # make sure showQueue fails when not enabled
+            id_ack = await self.remote.cmd_showQueue.start(
+                self.remote.cmd_showQueue.DataType(), timeout=10)
+            self.assertEqual(id_ack.ack.ack, self.remote.salinfo.lib.SAL__CMD_FAILED)
+
+            id_ack = await self.remote.cmd_enable.start(self.remote.cmd_enable.DataType(), timeout=2)
+            self.assertEqual(id_ack.ack.ack, self.remote.salinfo.lib.SAL__CMD_COMPLETE)
+            await self.assert_next_queue(enabled=True, running=True)
+
+            # make sure we have no more queue events
+            with self.assertRaises(asyncio.TimeoutError):
+                await self.remote.evt_queue.next(flush=False, timeout=0.1)
+
+            id_ack = await self.remote.cmd_showQueue.start(self.remote.cmd_showQueue.DataType(), timeout=2)
+            self.assertEqual(id_ack.ack.ack, self.remote.salinfo.lib.SAL__CMD_COMPLETE)
+            await self.assert_next_queue(enabled=True, running=True)
+
+            # make sure disabling the queue outputs the queue event with runnable False
+            # and disables the showQueue command.
+            id_ack = await self.remote.cmd_disable.start(self.remote.cmd_disable.DataType(), timeout=2)
+            self.assertEqual(id_ack.ack.ack, self.remote.salinfo.lib.SAL__CMD_COMPLETE)
+            await self.assert_next_queue(enabled=False, running=True)
+            with self.assertRaises(asyncio.TimeoutError):
+                await self.remote.evt_queue.next(flush=False, timeout=0.1)
+            id_ack = await self.remote.cmd_showQueue.start(self.remote.cmd_showQueue.DataType(), timeout=2)
+            self.assertEqual(id_ack.ack.ack, self.remote.salinfo.lib.SAL__CMD_FAILED)
 
         asyncio.get_event_loop().run_until_complete(doit())
 

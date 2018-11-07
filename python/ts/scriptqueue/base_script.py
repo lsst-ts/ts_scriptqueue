@@ -8,6 +8,7 @@ import logging
 import logging.handlers
 import queue
 import re
+import sys
 
 import yaml
 
@@ -113,6 +114,17 @@ class BaseScript(salobj.Controller, abc.ABC):
     @classmethod
     def main(cls, descr):
         """Start the script from the command line.
+
+        Parameters
+        ----------
+        descr : `str`
+            Short description of why you are running this script.
+
+        The final return code will be:
+
+        * 0 if final state is `ScriptState.DONE` or `ScriptState.STOPPED`
+        * 1 if final state is `ScriptState.FAILED`
+        * 2 otherwise (which should never happen)
         """
         parser = argparse.ArgumentParser(f"Run {cls.__name__} from the command line")
         parser.add_argument("index", type=int,
@@ -120,6 +132,11 @@ class BaseScript(salobj.Controller, abc.ABC):
         args = parser.parse_args()
         script = cls(index=args.index, descr=descr)
         asyncio.get_event_loop().run_until_complete(script.final_state_future)
+        final_state = script.final_state_future.result()
+        return_code = {ScriptState.DONE: 0,
+                       ScriptState.STOPPED: 0,
+                       ScriptState.FAILED: 1}.get(final_state.state, 2)
+        sys.exit(return_code)
 
     @property
     def checkpoints(self):

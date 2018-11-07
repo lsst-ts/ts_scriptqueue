@@ -313,9 +313,6 @@ class BaseScriptTestCase(unittest.TestCase):
 
         asyncio.get_event_loop().run_until_complete(doit())
 
-    def make_yaml(self, data):
-        yaml.safe_dump(data)
-
     def test_stop_while_running(self):
         script = TestScript(index=self.index)
 
@@ -376,39 +373,50 @@ class BaseScriptTestCase(unittest.TestCase):
     def test_script_process(self):
         """Test running a script as a subprocess.
         """
-        remote = salobj.Remote(SALPY_Script, self.index)
         script_path = os.path.join(self.datadir, "standard", "script1")
 
         async def doit():
-            print("run script in a subprocess")
-            self.process = await asyncio.create_subprocess_exec(script_path, str(self.index))
-            self.assertIsNone(self.process.returncode)
+            for fail in (None, "fail_run", "fail_cleanup"):
+                with self.subTest(fail=fail):
+                    index = next(index_gen)
+                    remote = salobj.Remote(SALPY_Script, index)
 
-            state = await remote.evt_state.next(flush=False, timeout=20)
-            self.assertEqual(state.state, ScriptState.UNCONFIGURED)
+                    self.process = await asyncio.create_subprocess_exec(script_path, str(index))
+                    self.assertIsNone(self.process.returncode)
 
-            setLogging_data = remote.cmd_setLogging.DataType()
-            setLogging_data.level = logging.INFO
-            ack_id = await remote.cmd_setLogging.start(setLogging_data, timeout=2)
-            self.assertEqual(ack_id.ack.ack, remote.salinfo.lib.SAL__CMD_COMPLETE)
+                    state = await remote.evt_state.next(flush=False, timeout=20)
+                    self.assertEqual(state.state, ScriptState.UNCONFIGURED)
 
-            configure_data = remote.cmd_configure.DataType()
-            configure_data.config = "wait_time: 1"
-            ack_id = await remote.cmd_configure.start(configure_data, timeout=2)
-            self.assertEqual(ack_id.ack.ack, remote.salinfo.lib.SAL__CMD_COMPLETE)
+                    setLogging_data = remote.cmd_setLogging.DataType()
+                    setLogging_data.level = logging.INFO
+                    ack_id = await remote.cmd_setLogging.start(setLogging_data, timeout=2)
+                    self.assertEqual(ack_id.ack.ack, remote.salinfo.lib.SAL__CMD_COMPLETE)
 
-            metadata = remote.evt_metadata.get()
-            self.assertEqual(metadata.duration, 1)
-            await asyncio.sleep(0.2)
-            log_msg = remote.evt_logMessage.get()
-            self.assertEqual(log_msg.message, "Configure succeeded")
+                    wait_time = 0.1
+                    configure_data = remote.cmd_configure.DataType()
+                    config = f"wait_time: {wait_time}"
+                    if fail:
+                        config = config + f"\n{fail}: True"
+                    print(f"config={config}")
+                    configure_data.config = config
+                    ack_id = await remote.cmd_configure.start(configure_data, timeout=2)
+                    self.assertEqual(ack_id.ack.ack, remote.salinfo.lib.SAL__CMD_COMPLETE)
 
-            run_data = remote.cmd_run.DataType()
-            ack_id = await remote.cmd_run.start(run_data, timeout=3)
-            self.assertEqual(ack_id.ack.ack, remote.salinfo.lib.SAL__CMD_COMPLETE)
+                    metadata = remote.evt_metadata.get()
+                    self.assertEqual(metadata.duration, wait_time)
+                    await asyncio.sleep(0.2)
+                    log_msg = remote.evt_logMessage.get()
+                    self.assertEqual(log_msg.message, "Configure succeeded")
 
-            await asyncio.wait_for(self.process.wait(), timeout=2)
-            self.assertEqual(self.process.returncode, 0)
+                    run_data = remote.cmd_run.DataType()
+                    ack_id = await remote.cmd_run.start(run_data, timeout=3)
+                    self.assertEqual(ack_id.ack.ack, remote.salinfo.lib.SAL__CMD_COMPLETE)
+
+                    await asyncio.wait_for(self.process.wait(), timeout=2)
+                    if fail:
+                        self.assertEqual(self.process.returncode, 1)
+                    else:
+                        self.assertEqual(self.process.returncode, 0)
 
         asyncio.get_event_loop().run_until_complete(doit())
 

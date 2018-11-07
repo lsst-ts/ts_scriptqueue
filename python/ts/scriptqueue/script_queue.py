@@ -26,8 +26,16 @@ import os.path
 
 import SALPY_ScriptQueue
 import salobj
-from .queue_model import MIN_SAL_INDEX, QueueModel, ScriptInfo
+from .queue_model import QueueModel, ScriptInfo
 
+SCRIPT_INDEX_MULT = 10000
+"""Minimum Script SAL index is ScriptQueue SAL index * SCRIPT_INDEX_MULT
+and the maximum is SCRIPT_INDEX_MULT-1 more.
+
+TODO once a ts_sal release with TSS-3305 fixed is in widespread use,
+increase this to 100,000.
+"""
+_MAX_SCRIPTQUEUE_INDEX = salobj.MAX_SAL_INDEX//SCRIPT_INDEX_MULT - 1
 _LOAD_TIMEOUT = 20  # seconds
 
 
@@ -36,14 +44,22 @@ class ScriptQueue(salobj.BaseCsc):
 
     Parameters
     ----------
+    index : `int`
+        ScriptQueue SAL component index:
+
+        * 1 for the Main telescope.
+        * 2 for AuxTel.
+        * Any allowed value (see ``Raises``) for unit tests.
     standardpath : `str`, `bytes` or `os.PathLike`
         Path to standard SAL scripts.
     externalpath : `str`, `bytes` or `os.PathLike`
         Path to external SAL scripts.
-    min_sal_index : `int` (optional)
-        Minimum SAL index for Script SAL components
-    max_sal_index : `int` (optional)
-        Maximum SAL index for Script SAL components
+
+    Raises
+    ------
+    ValueError
+        If ``index`` < 0 or > MAX_SAL_INDEX//100,000 - 1.
+        If ``standardpath`` or ``externalpath`` is not an existing dir.
 
     Notes
     -----
@@ -74,20 +90,31 @@ class ScriptQueue(salobj.BaseCsc):
       have already run. Eventually support for history can probably
       be done better using the Engineering Facilities Database,
       in which case the history buffer will be eliminated.
+
+    The minimum SAL Script index will be 100,000 * ``index``
+    and the maximum will 99,999 more than that.
     """
-    def __init__(self, standardpath, externalpath,
-                 min_sal_index=MIN_SAL_INDEX, max_sal_index=salobj.MAX_SAL_INDEX):
+    def __init__(self, index, standardpath, externalpath):
+        if index < 0 or index > _MAX_SCRIPTQUEUE_INDEX:
+            raise ValueError(f"index {index} must be >= 0 and <= {_MAX_SCRIPTQUEUE_INDEX}")
         if not os.path.isdir(standardpath):
             raise ValueError(f"No such dir standardpath={standardpath}")
         if not os.path.isdir(externalpath):
             raise ValueError(f"No such dir externalpath={externalpath}")
 
-        super().__init__(SALPY_ScriptQueue, 0)
+        super().__init__(SALPY_ScriptQueue, index)
         self.cmd_stop.allow_multiple_callbacks = True
         self.cmd_terminate.allow_multiple_callbacks = True
-        self.model = QueueModel(standardpath=standardpath, externalpath=externalpath,
+        min_sal_index = index * SCRIPT_INDEX_MULT
+        max_sal_index = min_sal_index + SCRIPT_INDEX_MULT - 1
+        if max_sal_index > salobj.MAX_SAL_INDEX:
+            raise ValueError(f"index {index} too large and a bug let this slip through")
+        self.model = QueueModel(standardpath=standardpath,
+                                externalpath=externalpath,
                                 queue_callback=self.put_queue,
-                                script_callback=self.put_script)
+                                script_callback=self.put_script,
+                                min_sal_index=min_sal_index,
+                                max_sal_index=max_sal_index)
         self.put_queue()
 
     def do_showAvailableScripts(self, id_data=None):
@@ -246,17 +273,15 @@ class ScriptQueue(salobj.BaseCsc):
 
         self.evt_queue.put(evtdata, 1)
 
-    def put_script(self, script_info, returncode=None):
+    def put_script(self, script_info):
         """Output information about a script as a ``script`` event.
 
-        Can be used as a callback for ``self.model.task``.
+        Designed to be used as a QueueModel script_callback.
 
         Parameters
         ----------
         script_info : `ScriptInfo`
-            Information about the script
-        returncode : `int` (optional)
-            Ignored, but needed for use as a callback.
+            Information about the script.
         """
         if script_info is None:
             return

@@ -552,7 +552,6 @@ class QueueModelTestCase(unittest.TestCase):
 
             # add the scripts to the end of the queue
             for info in info_list:
-                print(f"add {info}")
                 await self.model.add(script_info=info,
                                      location=SALPY_ScriptQueue.add_Last,
                                      location_sal_index=0)

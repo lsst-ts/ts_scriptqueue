@@ -118,6 +118,10 @@ class ScriptInfo:
         return self.process_task is not None and self.process_task.done()
 
     @property
+    def failed(self):
+        return self.done and self.process.returncode != 0
+
+    @property
     def index(self):
         """Get the script's SAL index"""
         return self._index

@@ -477,7 +477,7 @@ class QueueModel:
         was_running = self._running
         self._running = bool(run)
         if self._running != was_running:
-            self._update_queue()
+            self._update_queue(pause_on_failure=False)
 
     def terminate_all(self):
         """Terminate all subprocesses and info for the ones terminated.
@@ -568,7 +568,7 @@ class QueueModel:
             # this script is next in line and ready to run
             self._update_queue(force_callback=False)
 
-    def _update_queue(self, force_callback=True):
+    def _update_queue(self, force_callback=True, pause_on_failure=True):
         """Call whenever the queue changes state.
 
         If the current script is done, move it to the history queue.
@@ -577,14 +577,26 @@ class QueueModel:
 
         Parameters
         ----------
-        force_callback : `bool`
+        force_callback : `bool` (optional)
             If True then always call ``queue_callback``;
             otherwise call ``queue_callback`` if the queue changes.
+        pause_on_failure : `bool` (optional)
+            This affects the behavior if the current script has failed:
+
+            * If True, leave it as the current script and pause the queue.
+            * If False and the queue is running, move the current
+              script to history. This is intended for use by ``running``
+              to allow the queue to resume after pausing on failure.
         """
         if self.current_script:
             if self.current_script.done:
-                self.history.appendleft(self.current_script)
-                self.current_script = None
+                if self.current_script.failed and (pause_on_failure or not self.running):
+                    # set `_running` instead of `running` so as to
+                    # not trigger _update_queue
+                    self._running = False
+                else:
+                    self.history.appendleft(self.current_script)
+                    self.current_script = None
             elif not force_callback:
                 return
 

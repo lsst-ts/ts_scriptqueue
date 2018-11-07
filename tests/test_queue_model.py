@@ -457,6 +457,76 @@ class QueueModelTestCase(unittest.TestCase):
 
         asyncio.get_event_loop().run_until_complete(doit())
 
+    def test_pause_on_failure(self):
+        """Test that a failed script pauses the queue.
+        """
+        def make_add_kwargs(fail):
+            sal_index = self.model.next_sal_index
+            config = "wait_time: 0.1"
+            if fail:
+                config = config + "\nfail_run: True"
+            return dict(
+                script_info=scriptqueue.ScriptInfo(
+                    index=sal_index,
+                    cmd_id=sal_index*2,  # arbitrary
+                    is_standard=False,
+                    path=os.path.join("subdir", "script6"),
+                    config=config,
+                    descr=f"test_pause_on_failure {sal_index}",
+                ),
+                location=SALPY_ScriptQueue.add_Last,
+                location_sal_index=0,
+            )
+
+        async def doit():
+            await self.assert_next_queue(enabled=False, running=True)
+
+            self.model.enable = True
+            await self.assert_next_queue(enabled=True, running=True)
+
+            # pause the queue so we know what to expect of queue state
+            self.model.running = False
+            await self.assert_next_queue(running=False)
+
+            # add scripts 1000, 1001, 1002; 1001 fails
+            add_kwargs = make_add_kwargs(fail=False)
+            await self.model.add(**add_kwargs)
+            await self.assert_next_queue(sal_indices=[1000])
+
+            add_kwargs = make_add_kwargs(fail=True)
+            await self.model.add(**add_kwargs)
+            await self.assert_next_queue(sal_indices=[1000, 1001])
+
+            add_kwargs = make_add_kwargs(fail=False)
+            await self.model.add(**add_kwargs)
+            await self.assert_next_queue(sal_indices=[1000, 1001, 1002])
+
+            # make sure all scripts are runnable before starting the queue
+            # so the queue data is more predictable (otherwise the queue
+            # may start up with no script running)
+            await self.wait_runnable(1000, 1001, 1002)
+
+            # start the queue; it should pause when 1001 fails
+            self.model.running = True
+            await self.assert_next_queue(running=True, current_sal_index=1000,
+                                         sal_indices=[1001, 1002], past_sal_indices=[], wait=True)
+
+            await self.assert_next_queue(running=True, current_sal_index=1001,
+                                         sal_indices=[1002], past_sal_indices=[1000], wait=True)
+
+            await self.assert_next_queue(running=False, current_sal_index=1001,
+                                         sal_indices=[1002], past_sal_indices=[1000], wait=True)
+
+            # resume the queue; this should move 1001 to history and keep going
+            self.model.running = True
+            await self.assert_next_queue(running=True, current_sal_index=1002,
+                                         sal_indices=[], past_sal_indices=[1001, 1000], wait=True)
+
+            await self.assert_next_queue(running=True, current_sal_index=0,
+                                         sal_indices=[], past_sal_indices=[1002, 1001, 1000], wait=True)
+
+        asyncio.get_event_loop().run_until_complete(doit())
+
     def test_requeue(self):
         """Test requeue
         """

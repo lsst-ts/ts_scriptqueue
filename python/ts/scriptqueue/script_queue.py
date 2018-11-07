@@ -21,6 +21,7 @@
 
 __all__ = ["ScriptQueue"]
 
+import asyncio
 import os.path
 
 import SALPY_ScriptQueue
@@ -82,6 +83,8 @@ class ScriptQueue(salobj.BaseCsc):
             raise ValueError(f"No such dir externalpath={externalpath}")
 
         super().__init__(SALPY_ScriptQueue, 0)
+        self.cmd_stop.allow_multiple_callbacks = True
+        self.cmd_terminate.allow_multiple_callbacks = True
         self.model = QueueModel(standardpath=standardpath, externalpath=externalpath,
                                 queue_callback=self.put_queue,
                                 script_callback=self.put_script)
@@ -122,7 +125,8 @@ class ScriptQueue(salobj.BaseCsc):
             Command ID and data. Ignored.
         """
         self.assert_enabled("showScript")
-        script_info = self.model.get_script_info(id_data.data.salIndex)
+        script_info = self.model.get_script_info(id_data.data.salIndex,
+                                                 search_history=True)
         self.put_script(script_info)
 
     def do_pause(self, id_data):
@@ -176,12 +180,6 @@ class ScriptQueue(salobj.BaseCsc):
                         location=id_data.data.location,
                         location_sal_index=id_data.data.locationSalIndex)
 
-    def do_remove(self, id_data):
-        """Remove a script from the queue and terminate it.
-        """
-        self.assert_enabled("remove")
-        self.model.remove(id_data.data.salIndex)
-
     async def do_requeue(self, id_data):
         """Put a script back on the queue with the same configuration.
         """
@@ -192,6 +190,33 @@ class ScriptQueue(salobj.BaseCsc):
             location=id_data.data.location,
             location_sal_index=id_data.data.locationSalIndex,
         )
+
+    async def do_stop(self, id_data):
+        """Stop a queued or running script, giving it a chance to clean up.
+
+        First try sending the script the ``stop`` command.
+        Then, if necessary, terminate the script by sending
+        SIGTERM to the subprocess.
+
+        If the script was running, it is moved to the history.
+        If the script was not yet running, it is removed
+        from the queue.
+        """
+        self.assert_enabled("remove")
+        await self.model.stop(id_data.data.salIndex, timeout=20)
+
+    async def do_terminate(self, id_data):
+        """Stop a queued or running script without giving it
+        a chance to clean up.
+
+        Terminate a script by sending SIGTERM to the subprocess.
+
+        If the script was running, it is moved to the history.
+        If the script was not yet running, it is removed
+        from the queue.
+        """
+        self.assert_enabled("remove")
+        await asyncio.wait_for(self.model.terminate(id_data.data.salIndex), 5)
 
     def report_summary_state(self):
         super().report_summary_state()

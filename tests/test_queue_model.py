@@ -203,22 +203,17 @@ class QueueModelTestCase(unittest.TestCase):
                 await self.model.add(**add_kwargs)
             await self.assert_next_queue(sal_indices=[1005, 1002, 1004, 1006, 1000, 1001, 1003])
 
-            # remove a few scripts
-            self.model.remove(1006)
+            # stop a few scripts
+            await self.model.stop(1006, timeout=5)
             await self.assert_next_queue(sal_indices=[1005, 1002, 1004, 1000, 1001, 1003])
 
-            self.model.remove(1005)
+            await self.model.stop(1005, timeout=5)
             await self.assert_next_queue(sal_indices=[1002, 1004, 1000, 1001, 1003])
 
-            self.model.remove(1000)
+            await self.model.stop(1000, timeout=5)
             await self.assert_next_queue(sal_indices=[1002, 1004, 1001, 1003])
 
-            self.model.remove(1004)
-            await self.assert_next_queue(sal_indices=[1002, 1001, 1003])
-
-            # try to remove a non-existent script
-            with self.assertRaises(ValueError):
-                self.model.remove(5432)
+            await self.model.stop(1004, timeout=5)
             await self.assert_next_queue(sal_indices=[1002, 1001, 1003])
 
             # make sure all scripts are runnable before starting the queue
@@ -297,8 +292,12 @@ class QueueModelTestCase(unittest.TestCase):
             await self.assert_next_queue(running=True, current_sal_index=1001,
                                          sal_indices=[1002], past_sal_indices=[1000], wait=True)
 
+            info1002 = self.model.get_script_info(sal_index=1002, search_history=False)
+            self.assert_script_info_equal(info1002, info_dict[1002])
+            with self.assertRaises(ValueError):
+                self.model.get_script_info(sal_index=1000, search_history=False)
             for sal_index, expected_script_info in info_dict.items():
-                script_info = self.model.get_script_info(sal_index=sal_index)
+                script_info = self.model.get_script_info(sal_index=sal_index, search_history=True)
                 self.assert_script_info_equal(script_info, expected_script_info)
 
             await self.model.wait_terminate_all()
@@ -458,57 +457,6 @@ class QueueModelTestCase(unittest.TestCase):
 
         asyncio.get_event_loop().run_until_complete(doit())
 
-    def test_remove(self):
-        async def doit():
-            await self.assert_next_queue(enabled=False, running=True)
-
-            self.model.enabled = True
-            await self.assert_next_queue(enabled=True, running=True)
-
-            # pause the queue so we know what to expect of queue state
-            self.model.running = False
-            await self.assert_next_queue(running=False)
-
-            for i in range(3):
-                script_info = scriptqueue.ScriptInfo(
-                    index=self.model.next_sal_index,
-                    cmd_id=i + 10,  # arbitrary
-                    is_standard=False,
-                    path=os.path.join("subdir", "script6"),
-                    config="wait_time: 0.5" if i == 1 else "",
-                    descr=f"test_requeue {i}",
-                )
-                await self.model.add(script_info=script_info,
-                                     location=SALPY_ScriptQueue.add_Last,
-                                     location_sal_index=0)
-
-            await self.assert_next_queue(sal_indices=[1000, 1001, 1002])
-
-            await self.wait_runnable(1000, 1001)
-
-            # resume the queue and wait for the second script to start
-            # running. At that point we have one running script, one in
-            # history and one on the queue. Remove the ones not done.
-            self.model.running = True
-            await self.assert_next_queue(running=True, current_sal_index=1000,
-                                         sal_indices=[1001, 1002], past_sal_indices=[], wait=True)
-            await self.assert_next_queue(running=True, current_sal_index=1001,
-                                         sal_indices=[1002], past_sal_indices=[1000], wait=True)
-
-            self.model.remove(sal_index=1002)
-            await self.assert_next_queue(running=True, current_sal_index=1001,
-                                         sal_indices=[], past_sal_indices=[1000], wait=True)
-
-            self.model.remove(sal_index=1001)
-            await self.assert_next_queue(running=True, current_sal_index=0,
-                                         sal_indices=[], past_sal_indices=[1000], wait=True)
-
-            # try removing a script that doesn't exist
-            with self.assertRaises(ValueError):
-                self.model.remove(sal_index=333)
-
-        asyncio.get_event_loop().run_until_complete(doit())
-
     def test_requeue(self):
         """Test requeue
         """
@@ -661,6 +609,108 @@ class QueueModelTestCase(unittest.TestCase):
 
         asyncio.get_event_loop().run_until_complete(doit())
 
+    def test_stop(self):
+        async def doit():
+            await self.assert_next_queue(enabled=False, running=True)
+
+            self.model.enabled = True
+            await self.assert_next_queue(enabled=True, running=True)
+
+            # pause the queue so we know what to expect of queue state
+            self.model.running = False
+            await self.assert_next_queue(running=False)
+
+            for i in range(3):
+                script_info = scriptqueue.ScriptInfo(
+                    index=self.model.next_sal_index,
+                    cmd_id=i + 10,  # arbitrary
+                    is_standard=False,
+                    path=os.path.join("subdir", "script6"),
+                    config="wait_time: 10" if i == 1 else "",
+                    descr=f"test_requeue {i}",
+                )
+                await self.model.add(script_info=script_info,
+                                     location=SALPY_ScriptQueue.add_Last,
+                                     location_sal_index=0)
+
+            await self.assert_next_queue(sal_indices=[1000, 1001, 1002])
+
+            await self.wait_runnable(1000, 1001, 1002)
+
+            # resume the queue and wait for the second script to start
+            # running. At that point we have one running script, one in
+            # history and one on the queue. Remove the ones not done.
+            self.model.running = True
+            await self.assert_next_queue(running=True, current_sal_index=1000,
+                                         sal_indices=[1001, 1002], past_sal_indices=[], wait=True)
+            await self.assert_next_queue(running=True, current_sal_index=1001,
+                                         sal_indices=[1002], past_sal_indices=[1000], wait=True)
+
+            await self.model.stop(sal_index=1002, timeout=5)
+            await self.assert_next_queue(running=True, current_sal_index=1001,
+                                         sal_indices=[], past_sal_indices=[1000], wait=True)
+
+            await self.model.stop(sal_index=1001, timeout=5)
+            await self.assert_next_queue(running=True, current_sal_index=0,
+                                         sal_indices=[], past_sal_indices=[1001, 1000], wait=True)
+
+            # try to stop a script that doesn't exist
+            with self.assertRaises(ValueError):
+                await self.model.stop(sal_index=333)
+
+        asyncio.get_event_loop().run_until_complete(doit())
+
+    def test_terminate(self):
+        async def doit():
+            await self.assert_next_queue(enabled=False, running=True)
+
+            self.model.enabled = True
+            await self.assert_next_queue(enabled=True, running=True)
+
+            # pause the queue so we know what to expect of queue state
+            self.model.running = False
+            await self.assert_next_queue(running=False)
+
+            for i in range(3):
+                script_info = scriptqueue.ScriptInfo(
+                    index=self.model.next_sal_index,
+                    cmd_id=i + 10,  # arbitrary
+                    is_standard=False,
+                    path=os.path.join("subdir", "script6"),
+                    config="wait_time: 10" if i == 1 else "",
+                    descr=f"test_requeue {i}",
+                )
+                await self.model.add(script_info=script_info,
+                                     location=SALPY_ScriptQueue.add_Last,
+                                     location_sal_index=0)
+
+            await self.assert_next_queue(sal_indices=[1000, 1001, 1002])
+
+            await self.wait_runnable(1000, 1001, 1002)
+
+            # resume the queue and wait for the second script to start
+            # running. At that point we have one running script, one in
+            # history and one on the queue. Remove the ones not done.
+            self.model.running = True
+            await self.assert_next_queue(running=True, current_sal_index=1000,
+                                         sal_indices=[1001, 1002], past_sal_indices=[], wait=True)
+            await self.assert_next_queue(running=True, current_sal_index=1001,
+                                         sal_indices=[1002], past_sal_indices=[1000], wait=True)
+
+            await asyncio.wait_for(self.model.terminate(sal_index=1002), 5)
+            await self.assert_next_queue(running=True, current_sal_index=1001,
+                                         sal_indices=[], past_sal_indices=[1000], wait=True)
+
+            await asyncio.wait_for(self.model.terminate(sal_index=1001), 5)
+            await self.assert_next_queue(running=True, current_sal_index=0,
+                                         sal_indices=[], past_sal_indices=[1001, 1000], wait=True)
+
+            # try to stop a script that doesn't exist
+            with self.assertRaises(ValueError):
+                await self.model.terminate(sal_index=333)
+
+        asyncio.get_event_loop().run_until_complete(doit())
+
     async def wait_runnable(self, *indices):
         """Wait for the specified scripts to be runnable.
 
@@ -670,7 +720,7 @@ class QueueModelTestCase(unittest.TestCase):
         """
         for sal_index in indices:
             print(f"waiting for script {sal_index} to be runnable")
-            script_info = self.model.get_script_info(sal_index)
+            script_info = self.model.get_script_info(sal_index, search_history=False)
             await asyncio.wait_for(script_info.start_task, 20)
             await asyncio.wait_for(script_info.config_task, 20)
             # this will fail if the script was already run

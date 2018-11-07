@@ -33,6 +33,7 @@ import SALPY_ScriptQueue
 import salobj
 from . import utils
 from .script_info import ScriptInfo
+from .base_script import ScriptState
 
 _LOAD_TIMEOUT = 20  # seconds
 
@@ -200,7 +201,7 @@ class QueueModel:
         key = ScriptKey(sal_index)
         return self.queue.index(key)
 
-    def get_script_info(self, sal_index):
+    def get_script_info(self, sal_index, search_history):
         """Get information about a script.
 
         Search current script, the queue and history.
@@ -221,7 +222,10 @@ class QueueModel:
         try:
             return self.queue[self.queue.index(key)]
         except ValueError:
-            pass
+            if search_history:
+                pass
+            else:
+                raise
         return self.history[self.history.index(key)]
 
     def make_full_path(self, is_standard, path):
@@ -329,27 +333,6 @@ class QueueModel:
         del self.queue[queue_index]
         return script_info
 
-    def remove(self, sal_index):
-        """Remove a script from the queue and terminate it.
-
-        Parameters
-        ----------
-        sal_index : `int`
-            SAL index of script to move.
-
-        Raises
-        ------
-        ValueError
-            If a script is not queued or running.
-        """
-        if self.current_script and self.current_script.index == sal_index:
-            script_info = self.current_script
-            self.current_script = None
-        else:
-            script_info = self.pop_script_info(sal_index)
-        self._update_queue()
-        script_info.terminate()
-
     async def requeue(self, sal_index, cmd_id, location, location_sal_index):
         """Requeue a script.
 
@@ -379,7 +362,7 @@ class QueueModel:
         script_info : `ScriptInfo`
             Info for the requeued script.
         """
-        old_script_info = self.get_script_info(sal_index)
+        old_script_info = self.get_script_info(sal_index, search_history=True)
         script_info = ScriptInfo(
             index=self.next_sal_index,
             cmd_id=cmd_id,
@@ -392,6 +375,79 @@ class QueueModel:
                        location=location,
                        location_sal_index=location_sal_index)
         return script_info
+
+    async def stop(self, sal_index, timeout=None):
+        """Stop a queued or running script, giving it time to clean up.
+
+        First send the script the ``stop`` command, giving that ``timeout``
+        seconds to succeed or fail. If necessary, terminate the script
+        by sending SIGTERM to the process.
+
+        This is slower and than `terminate`, but gives the script
+        a chance to clean up.
+        If successful, the script is removed from the queue.
+
+        Parameters
+        ----------
+        sal_index : `int`
+            SAL index of script to move.
+        timeout : `float` (optional)
+            Time limit, in seconds. If None then no time limit.
+
+        Raises
+        ------
+        ValueError
+            If a script is not queued or running.
+        """
+        script_info = self.get_script_info(sal_index, search_history=False)
+        if script_info.done or script_info.remote is None:
+            return
+        if script_info.remote.evt_state.get() == ScriptState.RUNNING:
+            # process is running, so send the "stop" command
+            try:
+                await script_info.remote.cmd_stop.start(script_info.remote.cmd_stop.DataType(),
+                                                        timeout=timeout)
+                # give the process time to terminate
+                await asyncio.wait_for(script_info.process.wait(), timeout=2)
+                # let the script be removed or moved
+                await asyncio.sleep(0)
+                return
+            except Exception:
+                # oh well, terminate it instead
+                pass
+        script_info.terminate()
+        if timeout is None:
+            await script_info.process.wait()
+        else:
+            await asyncio.wait_for(script_info.process.wait(), timeout=timeout)
+        # let the script be removed or moved
+        await asyncio.sleep(0)
+
+    async def terminate(self, sal_index):
+        """Terminate a queued or running script by sending SIGTERM
+        to the subprocess and wait for that to complete.
+
+        If successful (as it will be, unless the script catches SIGTERM),
+        the script is removed from the the queue.
+        If you have time please try `stop` first, as that gives the
+        script a chance to clean up.
+
+        Parameters
+        ----------
+        sal_index : `int`
+            SAL index of script to move.
+
+        Raises
+        ------
+        ValueError
+            If a script is not queued or running.
+        """
+        script_info = self.get_script_info(sal_index, search_history=False)
+        did_terminate = script_info.terminate()
+        if did_terminate:
+            await script_info.process.wait()
+            # let the script be removed or moved
+            await asyncio.sleep(0)
 
     @property
     def enabled(self):

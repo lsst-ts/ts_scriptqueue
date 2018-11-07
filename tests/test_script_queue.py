@@ -206,38 +206,38 @@ class ScriptQueueTestCase(unittest.TestCase):
             self.assertEqual(id_ack.ack.ack, self.remote.salinfo.lib.SAL__CMD_COMPLETE)
             await self.assert_next_queue(salIndices=[1005, 1002, 1004, 1006, 1000, 1001, 1003])
 
-            # remove a few scripts
-            remove_data = self.remote.cmd_remove.DataType()
-            remove_data.salIndex = 1006
-            id_ack = await self.remote.cmd_remove.start(remove_data, timeout=10)
+            # stop a few scripts
+            stop_data = self.remote.cmd_stop.DataType()
+            stop_data.salIndex = 1006
+            id_ack = await self.remote.cmd_stop.start(stop_data, timeout=10)
             self.assertEqual(id_ack.ack.ack, self.remote.salinfo.lib.SAL__CMD_COMPLETE)
             await self.assert_next_queue(salIndices=[1005, 1002, 1004, 1000, 1001, 1003])
 
-            remove_data = self.remote.cmd_remove.DataType()
-            remove_data.salIndex = 1005
-            id_ack = await self.remote.cmd_remove.start(remove_data, timeout=10)
+            stop_data = self.remote.cmd_stop.DataType()
+            stop_data.salIndex = 1005
+            id_ack = await self.remote.cmd_stop.start(stop_data, timeout=10)
             self.assertEqual(id_ack.ack.ack, self.remote.salinfo.lib.SAL__CMD_COMPLETE)
             await self.assert_next_queue(salIndices=[1002, 1004, 1000, 1001, 1003])
 
-            remove_data = self.remote.cmd_remove.DataType()
-            remove_data.salIndex = 1000
-            id_ack = await self.remote.cmd_remove.start(remove_data, timeout=10)
+            stop_data = self.remote.cmd_stop.DataType()
+            stop_data.salIndex = 1000
+            id_ack = await self.remote.cmd_stop.start(stop_data, timeout=10)
             self.assertEqual(id_ack.ack.ack, self.remote.salinfo.lib.SAL__CMD_COMPLETE)
             await self.assert_next_queue(salIndices=[1002, 1004, 1001, 1003])
 
-            remove_data = self.remote.cmd_remove.DataType()
-            remove_data.salIndex = 1004
-            id_ack = await self.remote.cmd_remove.start(remove_data, timeout=10)
+            stop_data = self.remote.cmd_stop.DataType()
+            stop_data.salIndex = 1004
+            id_ack = await self.remote.cmd_stop.start(stop_data, timeout=10)
             self.assertEqual(id_ack.ack.ack, self.remote.salinfo.lib.SAL__CMD_COMPLETE)
             await self.assert_next_queue(salIndices=[1002, 1001, 1003])
 
-            # try to remove a non-existent script
-            remove_data = self.remote.cmd_remove.DataType()
-            remove_data.salIndex = 5432
-            id_ack = await self.remote.cmd_remove.start(remove_data, timeout=10)
+            # try to stop a non-existent script
+            stop_data = self.remote.cmd_stop.DataType()
+            stop_data.salIndex = 5432
+            id_ack = await self.remote.cmd_stop.start(stop_data, timeout=10)
             self.assertEqual(id_ack.ack.ack, self.remote.salinfo.lib.SAL__CMD_FAILED)
 
-            # make sure the failed removals did not affect the queue
+            # make sure the failed stop did not affect the queue
             id_ack = await self.remote.cmd_showQueue.start(self.remote.cmd_showQueue.DataType())
             self.assertEqual(id_ack.ack.ack, self.remote.salinfo.lib.SAL__CMD_COMPLETE)
             await self.assert_next_queue(salIndices=[1002, 1001, 1003])
@@ -464,7 +464,7 @@ class ScriptQueueTestCase(unittest.TestCase):
         asyncio.get_event_loop().run_until_complete(doit())
 
     def test_requeue(self):
-        """Test requeue and move
+        """Test requeue, move and terminate
         """
         async def doit():
             await self.assert_next_queue(enabled=False, running=True)
@@ -572,14 +572,14 @@ class ScriptQueueTestCase(unittest.TestCase):
             self.assertEqual(id_ack.ack.ack, self.remote.salinfo.lib.SAL__CMD_COMPLETE)
             await self.assert_next_queue(salIndices=[1005, 1004, 1000, 1001, 1002, 1006, 1003, 1007, 1008])
 
-            # remove all scripts except 1001 and 1002
+            # stop all scripts except 1001 and 1002
             sal_indices = [1005, 1004, 1000, 1001, 1002, 1006, 1003, 1007, 1008]
             for remove_index in sal_indices[:]:
                 if remove_index in (1001, 1002):
                     continue
-                remove_data = self.remote.cmd_remove.DataType()
-                remove_data.salIndex = remove_index
-                id_ack = await self.remote.cmd_remove.start(remove_data, timeout=10)
+                stop_data = self.remote.cmd_stop.DataType()
+                stop_data.salIndex = remove_index
+                id_ack = await self.remote.cmd_stop.start(stop_data, timeout=10)
                 self.assertEqual(id_ack.ack.ack, self.remote.salinfo.lib.SAL__CMD_COMPLETE)
 
                 sal_indices.remove(remove_index)
@@ -708,7 +708,7 @@ class ScriptQueueTestCase(unittest.TestCase):
         """
         for sal_index in sal_indices:
             print(f"waiting for script {sal_index} to be runnable")
-            script_info = self.queue.model.get_script_info(sal_index)
+            script_info = self.queue.model.get_script_info(sal_index, search_history=False)
             await asyncio.wait_for(script_info.start_task, 20)
             await asyncio.wait_for(script_info.config_task, 20)
             # this will fail if the script was already run

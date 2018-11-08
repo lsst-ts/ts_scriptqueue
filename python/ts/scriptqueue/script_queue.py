@@ -295,14 +295,12 @@ class ScriptQueue(salobj.BaseCsc):
         evtdata.timestamp = script_info.timestamp
         evtdata.duration = script_info.duration
         if script_info.done:
-            returncode = script_info.process.returncode
-            assert returncode is not None
-            if returncode == 0:
-                evtdata.processState = sallib.script_Complete
-            elif returncode > 0:
+            if script_info.failed:
                 evtdata.processState = sallib.script_Failed
-            else:
+            elif script_info.terminated:
                 evtdata.processState = sallib.script_Terminated
+            else:
+                evtdata.processState = sallib.script_Complete
         elif script_info.running:
             evtdata.processState = sallib.script_Running
         elif script_info.configured:

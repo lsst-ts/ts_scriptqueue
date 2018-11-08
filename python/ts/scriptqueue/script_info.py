@@ -90,6 +90,12 @@ class ScriptInfo:
         """
         self._run_started = False  # `run` successfully called
 
+        # The following guarantees that if we terminate a process
+        # and it sucessfully stops, then we can report it as terminated;
+        # I had hoped to use process.returncode < 0 but was getting
+        # a returncode of 0 instead.
+        self._terminated = False
+
     @property
     def callback(self):
         """Set or get a function to call whenever the script
@@ -119,7 +125,11 @@ class ScriptInfo:
 
     @property
     def failed(self):
-        return self.done and self.process.returncode != 0
+        return self.done and self.process.returncode > 0
+
+    @property
+    def terminated(self):
+        return self.done and (self.process.returncode < 0 or self._terminated)
 
     @property
     def index(self):
@@ -197,7 +207,7 @@ class ScriptInfo:
             return False
         if self.process.returncode is not None:
             return False
-
+        self._terminated = True
         self.process.terminate()
         return True
 

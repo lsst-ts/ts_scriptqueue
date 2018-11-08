@@ -3,7 +3,13 @@ import os
 
 from lsst.sconsUtils import env, scripts
 
-scripts.BasicSConscript.tests(pyList=[])
+# TODO: once TSS-3191 is resolved:
+# * remove pySingles=[...]
+# * rename the files from nopytest_x to test_x
+# * shorten the time limits in these tests
+scripts.BasicSConscript.tests(pySingles=["nopytest_queue_model.py",
+                                         "nopytest_script_queue.py",
+                                         ], pyList=[])
 
 for name in ("OSPL_URI", "OPENSPLICE_LOC"):
     val = os.environ.get(name)

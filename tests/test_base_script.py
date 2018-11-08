@@ -384,7 +384,7 @@ class BaseScriptTestCase(unittest.TestCase):
                     self.process = await asyncio.create_subprocess_exec(script_path, str(index))
                     self.assertIsNone(self.process.returncode)
 
-                    state = await remote.evt_state.next(flush=False, timeout=20)
+                    state = await remote.evt_state.next(flush=False, timeout=60)
                     self.assertEqual(state.state, ScriptState.UNCONFIGURED)
 
                     setLogging_data = remote.cmd_setLogging.DataType()

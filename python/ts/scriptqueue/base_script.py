@@ -16,7 +16,7 @@ import SALPY_Script
 import salobj
 
 
-HEARTBEAT_INTERVAL = 2000  # seconds
+HEARTBEAT_INTERVAL = 5  # seconds
 LOG_MESSAGES_INTERVAL = 0.05  # seconds
 
 

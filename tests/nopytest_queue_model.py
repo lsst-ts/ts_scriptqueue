@@ -25,6 +25,7 @@ import time
 import unittest
 import warnings
 
+import SALPY_Script
 import SALPY_ScriptQueue
 import salobj
 from ts import scriptqueue
@@ -114,7 +115,9 @@ class QueueModelTestCase(unittest.TestCase):
     def script_callback(self, script_info):
         print(f"script_callback for {script_info.index} at {time.time():0.1f}: "
               f"started={script_info.start_task.done()}; "
-              f"configured={script_info.configured}; done={script_info.done}")
+              f"configured={script_info.configured}; "
+              f"done={script_info.done}; "
+              f"script_state={script_info.script_state}")
 
     def test_add(self):
         """Test add."""
@@ -517,10 +520,12 @@ class QueueModelTestCase(unittest.TestCase):
             await self.assert_next_queue(running=False, current_sal_index=1001,
                                          sal_indices=[1002], past_sal_indices=[1000], wait=True)
 
-            # assert that the process return code is positive for the failed script
+            # assert that the process return code is positive for failure
+            # and that the final script state Failed is sent and recorded
             script_info = self.model.get_script_info(1001, search_history=False)
             self.assertTrue(script_info.done)
             self.assertGreater(script_info.process.returncode, 0)
+            self.assertEqual(script_info.script_state, SALPY_Script.state_Failed)
 
             # resume the queue; this should move 1001 to history and keep going
             self.model.running = True
@@ -529,6 +534,13 @@ class QueueModelTestCase(unittest.TestCase):
 
             await self.assert_next_queue(running=True, current_sal_index=0,
                                          sal_indices=[], past_sal_indices=[1002, 1001, 1000], wait=True)
+
+            # assert that the process return code is 0 for success
+            # and that the final script state Done is sent and recorded
+            script_info = self.model.get_script_info(1002, search_history=True)
+            self.assertTrue(script_info.done)
+            self.assertEqual(script_info.process.returncode, 0)
+            self.assertEqual(script_info.script_state, SALPY_Script.state_Done)
 
         asyncio.get_event_loop().run_until_complete(doit())
 
@@ -745,6 +757,7 @@ class QueueModelTestCase(unittest.TestCase):
             self.model.running = False
             await self.assert_next_queue(running=False)
 
+            info_dict = {}
             for i in range(3):
                 script_info = scriptqueue.ScriptInfo(
                     index=self.model.next_sal_index,
@@ -754,15 +767,19 @@ class QueueModelTestCase(unittest.TestCase):
                     config="wait_time: 10" if i == 1 else "",
                     descr=f"test_requeue {i}",
                 )
+                info_dict[script_info.index] = script_info
                 await asyncio.wait_for(self.model.add(script_info=script_info,
                                                       location=SALPY_ScriptQueue.add_Last,
                                                       location_sal_index=0), timeout=60)
+            script_info0 = info_dict[1000]
+            script_info1 = info_dict[1001]
+            script_info2 = info_dict[1002]
 
             await self.assert_next_queue(sal_indices=[1000, 1001, 1002])
 
             await self.wait_runnable(1000, 1001, 1002)
 
-            # resume the queue and wait for the second script to start
+            # resume the queue and wait for the script 1001 to start
             # running. At that point we have one running script, one in
             # history and one on the queue. Remove the ones not done.
             self.model.running = True
@@ -770,6 +787,13 @@ class QueueModelTestCase(unittest.TestCase):
                                          sal_indices=[1001, 1002], past_sal_indices=[], wait=True)
             await self.assert_next_queue(running=True, current_sal_index=1001,
                                          sal_indices=[1002], past_sal_indices=[1000], wait=True)
+            for i in range(100):
+                if script_info1.script_state == SALPY_Script.state_Running:
+                    break
+                await asyncio.sleep(0.05)
+            else:
+                self.fail("Timed out waiting for script 1001 to start running")
+            self.assertEqual(script_info1.process_state, SALPY_ScriptQueue.script_Running)
 
             await asyncio.wait_for(self.model.terminate(sal_index=1002), timeout=2)
             await self.assert_next_queue(running=True, current_sal_index=1001,
@@ -778,6 +802,15 @@ class QueueModelTestCase(unittest.TestCase):
             await asyncio.wait_for(self.model.terminate(sal_index=1001), timeout=2)
             await self.assert_next_queue(running=True, current_sal_index=0,
                                          sal_indices=[], past_sal_indices=[1001, 1000], wait=True)
+
+            self.assertEqual(script_info0.script_state, SALPY_Script.state_Done)
+            self.assertEqual(script_info0.process_state, SALPY_ScriptQueue.script_Done)
+
+            self.assertEqual(script_info2.script_state, SALPY_Script.state_Configured)
+            self.assertEqual(script_info2.process_state, SALPY_ScriptQueue.script_Terminated)
+
+            self.assertEqual(script_info1.script_state, SALPY_Script.state_Running)
+            self.assertEqual(script_info1.process_state, SALPY_ScriptQueue.script_Terminated)
 
             # try to stop a script that doesn't exist
             with self.assertRaises(ValueError):

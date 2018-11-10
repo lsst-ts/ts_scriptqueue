@@ -26,6 +26,7 @@ import os
 
 import salobj
 import SALPY_Script
+import SALPY_ScriptQueue
 from .base_script import ScriptState
 
 _CONFIGURE_TIMEOUT = 15  # seconds
@@ -59,6 +60,8 @@ class ScriptInfo:
         self.config = config
         self.descr = descr
         self.salinfo = salobj.SalInfo(SALPY_Script, self.index)
+        self.script_state = 0
+        """Most recent state reported by the Script, or 0 if the script is not yet loaded."""
         self.timestamp = 0
         """Time at which the script process was started. 0 before that."""
         self.duration = 0
@@ -136,6 +139,20 @@ class ScriptInfo:
         """Get the script's SAL index"""
         return self._index
 
+    @property
+    def process_state(self):
+        if self.configured and self.config_task.exception() is not None:
+            return SALPY_ScriptQueue.script_ConfigureFailed
+        elif self.terminated:
+            return SALPY_ScriptQueue.script_Terminated
+        elif self.done:
+            return SALPY_ScriptQueue.script_Done
+        elif self.running:
+            return SALPY_ScriptQueue.script_Running
+        elif self.configured:
+            return SALPY_ScriptQueue.script_Configured
+        return SALPY_ScriptQueue.script_Loading
+
     def run(self):
         """Start the script running.
 
@@ -176,11 +193,8 @@ class ScriptInfo:
             self.process = await asyncio.create_subprocess_exec(scriptname, str(self.index))
             self.timestamp = self.salinfo.manager.getCurrentTime()
             self.process_task = asyncio.ensure_future(self.process.wait())
-            self.process_task.add_done_callback(self._run_callback)
             self.process_task.add_done_callback(self._cleanup)
-            self.config_task = asyncio.ensure_future(self._configure())
-            self.config_task.add_done_callback(self._run_callback)
-            self.start_task.set_result(None)
+            await self._add_remote()
         finally:
             os.environ["PATH"] = initialpath
 
@@ -222,12 +236,17 @@ class ScriptInfo:
             f"is_standard={self.is_standard}, path={self.path}, " \
             f"config={self.config}, descr={self.descr})"
 
-    def _add_remote(self):
-        """Set the remote attribute.
+    async def _add_remote(self):
+        """Create the remote.
 
-        This takes awhile so run this in a thread.
+        This takes awhile (TSS-3191) so run it as part of it in a thread.
         """
-        self.remote = salobj.Remote(SALPY_Script, self.index)
+        def thread_func():
+            self.remote = salobj.Remote(SALPY_Script, self.index)
+
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(None, thread_func)
+        self.remote.evt_state.callback = self._script_state_callback
 
     def _cleanup(self, returncode=None):
         """Clean up when the Script subprocess exits.
@@ -241,17 +260,22 @@ class ScriptInfo:
             self.config_task.cancel()
         self.remote = None
         self.salinfo = None
+        self._run_callback()
 
     async def _configure(self):
-        """Wait for the script to report UNCONFIGURED state and configure.
+        """Configure the script.
+
+        If configuration fails then terminate the script.
+
+        Raises
+        ------
+        RuntimeError
+            If the script state is not ScriptState.UNCONFIGURED
         """
         try:
-            loop = asyncio.get_event_loop()
-            await loop.run_in_executor(None, self._add_remote)
-            script_state = await self.remote.evt_state.next(flush=False, timeout=_STATE_TIMEOUT)
-            if script_state.state != ScriptState.UNCONFIGURED:
-                raise salobj.ExpectedError(f"Cannot configure script it is in state {script_state} "
-                                           f"instead of {ScriptState.UNCONFIGURED}")
+            if self.script_state != ScriptState.UNCONFIGURED:
+                raise RuntimeError(f"Cannot configure script because it is in state {self.script_state} "
+                                   f"instead of {ScriptState.UNCONFIGURED}")
 
             config_data = self.remote.cmd_configure.DataType()
             config_data.config = self.config
@@ -260,9 +284,16 @@ class ScriptInfo:
                 raise salobj.ExpectedError(f"Configure command failed")
         except Exception:
             self.terminate()
-            self.remote = None
             raise
 
-    def _run_callback(self, state):
+    def _run_callback(self, *args):
         if self.callback:
             self.callback(self)
+
+    def _script_state_callback(self, state):
+        self.script_state = state.state
+        if self.script_state == ScriptState.UNCONFIGURED and self.config_task is None:
+            self.config_task = asyncio.ensure_future(self._configure())
+            self.config_task.add_done_callback(self._run_callback)
+            self.start_task.set_result(None)
+        self._run_callback()

@@ -271,6 +271,10 @@ class ScriptQueue(salobj.BaseCsc):
             [info.index for info in self.model.history][0:evtdata.pastLength]
         evtdata.pastSalIndices[evtdata.pastLength:] = 0
 
+        # print(f"put_queue: enabled={self.model.enabled}, running={self.model.running}, "
+        #       f"currentSalIndex={self.model.current_index}, "
+        #       f"salIndices={evtdata.salIndices[0:evtdata.length]}, "
+        #       f"pastSalIndices={evtdata.pastSalIndices[0:evtdata.pastLength]}")
         self.evt_queue.put(evtdata, 1)
 
     def put_script(self, script_info):
@@ -286,7 +290,6 @@ class ScriptQueue(salobj.BaseCsc):
         if script_info is None:
             return
 
-        sallib = self.salinfo.lib
         evtdata = self.evt_script.DataType()
         evtdata.cmdId = script_info.cmd_id
         evtdata.salIndex = script_info.index
@@ -294,17 +297,9 @@ class ScriptQueue(salobj.BaseCsc):
         evtdata.isStandard = script_info.is_standard
         evtdata.timestamp = script_info.timestamp
         evtdata.duration = script_info.duration
-        if script_info.done:
-            if script_info.failed:
-                evtdata.processState = sallib.script_Failed
-            elif script_info.terminated:
-                evtdata.processState = sallib.script_Terminated
-            else:
-                evtdata.processState = sallib.script_Complete
-        elif script_info.running:
-            evtdata.processState = sallib.script_Running
-        elif script_info.configured:
-            evtdata.processState = sallib.script_Configured
-        else:
-            evtdata.processState = sallib.script_Loading
+        evtdata.processState = script_info.process_state
+        evtdata.scriptState = script_info.script_state
+        # print(f"put_script: index={script_info.index}, "
+        #       f"process_state={script_info.process_state}, "
+        #       f"script_state={script_info.script_state}")
         self.evt_script.put(evtdata, 1)

@@ -515,6 +515,8 @@ class BaseScript(salobj.Controller, abc.ABC):
                 self.log.exception("Error in run")
             self.set_state(ScriptState.FAILED, reason=f"failed in _exit: {e}", keep_old_reason=True)
         finally:
+            # allow time for the final state to be output
+            await asyncio.sleep(0.1)
             asyncio.ensure_future(self._set_final_state())
 
     async def _set_final_state(self):
@@ -523,6 +525,5 @@ class BaseScript(salobj.Controller, abc.ABC):
         Give up the event loop first, so whatever command triggered this
         can be reported as finished.
         """
-        await asyncio.sleep(0)
         if not self._final_state_future.done():
             self._final_state_future.set_result(self.state)

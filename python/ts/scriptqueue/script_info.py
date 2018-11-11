@@ -279,9 +279,7 @@ class ScriptInfo:
 
             config_data = self.remote.cmd_configure.DataType()
             config_data.config = self.config
-            id_ack = await self.remote.cmd_configure.start(config_data, timeout=_CONFIGURE_TIMEOUT)
-            if id_ack.ack.ack != self.remote.salinfo.lib.SAL__CMD_COMPLETE:
-                raise salobj.ExpectedError(f"Configure command failed")
+            await self.remote.cmd_configure.start(config_data, timeout=_CONFIGURE_TIMEOUT)
         except Exception:
             self.terminate()
             raise

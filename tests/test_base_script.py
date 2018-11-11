@@ -389,8 +389,7 @@ class BaseScriptTestCase(unittest.TestCase):
 
                     setLogging_data = remote.cmd_setLogging.DataType()
                     setLogging_data.level = logging.INFO
-                    ack_id = await remote.cmd_setLogging.start(setLogging_data, timeout=2)
-                    self.assertEqual(ack_id.ack.ack, remote.salinfo.lib.SAL__CMD_COMPLETE)
+                    await remote.cmd_setLogging.start(setLogging_data, timeout=2)
 
                     wait_time = 0.1
                     configure_data = remote.cmd_configure.DataType()
@@ -399,8 +398,7 @@ class BaseScriptTestCase(unittest.TestCase):
                         config = config + f"\n{fail}: True"
                     print(f"config={config}")
                     configure_data.config = config
-                    ack_id = await remote.cmd_configure.start(configure_data, timeout=2)
-                    self.assertEqual(ack_id.ack.ack, remote.salinfo.lib.SAL__CMD_COMPLETE)
+                    await remote.cmd_configure.start(configure_data, timeout=2)
 
                     metadata = remote.evt_metadata.get()
                     self.assertEqual(metadata.duration, wait_time)
@@ -409,8 +407,7 @@ class BaseScriptTestCase(unittest.TestCase):
                     self.assertEqual(log_msg.message, "Configure succeeded")
 
                     run_data = remote.cmd_run.DataType()
-                    ack_id = await remote.cmd_run.start(run_data, timeout=3)
-                    self.assertEqual(ack_id.ack.ack, remote.salinfo.lib.SAL__CMD_COMPLETE)
+                    await remote.cmd_run.start(run_data, timeout=3)
 
                     await asyncio.wait_for(self.process.wait(), timeout=2)
                     if fail:

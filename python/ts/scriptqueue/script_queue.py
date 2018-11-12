@@ -218,32 +218,19 @@ class ScriptQueue(salobj.BaseCsc):
             location_sal_index=id_data.data.locationSalIndex,
         )
 
-    async def do_stop(self, id_data):
-        """Stop a queued or running script, giving it a chance to clean up.
+    async def do_stopScripts(self, id_data):
+        """Stop one or more queued scripts and/or the current script.
 
-        First try sending the script the ``stop`` command.
-        Then, if necessary, terminate the script by sending
-        SIGTERM to the subprocess.
-
-        If the script was running, it is moved to the history.
-        If the script was not yet running, it is removed
-        from the queue.
+        If you stop the current script, it is moved to the history.
+        If you stop queued scripts they are not not moved to the history.
         """
-        self.assert_enabled("remove")
-        await self.model.stop(id_data.data.salIndex, timeout=20)
-
-    async def do_terminate(self, id_data):
-        """Stop a queued or running script without giving it
-        a chance to clean up.
-
-        Terminate a script by sending SIGTERM to the subprocess.
-
-        If the script was running, it is moved to the history.
-        If the script was not yet running, it is removed
-        from the queue.
-        """
-        self.assert_enabled("remove")
-        await asyncio.wait_for(self.model.terminate(id_data.data.salIndex), 5)
+        self.assert_enabled("stopScripts")
+        data = id_data.data
+        if data.length <= 0:
+            raise salobj.ExpectedError(f"length={data.length} must be positive")
+        timeout = 5 + 2*data.length
+        await asyncio.wait_for(self.model.stop_scripts(sal_indices=data.salIndices[0:data.length],
+                                                       terminate=data.terminate, timeout=20), timeout)
 
     def report_summary_state(self):
         super().report_summary_state()

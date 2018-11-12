@@ -128,6 +128,7 @@ class QueueModel:
         self._running = True
         self._enabled = False
         self._index_generator = salobj.index_generator(imin=min_sal_index, imax=max_sal_index)
+        self._scripts_being_stopped = set()
 
     async def add(self, script_info, location, location_sal_index):
         """Add a script to the queue.
@@ -376,7 +377,36 @@ class QueueModel:
                        location_sal_index=location_sal_index)
         return script_info
 
-    async def stop(self, sal_index, timeout=None):
+    async def stop_scripts(self, sal_indices, terminate):
+        """Stop one or more queued scripts and/or the current script.
+
+        Parameters
+        ----------
+        sal_indices : ``iterable`` of `int`
+            SAL indices of scripts to stop.
+            Scripts whose indices are not found are ignored,
+            but if no scripts are stopped the command fails.
+        terminate : `bool`
+            Give the current script (or any other running script)
+            a chance to clean up?
+        """
+        self._scripts_being_stopped = set(sal_indices)
+        try:
+            for index in sal_indices:
+                try:
+                    script_info = self.get_script_info(index, search_history=False)
+                except ValueError:
+                    continue
+                if script_info.done:
+                    continue
+                if script_info.running and not terminate:
+                    await self.stop_one_script(index)
+                else:
+                    await self.terminate_one_script(index)
+        finally:
+            self._scripts_being_stopped = set()
+
+    async def stop_one_script(self, sal_index, timeout=None):
         """Stop a queued or running script, giving it time to clean up.
 
         First send the script the ``stop`` command, giving that ``timeout``
@@ -400,9 +430,9 @@ class QueueModel:
             If a script is not queued or running.
         """
         script_info = self.get_script_info(sal_index, search_history=False)
-        if script_info.done or script_info.remote is None:
+        if script_info.done:
             return
-        if script_info.remote.evt_state.get() == ScriptState.RUNNING:
+        if script_info.script_state == ScriptState.RUNNING:
             # process is running, so send the "stop" command
             try:
                 await script_info.remote.cmd_stop.start(script_info.remote.cmd_stop.DataType(),
@@ -423,7 +453,7 @@ class QueueModel:
         # let the script be removed or moved
         await asyncio.sleep(0)
 
-    async def terminate(self, sal_index):
+    async def terminate_one_script(self, sal_index):
         """Terminate a queued or running script by sending SIGTERM
         to the subprocess and wait for that to complete.
 
@@ -545,10 +575,12 @@ class QueueModel:
             key = ScriptKey(sal_index)
             if self.current_script and self.current_script == key:
                 # handled by _update_queue
-                self._update_queue()
+                if sal_index not in self._scripts_being_stopped:
+                    self._update_queue()
             elif key in self.queue:
                 self.pop_script_info(sal_index)
-                self._update_queue()
+                if not self._scripts_being_stopped:
+                    self._update_queue()
 
         asyncio.ensure_future(delete_shortly(sal_index))
 
@@ -608,7 +640,7 @@ class QueueModel:
                 if script_info.done:
                     self.queue.popleft()
                     continue
-                if script_info.runnable:
+                if script_info.runnable and script_info.index not in self._scripts_being_stopped:
                     self.current_script = script_info
                     self.queue.popleft()
                     script_info.run()

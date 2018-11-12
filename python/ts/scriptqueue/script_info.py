@@ -79,18 +79,15 @@ class ScriptInfo:
         """
         self.remote = None
         """Remote which talks to the ``Script`` SAL component.
-        None initially and after process exits."""
+        None initially and after the process exits."""
         self.process = None
         """Process in which the ``Script`` SAL component is loaded."""
         self.process_task = None
         """Task awaiting ``process.wait()``, or None if not yet started."""
         self.config_task = None
-        """Task awaiting configuration to complete, or None if not yet started."""
+        """Task awaiting configuration to complete,
+        or None if not yet started."""
         self._callback = None
-        """Function to be called whenever the script's state changes.
-
-        It receives one argument: this ScriptInfo.
-        """
         self._run_started = False  # `run` successfully called
 
         # The following guarantees that if we terminate a process
@@ -101,10 +98,11 @@ class ScriptInfo:
 
     @property
     def callback(self):
-        """Set or get a function to call whenever the script
+        """Set, clear or get a function to call whenever the script
         state changes.
 
         It receives one argument: this ScriptInfo.
+        Set to None to clear the callback.
         """
         return self._callback
 
@@ -116,31 +114,40 @@ class ScriptInfo:
 
     @property
     def configured(self):
+        """True if the the configuration command succeeded or failed."""
         return self.config_task is not None and self.config_task.done()
 
     @property
     def running(self):
+        """True if the script was commanded to run and is not done."""
         return self._run_started and not self.done
 
     @property
     def done(self):
+        """True if the script subprocess is done."""
         return self.process_task is not None and self.process_task.done()
 
     @property
     def failed(self):
+        """True if the script failed."""
         return self.done and self.process.returncode > 0
 
     @property
     def terminated(self):
+        """True if the script subprocess was terminated."""
         return self.done and (self.process.returncode < 0 or self._terminated)
 
     @property
     def index(self):
-        """Get the script's SAL index"""
+        """The script's SAL index."""
         return self._index
 
     @property
     def process_state(self):
+        """State of the script subprocess.
+
+        One of the ``SALPY_ScriptQueue.script_`` enumeration constants.
+        """
         if self.configured and self.config_task.exception() is not None:
             return SALPY_ScriptQueue.script_ConfigureFailed
         elif self.terminated:
@@ -159,7 +166,8 @@ class ScriptInfo:
         Raises
         ------
         RuntimeError
-            If the script cannot be run. Reasons could include:
+            If the script cannot be run, e.g. because:
+
             - The script has not yet been configured.
             - `run` was already called.
             - The script process is done.
@@ -210,12 +218,6 @@ class ScriptInfo:
         did_terminate : `bool`
             True if termination was requested,
             False if there is no process or it was already finished.
-
-        Raises
-        ------
-        RuntimeError
-            If we have no information about that script, meaning
-            it already finished or was never loaded.
         """
         if self.process is None:
             return False

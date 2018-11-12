@@ -63,7 +63,10 @@ def _make_remote_name(remote):
 
 
 class BaseScript(salobj.Controller, abc.ABC):
-    """Abstract base class for SAL scripts run as Script SAL commponents.
+    """Abstract base class for SAL scripts.
+
+    SAL scripts are SAL Script components that are configured once,
+    run once, and then they quit.
 
     Parameters
     ----------
@@ -142,26 +145,30 @@ class BaseScript(salobj.Controller, abc.ABC):
 
     @property
     def checkpoints(self):
-        """Get the checkpoints at which to pause and stop,
-        an instance of self.evt_checkpoints.DataType()
+        """Get the checkpoints at which to pause and stop.
+
+        An instance of ``self.evt_checkpoints.DataType()``
         """
         return self._checkpoints
 
     @property
     def state(self):
-        """Get the current state, an instance of self.evt_state.DataType().
+        """Get the current state.
 
-        State has these fields:
+        The returned state is an instance of ``evt_state.DataType()``;
+        as such, it has these fields:
 
-        * state: the current state; a `ScriptState`
-        * last_checkpoint: name of most recently seen checkpoint
-        * reason: reason for this state
+        * ``state``: the current state; a `ScriptState`
+        * ``last_checkpoint``: name of most recently seen checkpoint;
+          a `str`
+        * ``reason``: reason for this state, if any; a `str`
         """
         return self._state
 
     @property
     def state_name(self):
-        """Return the current state as a name"""
+        """Get the current `state`.state as a name.
+        """
         try:
             return ScriptState(self.state.state).name
         except ValueError:
@@ -214,9 +221,11 @@ class BaseScript(salobj.Controller, abc.ABC):
         Raises
         ------
         RuntimeError:
-            If state is not RUNNING; perhaps you called `checkpoint` from somewhere other than `run`.
+            If the state is not `ScriptState.RUNNING`. This likely means
+            you called checkpoint from somewhere other than `run`.
         RuntimeError:
-            If _run_task is None or done. This probably means your code incorrectly set the state.
+            If `_run_task` is `None` or done. This probably means your code
+            incorrectly set the state.
         """
         if not self.state.state == ScriptState.RUNNING:
             raise RuntimeError(f"checkpoint error: state={self.state_name} instead of RUNNING; "
@@ -329,7 +338,7 @@ class BaseScript(salobj.Controller, abc.ABC):
         This method does the following:
 
         * Receive the configuration as a ``yaml`` string.
-        * Parse the configuration to a `dict`.
+        * Parse the configuration as a `dict`.
         * Call `configure`, using the dict as keyword arguments.
         * Call `set_metadata(metadata)`.
         * Output the metadata event.
@@ -338,7 +347,7 @@ class BaseScript(salobj.Controller, abc.ABC):
         Raises
         ------
         salobj.ExpectedError
-            If state is not UNCONFIGURED.
+            If `state`.state is not `ScriptState.UNCONFIGURED`.
         """
         self.assert_state("configure", [ScriptState.UNCONFIGURED])
         try:
@@ -371,7 +380,7 @@ class BaseScript(salobj.Controller, abc.ABC):
         Raises
         ------
         salobj.ExpectedError
-            If state is not CONFIGURED.
+            If `state`.state is not `ScriptState.CONFIGURED`.
         """
         self.assert_state("run", [ScriptState.CONFIGURED])
         try:
@@ -394,7 +403,7 @@ class BaseScript(salobj.Controller, abc.ABC):
         Raises
         ------
         salobj.ExpectedError
-            If state is not PAUSED.
+            If `state`.state is not `ScriptState.PAUSED`.
         """
         self.assert_state("resume", [ScriptState.PAUSED])
         self._pause_future.set_result(None)
@@ -411,7 +420,9 @@ class BaseScript(salobj.Controller, abc.ABC):
         Raises
         ------
         salobj.ExpectedError
-            If state is not UNCONFIGURED, CONFIGURED, RUNNING or PAUSED.
+            If `state`.state is not `ScriptState.UNCONFIGURED`,
+            `ScriptState.CONFIGURED`, `ScriptState.RUNNING`
+            or `ScriptState.PAUSED`.
         """
         self.assert_state("setCheckpoints", [ScriptState.UNCONFIGURED, ScriptState.CONFIGURED,
                           ScriptState.RUNNING, ScriptState.PAUSED])

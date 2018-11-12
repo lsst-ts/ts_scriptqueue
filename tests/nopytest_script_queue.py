@@ -50,6 +50,24 @@ class ScriptQueueTestCase(unittest.TestCase):
         if nkilled > 0:
             warnings.warn(f"Killed {nkilled} subprocesses")
 
+    def make_stop_data(self, stop_indices, terminate):
+        """Make data for the stopScripts command.
+
+        Parameters
+        ----------
+        stop_indices : ``iterable`` of `int`
+            SAL indices of scripts to stop
+        terminate : `bool`
+            Terminate a running script instead of giving it time
+            to stop gently?
+        """
+        stop_data = self.remote.cmd_stopScripts.DataType()
+        stop_data.length = len(stop_indices)
+        stop_data.salIndices[0:stop_data.length] = stop_indices
+        stop_data.length = stop_data.length
+        stop_data.terminate = False
+        return stop_data
+
     async def assert_next_queue(self, enabled=True, running=False,
                                 currentSalIndex=0, salIndices=(), pastSalIndices=()):
         """Get the next queue event and check values.
@@ -199,35 +217,9 @@ class ScriptQueueTestCase(unittest.TestCase):
             await self.remote.cmd_showQueue.start(self.remote.cmd_showQueue.DataType(), timeout=2)
             await self.assert_next_queue(salIndices=[I0+5, I0+2, I0+4, I0+6, I0, I0+1, I0+3])
 
-            # stop a few scripts
-            stop_data = self.remote.cmd_stop.DataType()
-            stop_data.salIndex = I0+6
-            await self.remote.cmd_stop.start(stop_data, timeout=60)
-            await self.assert_next_queue(salIndices=[I0+5, I0+2, I0+4, I0, I0+1, I0+3])
-
-            stop_data = self.remote.cmd_stop.DataType()
-            stop_data.salIndex = I0+5
-            await self.remote.cmd_stop.start(stop_data, timeout=60)
-            await self.assert_next_queue(salIndices=[I0+2, I0+4, I0, I0+1, I0+3])
-
-            stop_data = self.remote.cmd_stop.DataType()
-            stop_data.salIndex = I0
-            await self.remote.cmd_stop.start(stop_data, timeout=60)
-            await self.assert_next_queue(salIndices=[I0+2, I0+4, I0+1, I0+3])
-
-            stop_data = self.remote.cmd_stop.DataType()
-            stop_data.salIndex = I0+4
-            await self.remote.cmd_stop.start(stop_data, timeout=60)
-            await self.assert_next_queue(salIndices=[I0+2, I0+1, I0+3])
-
-            # try to stop a non-existent script
-            stop_data = self.remote.cmd_stop.DataType()
-            stop_data.salIndex = 5432
-            with self.assertRaises(salobj.AckError):
-                await self.remote.cmd_stop.start(stop_data, timeout=60)
-
-            # make sure the failed stop did not affect the queue
-            await self.remote.cmd_showQueue.start(self.remote.cmd_showQueue.DataType(), timeout=2)
+            # stop a few scripts, including one non-existent script
+            stop_data = self.make_stop_data([I0+6, I0+5, I0+4, I0, 5432], terminate=False)
+            await self.remote.cmd_stopScripts.start(stop_data, timeout=10)
             await self.assert_next_queue(salIndices=[I0+2, I0+1, I0+3])
 
             # make sure all scripts are runnable before starting the queue
@@ -355,9 +347,8 @@ class ScriptQueueTestCase(unittest.TestCase):
             self.assertEqual(script_data0.scriptState, SALPY_Script.state_Failed)
 
             # terminate the next script
-            terminate_data = self.remote.cmd_terminate.DataType()
-            terminate_data.salIndex = I0+1
-            await self.remote.cmd_terminate.start(terminate_data, timeout=2)
+            stop_data = self.make_stop_data([I0+1], terminate=True)
+            await self.remote.cmd_stopScripts.start(stop_data, timeout=10)
             await self.assert_next_queue(running=False, currentSalIndex=I0,
                                          salIndices=[I0+2], pastSalIndices=[])
 
@@ -621,16 +612,9 @@ class ScriptQueueTestCase(unittest.TestCase):
             await self.assert_next_queue(salIndices=[I0+5, I0+4, I0+0, I0+1, I0+2, I0+6, I0+3, I0+7, I0+8])
 
             # stop all scripts except I0+1 and I0+2
-            sal_indices = [I0+5, I0+4, I0, I0+1, I0+2, I0+6, I0+3, I0+7, I0+8]
-            for remove_index in sal_indices[:]:
-                if remove_index in (I0+1, I0+2):
-                    continue
-                stop_data = self.remote.cmd_stop.DataType()
-                stop_data.salIndex = remove_index
-                await self.remote.cmd_stop.start(stop_data, timeout=60)
-
-                sal_indices.remove(remove_index)
-                await self.assert_next_queue(salIndices=sal_indices)
+            stop_data = self.make_stop_data([I0+5, I0+4, I0, I0+6, I0+3, I0+7, I0+8], terminate=False)
+            await self.remote.cmd_stopScripts.start(stop_data, timeout=60)
+            await self.assert_next_queue(salIndices=[I0+1, I0+2])
 
             await self.wait_runnable(I0+1, I0+2)
 

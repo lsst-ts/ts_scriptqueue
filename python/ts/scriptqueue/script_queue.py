@@ -103,8 +103,6 @@ class ScriptQueue(salobj.BaseCsc):
             raise ValueError(f"No such dir externalpath={externalpath}")
 
         super().__init__(SALPY_ScriptQueue, index)
-        self.cmd_stop.allow_multiple_callbacks = True
-        self.cmd_terminate.allow_multiple_callbacks = True
         min_sal_index = index * SCRIPT_INDEX_MULT
         max_sal_index = min_sal_index + SCRIPT_INDEX_MULT - 1
         if max_sal_index > salobj.MAX_SAL_INDEX:
@@ -228,9 +226,9 @@ class ScriptQueue(salobj.BaseCsc):
         data = id_data.data
         if data.length <= 0:
             raise salobj.ExpectedError(f"length={data.length} must be positive")
-        timeout = 5 + 2*data.length
+        timeout = 5 + 0.2*data.length
         await asyncio.wait_for(self.model.stop_scripts(sal_indices=data.salIndices[0:data.length],
-                                                       terminate=data.terminate, timeout=20), timeout)
+                                                       terminate=data.terminate), timeout)
 
     def report_summary_state(self):
         super().report_summary_state()

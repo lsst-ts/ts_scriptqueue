@@ -110,6 +110,8 @@ class BaseScript(salobj.Controller, abc.ABC):
         self.evt_description.put(self._description_data)
         self._heartbeat_task = asyncio.ensure_future(self._heartbeat_loop())
         self._log_messages_task = asyncio.ensure_future(self._log_messages_loop())
+        self.final_state_delay = 0.2
+        """Delay (sec) to allow sending final state before exiting."""
 
     @classmethod
     def main(cls, descr):
@@ -516,7 +518,7 @@ class BaseScript(salobj.Controller, abc.ABC):
             self.set_state(ScriptState.FAILED, reason=f"failed in _exit: {e}", keep_old_reason=True)
         finally:
             # allow time for the final state to be output
-            await asyncio.sleep(0.1)
+            await asyncio.sleep(self.final_state_delay)
             asyncio.ensure_future(self._set_final_state())
 
     async def _set_final_state(self):

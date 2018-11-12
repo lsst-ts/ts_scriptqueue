@@ -243,8 +243,9 @@ class BaseScriptTestCase(unittest.TestCase):
             await asyncio.wait_for(run_task, 2)
             await asyncio.wait_for(script.final_state_future, 2)
             duration = time.time() - start_time
+            desired_duration = wait_time + script.final_state_delay
             print(f"test_pause duration={duration:0.2f}")
-            self.assertLess(abs(duration - wait_time), 0.2)
+            self.assertLess(abs(duration - desired_duration), 0.2)
 
         asyncio.get_event_loop().run_until_complete(doit())
 
@@ -272,9 +273,10 @@ class BaseScriptTestCase(unittest.TestCase):
             self.assertEqual(final_state.state, ScriptState.STOPPED)
             self.assertEqual(script.state.state, ScriptState.STOPPED)
             duration = time.time() - start_time
+            desired_duration = wait_time + script.final_state_delay
             # waited and then stopped at the "end" checkpoint
             print(f"test_stop_at_checkpoint duration={duration:0.2f}")
-            self.assertLess(abs(duration - wait_time), 0.2)
+            self.assertLess(abs(duration - desired_duration), 0.2)
 
         asyncio.get_event_loop().run_until_complete(doit())
 
@@ -307,9 +309,11 @@ class BaseScriptTestCase(unittest.TestCase):
             self.assertEqual(final_state.state, ScriptState.STOPPED)
             self.assertEqual(script.state.state, ScriptState.STOPPED)
             duration = time.time() - start_time
+            desired_duration = script.final_state_delay
             # we did not wait because the script right after pausing at the "start" checkpoint
             print(f"test_stop_while_paused duration={duration:0.2f}")
-            self.assertLess(abs(duration), 0.2)
+            self.assertGreater(duration, 0.0)
+            self.assertLess(abs(duration - desired_duration), 0.2)
 
         asyncio.get_event_loop().run_until_complete(doit())
 
@@ -338,8 +342,8 @@ class BaseScriptTestCase(unittest.TestCase):
             duration = time.time() - start_time
             # we waited `pause_time` seconds after the "start" checkpoint
             print(f"test_stop_while_running duration={duration:0.2f}")
-            self.assertGreater(abs(duration), pause_time - 0.01)
-            self.assertLess(abs(duration - pause_time), 0.2)
+            desired_duration = pause_time + script.final_state_delay
+            self.assertLess(abs(duration - desired_duration), 0.2)
 
         asyncio.get_event_loop().run_until_complete(doit())
 
@@ -364,7 +368,8 @@ class BaseScriptTestCase(unittest.TestCase):
                 self.assertEqual(script.state.state, ScriptState.FAILED)
                 duration = time.time() - start_time
                 # if fail_run then failed before waiting, otherwise failed after
-                desired_duration = 0 if fail_run else wait_time
+                overhead = 0.2  # seconds to output final state
+                desired_duration = (0 if fail_run else wait_time) + overhead
                 print(f"test_fail duration={duration:0.2f} with fail_run={fail_run}")
                 self.assertLess(abs(duration - desired_duration), 0.2)
 

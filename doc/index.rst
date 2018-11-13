@@ -9,4 +9,4 @@ ts_scriptqueue documentation
 .. toctree::
    :maxdepth: 1
 
-   scriptqueue/index
+   ts_scriptqueue/index

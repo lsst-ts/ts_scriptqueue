@@ -1,6 +1,6 @@
-##########################
-scriptloader documentation
-##########################
+############################
+ts_scriptqueue documentation
+############################
 
 .. This page is for local development only. It isn't published to pipelines.lsst.io.
 
@@ -9,4 +9,4 @@ scriptloader documentation
 .. toctree::
    :maxdepth: 1
 
-   scriptloader/index
+   scriptqueue/index

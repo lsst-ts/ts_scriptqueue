@@ -8,6 +8,7 @@ import logging
 import logging.handlers
 import queue
 import re
+import sys
 
 import yaml
 
@@ -15,8 +16,8 @@ import SALPY_Script
 import salobj
 
 
-HEARTBEAT_INTERVAL = 1  # seconds
-LOG_MESSAGES_INTERVAL = 0.2  # seconds
+HEARTBEAT_INTERVAL = 5  # seconds
+LOG_MESSAGES_INTERVAL = 0.05  # seconds
 
 
 class ScriptState(enum.IntEnum):
@@ -62,7 +63,10 @@ def _make_remote_name(remote):
 
 
 class BaseScript(salobj.Controller, abc.ABC):
-    """Abstract base class for SAL scripts run as Script SAL commponents.
+    """Abstract base class for SAL scripts.
+
+    SAL scripts are SAL Script components that are configured once,
+    run once, and then they quit.
 
     Parameters
     ----------
@@ -109,10 +113,23 @@ class BaseScript(salobj.Controller, abc.ABC):
         self.evt_description.put(self._description_data)
         self._heartbeat_task = asyncio.ensure_future(self._heartbeat_loop())
         self._log_messages_task = asyncio.ensure_future(self._log_messages_loop())
+        self.final_state_delay = 0.2
+        """Delay (sec) to allow sending final state before exiting."""
 
     @classmethod
     def main(cls, descr):
         """Start the script from the command line.
+
+        Parameters
+        ----------
+        descr : `str`
+            Short description of why you are running this script.
+
+        The final return code will be:
+
+        * 0 if final state is `ScriptState.DONE` or `ScriptState.STOPPED`
+        * 1 if final state is `ScriptState.FAILED`
+        * 2 otherwise (which should never happen)
         """
         parser = argparse.ArgumentParser(f"Run {cls.__name__} from the command line")
         parser.add_argument("index", type=int,
@@ -120,29 +137,38 @@ class BaseScript(salobj.Controller, abc.ABC):
         args = parser.parse_args()
         script = cls(index=args.index, descr=descr)
         asyncio.get_event_loop().run_until_complete(script.final_state_future)
+        final_state = script.final_state_future.result()
+        return_code = {ScriptState.DONE: 0,
+                       ScriptState.STOPPED: 0,
+                       ScriptState.FAILED: 1}.get(final_state.state, 2)
+        sys.exit(return_code)
 
     @property
     def checkpoints(self):
-        """Get the checkpoints at which to pause and stop,
-        an instance of self.evt_checkpoints.DataType()
+        """Get the checkpoints at which to pause and stop.
+
+        An instance of ``self.evt_checkpoints.DataType()``
         """
         return self._checkpoints
 
     @property
     def state(self):
-        """Get the current state, an instance of self.evt_state.DataType().
+        """Get the current state.
 
-        State has these fields:
+        The returned state is an instance of ``evt_state.DataType()``;
+        as such, it has these fields:
 
-        * state: the current state; a `ScriptState`
-        * last_checkpoint: name of most recently seen checkpoint
-        * reason: reason for this state
+        * ``state``: the current state; a `ScriptState`
+        * ``last_checkpoint``: name of most recently seen checkpoint;
+          a `str`
+        * ``reason``: reason for this state, if any; a `str`
         """
         return self._state
 
     @property
     def state_name(self):
-        """Return the current state as a name"""
+        """Get the current `state`.state as a name.
+        """
         try:
             return ScriptState(self.state.state).name
         except ValueError:
@@ -195,9 +221,11 @@ class BaseScript(salobj.Controller, abc.ABC):
         Raises
         ------
         RuntimeError:
-            If state is not RUNNING; perhaps you called `checkpoint` from somewhere other than `run`.
+            If the state is not `ScriptState.RUNNING`. This likely means
+            you called checkpoint from somewhere other than `run`.
         RuntimeError:
-            If _run_task is None or done. This probably means your code incorrectly set the state.
+            If `_run_task` is `None` or done. This probably means your code
+            incorrectly set the state.
         """
         if not self.state.state == ScriptState.RUNNING:
             raise RuntimeError(f"checkpoint error: state={self.state_name} instead of RUNNING; "
@@ -245,7 +273,7 @@ class BaseScript(salobj.Controller, abc.ABC):
         raise NotImplementedError()
 
     @abc.abstractmethod
-    async def set_metadata(self, metadata):
+    def set_metadata(self, metadata):
         """Set metadata fields in the provided struct, given the
         current configuration.
 
@@ -255,7 +283,7 @@ class BaseScript(salobj.Controller, abc.ABC):
         then the metadata is automatically broadcast as an event
         and the script's state is set to `ScriptState.CONFIGURED`.
 
-        THis method will only be called if the script state is
+        This method will only be called if the script state is
         `ScriptState.UNCONFIGURED`. or `ScriptState.CONFIGURED`.
         """
         raise NotImplementedError()
@@ -304,13 +332,13 @@ class BaseScript(salobj.Controller, abc.ABC):
             raise salobj.ExpectedError(
                 f"Cannot {action}: state={self.state_name} instead of {states_str}")
 
-    def do_configure(self, id_data):
+    async def do_configure(self, id_data):
         """Configure the currently loaded script.
 
         This method does the following:
 
         * Receive the configuration as a ``yaml`` string.
-        * Parse the configuration to a `dict`.
+        * Parse the configuration as a `dict`.
         * Call `configure`, using the dict as keyword arguments.
         * Call `set_metadata(metadata)`.
         * Output the metadata event.
@@ -319,22 +347,21 @@ class BaseScript(salobj.Controller, abc.ABC):
         Raises
         ------
         salobj.ExpectedError
-            If state is not UNCONFIGURED or CONFIGURED.
+            If `state`.state is not `ScriptState.UNCONFIGURED`.
         """
-        self.assert_state("configure", [ScriptState.UNCONFIGURED, ScriptState.CONFIGURED])
+        self.assert_state("configure", [ScriptState.UNCONFIGURED])
         try:
             config = yaml.safe_load(id_data.data.config)
         except yaml.scanner.ScannerError as e:
             raise salobj.ExpectedError(f"Could not parse config={id_data.data.config}: {e}") from e
         if config and not isinstance(config, dict):
             raise salobj.ExpectedError(f"Could not parse config={id_data.data.config} as a dict")
-        if config:
-            try:
-                self.configure(**config)
-            except TypeError as e:
-                raise salobj.ExpectedError(f"config({config}) failed: {e}") from e
-        else:
-            self.configure()
+        if not config:
+            config = {}
+        try:
+            await self.configure(**config)
+        except Exception as e:
+            raise salobj.ExpectedError(f"config({config}) failed: {e}") from e
 
         metadata = self.evt_metadata.DataType()
         # initialize to vaguely reasonable values
@@ -353,7 +380,7 @@ class BaseScript(salobj.Controller, abc.ABC):
         Raises
         ------
         salobj.ExpectedError
-            If state is not CONFIGURED.
+            If `state`.state is not `ScriptState.CONFIGURED`.
         """
         self.assert_state("run", [ScriptState.CONFIGURED])
         try:
@@ -376,7 +403,7 @@ class BaseScript(salobj.Controller, abc.ABC):
         Raises
         ------
         salobj.ExpectedError
-            If state is not PAUSED.
+            If `state`.state is not `ScriptState.PAUSED`.
         """
         self.assert_state("resume", [ScriptState.PAUSED])
         self._pause_future.set_result(None)
@@ -393,7 +420,9 @@ class BaseScript(salobj.Controller, abc.ABC):
         Raises
         ------
         salobj.ExpectedError
-            If state is not UNCONFIGURED, CONFIGURED, RUNNING or PAUSED.
+            If `state`.state is not `ScriptState.UNCONFIGURED`,
+            `ScriptState.CONFIGURED`, `ScriptState.RUNNING`
+            or `ScriptState.PAUSED`.
         """
         self.assert_state("setCheckpoints", [ScriptState.UNCONFIGURED, ScriptState.CONFIGURED,
                           ScriptState.RUNNING, ScriptState.PAUSED])
@@ -457,13 +486,12 @@ class BaseScript(salobj.Controller, abc.ABC):
         """
         while not self._is_exiting:
             try:
-                while not self._log_queue.empty():
+                if not self._log_queue.empty():
                     msg = self._log_queue.get_nowait()
                     data = self.evt_logMessage.DataType()
                     data.level = msg.levelno
                     data.message = msg.message
                     self.evt_logMessage.put(data)
-                    await asyncio.sleep(0)
                 await asyncio.sleep(LOG_MESSAGES_INTERVAL)
             except asyncio.CancelledError:
                 break
@@ -500,6 +528,8 @@ class BaseScript(salobj.Controller, abc.ABC):
                 self.log.exception("Error in run")
             self.set_state(ScriptState.FAILED, reason=f"failed in _exit: {e}", keep_old_reason=True)
         finally:
+            # allow time for the final state to be output
+            await asyncio.sleep(self.final_state_delay)
             asyncio.ensure_future(self._set_final_state())
 
     async def _set_final_state(self):
@@ -508,6 +538,5 @@ class BaseScript(salobj.Controller, abc.ABC):
         Give up the event loop first, so whatever command triggered this
         can be reported as finished.
         """
-        await asyncio.sleep(0)
         if not self._final_state_future.done():
             self._final_state_future.set_result(self.state)

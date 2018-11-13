@@ -1,9 +1,9 @@
-__all__ = ["findscripts"]
+__all__ = ["find_public_scripts"]
 
 import os
 
 
-def findscripts(root):
+def find_public_scripts(root):
     """Find all public scripts in the specified root path.
 
     Public scripts are executable files whose names do not start

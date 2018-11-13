@@ -1,5 +1,5 @@
 # -*- python -*-
 from lsst.sconsUtils import scripts
-scripts.BasicSConstruct("scriptloader",
+scripts.BasicSConstruct("ts_scriptqueue",
                         disableCc=True,
-                        versionModuleName="python/scriptloader/version.py")
+                        versionModuleName="python/lsst/ts/scriptqueue/version.py")

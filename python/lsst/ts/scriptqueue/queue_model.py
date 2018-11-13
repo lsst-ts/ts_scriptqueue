@@ -568,21 +568,29 @@ class QueueModel:
         script_info.callback = self._script_callback
         self._update_queue()
 
-    def _remove_script(self, sal_index):
+    async def _remove_script(self, sal_index):
         """Remove a script from the queue."""
-        async def delete_shortly(sal_index):
-            await asyncio.sleep(0)
-            key = ScriptKey(sal_index)
-            if self.current_script and self.current_script == key:
-                # handled by _update_queue
-                if sal_index not in self._scripts_being_stopped:
-                    self._update_queue()
-            elif key in self.queue:
-                self.pop_script_info(sal_index)
+        key = ScriptKey(sal_index)
+        if self.current_script and self.current_script == key:
+            if sal_index in self._scripts_being_stopped:
+                self._scripts_being_stopped.remove(sal_index)
                 if not self._scripts_being_stopped:
                     self._update_queue()
-
-        asyncio.ensure_future(delete_shortly(sal_index))
+                # else let removal finish before starting the next job,
+                # because it messes up the queue state callbacks otherwise
+            else:
+                # removal is handled by _update_queue
+                self._update_queue()
+        elif key in self.queue:
+            self.pop_script_info(sal_index)
+            if sal_index in self._scripts_being_stopped:
+                self._scripts_being_stopped.remove(sal_index)
+                if not self._scripts_being_stopped:
+                    # that was the last script to stop;
+                    # now show the queue state
+                    self._update_queue()
+            else:
+                self._update_queue()
 
     def _script_callback(self, script_info):
         """ScriptInfo callback."""
@@ -593,7 +601,7 @@ class QueueModel:
                 traceback.print_exc(file=sys.stderr)
 
         if script_info.done:
-            self._remove_script(script_info.index)
+            asyncio.ensure_future(self._remove_script(script_info.index))
         elif self.enabled and self.running \
                 and self.current_script is None and script_info.runnable \
                 and self.queue and self.queue[0].index == script_info.index:

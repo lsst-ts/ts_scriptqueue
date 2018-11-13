@@ -1,4 +1,4 @@
-.. py:currentmodule:: ts.scriptqueue
+.. py:currentmodule:: lsst.ts.scriptqueue
 
 .. scriptqueue:
 
@@ -136,10 +136,10 @@ The primary classes in ts_scriptqueue are:
 Python API reference
 ====================
 
-.. automodapi:: ts.scriptqueue
+.. automodapi:: lsst.ts.scriptqueue
     :no-main-docstr:
     :no-inheritance-diagram:
-.. automodapi:: ts.scriptqueue.test_utils
+.. automodapi:: lsst.ts.scriptqueue.test_utils
     :no-main-docstr:
     :no-inheritance-diagram:
 

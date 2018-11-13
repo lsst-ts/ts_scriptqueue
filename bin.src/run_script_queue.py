@@ -3,7 +3,7 @@
 import asyncio
 import argparse
 
-from ts import scriptqueue
+from lsst.ts import scriptqueue
 
 parser = argparse.ArgumentParser(f"Start the ScriptQueue")
 parser.add_argument("index", help="ScriptQueue CSC index: 1 for Main, 2 for AuxTel", type=int)

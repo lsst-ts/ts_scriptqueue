@@ -28,7 +28,7 @@ import warnings
 import SALPY_Script
 import SALPY_ScriptQueue
 import salobj
-from ts import scriptqueue
+from lsst.ts import scriptqueue
 
 
 class QueueModelTestCase(unittest.TestCase):

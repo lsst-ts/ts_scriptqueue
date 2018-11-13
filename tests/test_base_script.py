@@ -30,8 +30,8 @@ import yaml
 
 import SALPY_Script
 import salobj
-from ts.scriptqueue import ScriptState
-from ts.scriptqueue.test_utils import TestScript
+from lsst.ts.scriptqueue import ScriptState
+from lsst.ts.scriptqueue.test_utils import TestScript
 
 index_gen = salobj.index_generator()
 

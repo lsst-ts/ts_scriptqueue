@@ -22,7 +22,7 @@
 import os
 import unittest
 
-from ts import scriptqueue
+from lsst.ts import scriptqueue
 
 
 class FindScriptsTestCase(unittest.TestCase):

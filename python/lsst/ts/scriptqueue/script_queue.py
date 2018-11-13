@@ -25,7 +25,7 @@ import asyncio
 import os.path
 
 import SALPY_ScriptQueue
-import salobj
+import lsst.ts.salobj as salobj
 from .queue_model import QueueModel, ScriptInfo
 
 SCRIPT_INDEX_MULT = 10000

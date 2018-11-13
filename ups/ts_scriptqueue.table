@@ -1,4 +1,4 @@
-setupRequired(salobj)
+setupRequired(ts_salobj)
 setupOptional(pipelines_lsst_io)
 
 envPrepend(PATH, ${PRODUCT_DIR}/bin)

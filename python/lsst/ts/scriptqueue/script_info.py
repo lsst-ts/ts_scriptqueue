@@ -24,7 +24,7 @@ __all__ = ["ScriptInfo"]
 import asyncio
 import os
 
-import salobj
+import lsst.ts.salobj as salobj
 import SALPY_Script
 import SALPY_ScriptQueue
 from .base_script import ScriptState

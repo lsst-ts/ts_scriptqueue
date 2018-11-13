@@ -30,7 +30,7 @@ import sys
 import traceback
 
 import SALPY_ScriptQueue
-import salobj
+import lsst.ts.salobj as salobj
 from . import utils
 from .script_info import ScriptInfo
 from .base_script import ScriptState

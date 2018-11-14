@@ -1,10 +1,10 @@
 .. py:currentmodule:: lsst.ts.scriptqueue
 
-.. scriptqueue:
+.. _ts_scriptqueue:
 
-###########
-scriptqueue
-###########
+##############
+ts_scriptqueue
+##############
 
 Suppport for running `SAL Scripts`_.
 

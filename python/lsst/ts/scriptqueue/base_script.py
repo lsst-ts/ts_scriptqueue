@@ -13,7 +13,7 @@ import sys
 import yaml
 
 import SALPY_Script
-import salobj
+import lsst.ts.salobj as salobj
 
 
 HEARTBEAT_INTERVAL = 5  # seconds
@@ -346,7 +346,7 @@ class BaseScript(salobj.Controller, abc.ABC):
 
         Raises
         ------
-        salobj.ExpectedError
+        `salobj.ExpectedError`
             If `state`.state is not `ScriptState.UNCONFIGURED`.
         """
         self.assert_state("configure", [ScriptState.UNCONFIGURED])
@@ -379,7 +379,7 @@ class BaseScript(salobj.Controller, abc.ABC):
 
         Raises
         ------
-        salobj.ExpectedError
+        `salobj.ExpectedError`
             If `state`.state is not `ScriptState.CONFIGURED`.
         """
         self.assert_state("run", [ScriptState.CONFIGURED])
@@ -402,7 +402,7 @@ class BaseScript(salobj.Controller, abc.ABC):
 
         Raises
         ------
-        salobj.ExpectedError
+        `salobj.ExpectedError`
             If `state`.state is not `ScriptState.PAUSED`.
         """
         self.assert_state("resume", [ScriptState.PAUSED])
@@ -419,7 +419,7 @@ class BaseScript(salobj.Controller, abc.ABC):
 
         Raises
         ------
-        salobj.ExpectedError
+        `salobj.ExpectedError`
             If `state`.state is not `ScriptState.UNCONFIGURED`,
             `ScriptState.CONFIGURED`, `ScriptState.RUNNING`
             or `ScriptState.PAUSED`.

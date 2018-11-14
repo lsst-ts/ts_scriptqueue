@@ -3,7 +3,7 @@ __all__ = ["TestScript"]
 import asyncio
 import logging
 
-import salobj
+import lsst.ts.salobj as salobj
 from .base_script import BaseScript
 
 
@@ -41,7 +41,7 @@ class TestScript(BaseScript):
 
         Raises
         ------
-        salobj.ExpectedError
+        `salobj.ExpectedError`
             If ``wait_time < 0``. This can be used to make config fail.
         """
         self.log.info("Configure started")

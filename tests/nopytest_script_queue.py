@@ -26,7 +26,7 @@ import warnings
 
 import SALPY_Script
 import SALPY_ScriptQueue
-import salobj
+import lsst.ts.salobj as salobj
 from lsst.ts import scriptqueue
 
 I0 = scriptqueue.script_queue.SCRIPT_INDEX_MULT  # initial Script SAL index

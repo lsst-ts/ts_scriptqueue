@@ -12,4 +12,4 @@ Assuming you have the basic LSST DM stack installed you can do the following, fr
 - `scons` to build the package and run unit tests.
 - `scons install declare` to install the package and declare it to eups.
 - `package-docs build` to build the documentation.
-  This requires optional [dependencies](https://developer.lsst.io/stack/building-single-package-docs.html) beyond those required to build and use the package.
+  This requires `documenteer`; see [building single package docs](https://developer.lsst.io/stack/building-single-package-docs.html) for installation instructions.

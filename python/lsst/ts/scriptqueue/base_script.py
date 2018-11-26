@@ -4,9 +4,6 @@ import abc
 import argparse
 import asyncio
 import enum
-import logging
-import logging.handlers
-import queue
 import re
 import sys
 
@@ -17,7 +14,6 @@ import lsst.ts.salobj as salobj
 
 
 HEARTBEAT_INTERVAL = 5  # seconds
-LOG_MESSAGES_INTERVAL = 0.05  # seconds
 
 
 class ScriptState(enum.IntEnum):
@@ -62,7 +58,7 @@ def _make_remote_name(remote):
     return name
 
 
-class BaseScript(salobj.Controller, abc.ABC):
+class BaseScript(salobj.Controller, salobj.LogMixin, abc.ABC):
     """Abstract base class for SAL scripts.
 
     SAL scripts are SAL Script components that are configured once,
@@ -89,6 +85,7 @@ class BaseScript(salobj.Controller, abc.ABC):
     """
     def __init__(self, index, descr, remotes_dict=None):
         super().__init__(SALPY_Script, index, do_callbacks=True)
+        salobj.LogMixin.__init__(self)
         remote_names = []
         if remotes_dict:
             for attrname, remote in remotes_dict.items():
@@ -99,9 +96,6 @@ class BaseScript(salobj.Controller, abc.ABC):
         self._description_data.description = str(descr)
         self._description_data.remotes = ",".join(remote_names)
         self._metadata = self.evt_metadata.DataType()
-        self.log = logging.getLogger(self._description_data.classname)
-        self._log_queue = queue.Queue()
-        self.log.addHandler(logging.handlers.QueueHandler(self._log_queue))
         self._checkpoints = self.evt_checkpoints.DataType()
         self._state = self.evt_state.DataType()
         self._state.state = ScriptState.UNCONFIGURED
@@ -112,7 +106,6 @@ class BaseScript(salobj.Controller, abc.ABC):
         self.evt_state.put(self.state)
         self.evt_description.put(self._description_data)
         self._heartbeat_task = asyncio.ensure_future(self._heartbeat_loop())
-        self._log_messages_task = asyncio.ensure_future(self._log_messages_loop())
         self.final_state_delay = 0.2
         """Delay (sec) to allow sending final state before exiting."""
 
@@ -438,16 +431,6 @@ class BaseScript(salobj.Controller, abc.ABC):
         self.checkpoints.stop = id_data.data.stop
         self.evt_checkpoints.put(self.checkpoints)
 
-    def do_setLogging(self, id_data):
-        """Set logging level.
-
-        Parameters
-        ----------
-        id_data : `salobj.CommandIdData`
-            Logging level.
-        """
-        self.log.setLevel(id_data.data.level)
-
     async def do_stop(self, id_data):
         """Stop the script.
 
@@ -481,23 +464,6 @@ class BaseScript(salobj.Controller, abc.ABC):
             except Exception:
                 self.log.exception(f"Heartbeat output failed")
 
-    async def _log_messages_loop(self):
-        """Output log messages.
-        """
-        while not self._is_exiting:
-            try:
-                if not self._log_queue.empty():
-                    msg = self._log_queue.get_nowait()
-                    data = self.evt_logMessage.DataType()
-                    data.level = msg.levelno
-                    data.message = msg.message
-                    self.evt_logMessage.put(data)
-                await asyncio.sleep(LOG_MESSAGES_INTERVAL)
-            except asyncio.CancelledError:
-                break
-            except Exception:
-                pass  # no point trying to log this since logging failed
-
     async def _exit(self):
         """Call cleanup (if the script was run) and exit the script.
         """
@@ -510,7 +476,7 @@ class BaseScript(salobj.Controller, abc.ABC):
             self._heartbeat_task.cancel()
 
             # wait for final log messages, if any
-            await self._log_messages_loop()
+            await self.stop_logging()
 
             reason = None
             final_state = {

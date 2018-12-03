@@ -102,7 +102,6 @@ class ScriptQueue(salobj.BaseCsc):
         if not os.path.isdir(externalpath):
             raise ValueError(f"No such dir externalpath={externalpath}")
 
-        super().__init__(SALPY_ScriptQueue, index)
         min_sal_index = index * SCRIPT_INDEX_MULT
         max_sal_index = min_sal_index + SCRIPT_INDEX_MULT - 1
         if max_sal_index > salobj.MAX_SAL_INDEX:
@@ -113,6 +112,8 @@ class ScriptQueue(salobj.BaseCsc):
                                 script_callback=self.put_script,
                                 min_sal_index=min_sal_index,
                                 max_sal_index=max_sal_index)
+
+        super().__init__(SALPY_ScriptQueue, index)
         self.put_queue()
 
     def do_showAvailableScripts(self, id_data=None):

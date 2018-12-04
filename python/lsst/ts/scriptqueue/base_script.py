@@ -10,7 +10,7 @@ import sys
 import yaml
 
 import SALPY_Script
-import lsst.ts.salobj as salobj
+from lsst.ts import salobj
 
 
 HEARTBEAT_INTERVAL = 5  # seconds

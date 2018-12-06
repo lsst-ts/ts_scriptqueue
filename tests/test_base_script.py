@@ -29,7 +29,7 @@ import warnings
 import yaml
 
 import SALPY_Script
-import lsst.ts.salobj as salobj
+from lsst.ts import salobj
 from lsst.ts.scriptqueue import ScriptState
 from lsst.ts.scriptqueue.test_utils import TestScript
 
@@ -392,9 +392,13 @@ class BaseScriptTestCase(unittest.TestCase):
                     state = await remote.evt_state.next(flush=False, timeout=60)
                     self.assertEqual(state.state, ScriptState.UNCONFIGURED)
 
-                    setLogging_data = remote.cmd_setLogging.DataType()
-                    setLogging_data.level = logging.INFO
-                    await remote.cmd_setLogging.start(setLogging_data, timeout=2)
+                    logLevel_data = remote.evt_logLevel.get()
+                    self.assertEqual(logLevel_data.level, logging.WARNING)
+                    setLogLevel_data = remote.cmd_setLogLevel.DataType()
+                    setLogLevel_data.level = logging.INFO
+                    await remote.cmd_setLogLevel.start(setLogLevel_data, timeout=2)
+                    logLevel_data = remote.evt_logLevel.get()
+                    self.assertEqual(logLevel_data.level, logging.INFO)
 
                     wait_time = 0.1
                     configure_data = remote.cmd_configure.DataType()

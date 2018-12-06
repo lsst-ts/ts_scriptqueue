@@ -3,7 +3,7 @@ __all__ = ["TestScript"]
 import asyncio
 import logging
 
-import lsst.ts.salobj as salobj
+from lsst.ts import salobj
 from .base_script import BaseScript
 
 

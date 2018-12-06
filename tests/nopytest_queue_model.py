@@ -27,7 +27,7 @@ import warnings
 
 import SALPY_Script
 import SALPY_ScriptQueue
-import lsst.ts.salobj as salobj
+from lsst.ts import salobj
 from lsst.ts import scriptqueue
 
 

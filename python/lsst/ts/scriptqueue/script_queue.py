@@ -28,12 +28,9 @@ import SALPY_ScriptQueue
 from lsst.ts import salobj
 from .queue_model import QueueModel, ScriptInfo
 
-SCRIPT_INDEX_MULT = 10000
+SCRIPT_INDEX_MULT = 100000
 """Minimum Script SAL index is ScriptQueue SAL index * SCRIPT_INDEX_MULT
 and the maximum is SCRIPT_INDEX_MULT-1 more.
-
-TODO once a ts_sal release with TSS-3305 fixed is in widespread use,
-increase this to 100,000.
 """
 _MAX_SCRIPTQUEUE_INDEX = salobj.MAX_SAL_INDEX//SCRIPT_INDEX_MULT - 1
 _LOAD_TIMEOUT = 20  # seconds

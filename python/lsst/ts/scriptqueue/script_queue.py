@@ -66,33 +66,52 @@ class ScriptQueue(salobj.BaseCsc):
     Basic usage:
 
     * Send the ``add`` command to the ``ScriptQueue`` to add a script
-      to the queue.
-    * The added script will be loaded in a subprocess as a new ``Script``
-      SAL component with a unique index. The first script loaded
-      has index ``min_sal_index``, and each script after has the next
-      index until it wraps around after ``max_sal_index``.
-    * `ScriptQueue` will output a ``script_info`` event which includes
-      the the index of the ``Script`` SAL component and the command ID
-      of the add command. If you wish to reliably know which script your
-      ``add`` command added then pay attention to the command ID.
-    * Once the script is ready (reports a state of UNCONFIGURED),
-      the queue will configure it, using the configuration specified in
-      the ``add`` command. Configuring the script causes it to output
-      metadata and puts the script into the `ScriptState.CONFIGURED` state,
-      which means it can be run.
-    * Provided the queue is running (not paused) the first script
-      in the queue will be moved to the current script slot
-      (as reported in the ``queue`` event). The current script be run
-      as soon as it is configured.
-    * Once a script has finished running its information is moved to
-      a history buffer; history is output as part of the ``queue`` event.
-      The history buffer allows ``requeue`` to work with scripts that
-      have already run. Eventually support for history can probably
-      be done better using the Engineering Facilities Database,
-      in which case the history buffer will be eliminated.
+      to the queue. The added script is loaded in a subprocess
+      as a new ``Script`` SAL component with a unique SAL index:
 
-    The minimum SAL Script index will be 100,000 * ``index``
-    and the maximum will 99,999 more than that.
+      * The script's SAL index is used to uniquely identify the script
+        for commands such as ``move`` and ``stopScript``.
+      * The index is returned as the ``result`` field of
+        the final acknowledgement of the ``add`` command.
+      * The first script loaded has index ``min_sal_index``,
+        the next has index ``min_sal_index + 1``,
+        then  ``min_sal_index + 2``, ... ``max_sal_index``,
+        then wrap around to start over at ``min_sal_index``.
+      * The minimum SAL script index is 100,000 * the SAL index
+        of `ScriptQueue`: 100,000 for the main telescope
+        and 200,000 for the auxiliary telescope.
+        The maximum is, naturally, 99,999 more than that.
+
+    * Once a script is added, it reports its state as
+      `ScriptState.UNCONFIGURED`. At that point the `ScriptQueue`
+      configures it, using the configuration specified in the
+      ``add`` command.
+    * Configuring a script causes it to output the ``metadata`` event,
+      which includes an estimated duration, and changes the script's
+      state to `ScriptState.CONFIGURED`. This means it can now be run.
+    * When the current script is finished, its information is moved
+      to a history list, in order to support requeueing old scripts. Then:
+
+      * If the queue is running, then when the first script in the queue
+        has been configured, it is moved to the ``current`` slot and run.
+      * If the queue is paused, then the current slot is left empty
+        and no new script is run.
+    * Once a script has finished running, its information is moved to
+      a history list, which is output as part of the ``queue`` event.
+      The history list allows ``requeue`` to work with scripts that
+      have already run.
+
+    Events:
+
+    * As each script is added or changes state `ScriptQueue` outputs
+      a ``script_info`` event which includes the script's SAL index,
+      path and state.
+    * As the script queue changes state `ScriptQueue` outputs the
+      ``queue`` event listing the SAL indices of scripts on the queue,
+      the currently running script, and scripts that have been run
+      (the history list).
+    * When each script is configured, the script (not `ScriptQueue`)
+      outputs a `metadata` event that includes estimated duration.
     """
     def __init__(self, index, standardpath, externalpath):
         if index < 0 or index > _MAX_SCRIPTQUEUE_INDEX:
@@ -182,6 +201,10 @@ class ScriptQueue(salobj.BaseCsc):
         """Add a script to the queue.
 
         Start and configure a script SAL component, but don't run it.
+
+        On success the ``result`` field of the final acknowledgement
+        contains ``str(index)`` where ``index`` is the SAL index
+        of the added Script.
         """
         self.assert_enabled("add")
         script_info = ScriptInfo(
@@ -197,6 +220,7 @@ class ScriptQueue(salobj.BaseCsc):
             location=id_data.data.location,
             location_sal_index=id_data.data.locationSalIndex,
         )
+        return self.salinfo.makeAck(ack=SALPY_ScriptQueue.SAL__CMD_COMPLETE, result=str(script_info.index))
 
     def do_move(self, id_data):
         """Move a script within the queue.

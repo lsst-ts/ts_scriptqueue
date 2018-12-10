@@ -60,6 +60,8 @@ class ScriptQueue(salobj.BaseCsc):
 
     Notes
     -----
+    .. _script_queue_basic_usage:
+
     Basic usage:
 
     * Send the ``add`` command to the ``ScriptQueue`` to add a script
@@ -71,8 +73,8 @@ class ScriptQueue(salobj.BaseCsc):
       * The index is returned as the ``result`` field of
         the final acknowledgement of the ``add`` command.
       * The first script loaded has index ``min_sal_index``,
-        the next has index ``min_sal_index + 1``,
-        then  ``min_sal_index + 2``, ... ``max_sal_index``,
+        the next has index ``min_sal_index+1``,
+        then  ``min_sal_index+2``, ... ``max_sal_index``,
         then wrap around to start over at ``min_sal_index``.
       * The minimum SAL script index is 100,000 * the SAL index
         of `ScriptQueue`: 100,000 for the main telescope
@@ -108,7 +110,7 @@ class ScriptQueue(salobj.BaseCsc):
       the currently running script, and scripts that have been run
       (the history list).
     * When each script is configured, the script (not `ScriptQueue`)
-      outputs a `metadata` event that includes estimated duration.
+      outputs a ``metadata`` event that includes estimated duration.
     """
     def __init__(self, index, standardpath, externalpath):
         if index < 0 or index > _MAX_SCRIPTQUEUE_INDEX:

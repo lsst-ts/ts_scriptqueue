@@ -6,7 +6,11 @@
 ts_scriptqueue
 ##############
 
-Suppport for running `SAL Scripts`_.
+Suppport for running SAL scripts on a script queue.
+
+For more information about writing SAL scripts, see `SAL Scripts`_ and `Python SAL Scripts`_ below.
+For more information about the script queue, see `ScriptQueue`, especially :ref:`Basic Usage<script_queue_basic_usage>`.
+
 
 SAL Scripts
 ===========

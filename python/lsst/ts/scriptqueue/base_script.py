@@ -10,7 +10,7 @@ import sys
 import yaml
 
 import SALPY_Script
-import lsst.ts.salobj as salobj
+from lsst.ts import salobj
 
 
 HEARTBEAT_INTERVAL = 5  # seconds
@@ -58,7 +58,7 @@ def _make_remote_name(remote):
     return name
 
 
-class BaseScript(salobj.Controller, salobj.LogMixin, abc.ABC):
+class BaseScript(salobj.Controller, abc.ABC):
     """Abstract base class for SAL scripts.
 
     SAL scripts are SAL Script components that are configured once,
@@ -85,7 +85,6 @@ class BaseScript(salobj.Controller, salobj.LogMixin, abc.ABC):
     """
     def __init__(self, index, descr, remotes_dict=None):
         super().__init__(SALPY_Script, index, do_callbacks=True)
-        salobj.LogMixin.__init__(self)
         remote_names = []
         if remotes_dict:
             for attrname, remote in remotes_dict.items():

@@ -29,7 +29,7 @@ import warnings
 import yaml
 
 import SALPY_Script
-import lsst.ts.salobj as salobj
+from lsst.ts import salobj
 from lsst.ts.scriptqueue import ScriptState
 from lsst.ts.scriptqueue.test_utils import TestScript
 
@@ -41,12 +41,6 @@ class BaseScriptTestCase(unittest.TestCase):
         salobj.test_utils.set_random_lsst_dds_domain()
         self.datadir = os.path.abspath(os.path.join(os.path.dirname(__file__), "data"))
         self.index = next(index_gen)
-        self.process = None
-
-    def tearDown(self):
-        if self.process is not None and self.process.returncode is None:
-            self.process.terminate()
-            warnings.warn("A process was not properly terminated")
 
     async def configure_script(self, script, **kwargs):
         """Configure a script by calling do_configure
@@ -386,39 +380,48 @@ class BaseScriptTestCase(unittest.TestCase):
                     index = next(index_gen)
                     remote = salobj.Remote(SALPY_Script, index)
 
-                    self.process = await asyncio.create_subprocess_exec(script_path, str(index))
-                    self.assertIsNone(self.process.returncode)
+                    process = await asyncio.create_subprocess_exec(script_path, str(index))
+                    try:
+                        self.assertIsNone(process.returncode)
 
-                    state = await remote.evt_state.next(flush=False, timeout=60)
-                    self.assertEqual(state.state, ScriptState.UNCONFIGURED)
+                        state = await remote.evt_state.next(flush=False, timeout=60)
+                        self.assertEqual(state.state, ScriptState.UNCONFIGURED)
 
-                    setLogging_data = remote.cmd_setLogging.DataType()
-                    setLogging_data.level = logging.INFO
-                    await remote.cmd_setLogging.start(setLogging_data, timeout=2)
+                        logLevel_data = remote.evt_logLevel.get()
+                        self.assertEqual(logLevel_data.level, logging.WARNING)
+                        setLogLevel_data = remote.cmd_setLogLevel.DataType()
+                        setLogLevel_data.level = logging.INFO
+                        await remote.cmd_setLogLevel.start(setLogLevel_data, timeout=2)
+                        logLevel_data = remote.evt_logLevel.get()
+                        self.assertEqual(logLevel_data.level, logging.INFO)
 
-                    wait_time = 0.1
-                    configure_data = remote.cmd_configure.DataType()
-                    config = f"wait_time: {wait_time}"
-                    if fail:
-                        config = config + f"\n{fail}: True"
-                    print(f"config={config}")
-                    configure_data.config = config
-                    await remote.cmd_configure.start(configure_data, timeout=2)
+                        wait_time = 0.1
+                        configure_data = remote.cmd_configure.DataType()
+                        config = f"wait_time: {wait_time}"
+                        if fail:
+                            config = config + f"\n{fail}: True"
+                        print(f"config={config}")
+                        configure_data.config = config
+                        await remote.cmd_configure.start(configure_data, timeout=2)
 
-                    metadata = remote.evt_metadata.get()
-                    self.assertEqual(metadata.duration, wait_time)
-                    await asyncio.sleep(0.2)
-                    log_msg = remote.evt_logMessage.get()
-                    self.assertEqual(log_msg.message, "Configure succeeded")
+                        metadata = remote.evt_metadata.get()
+                        self.assertEqual(metadata.duration, wait_time)
+                        await asyncio.sleep(0.2)
+                        log_msg = remote.evt_logMessage.get()
+                        self.assertEqual(log_msg.message, "Configure succeeded")
 
-                    run_data = remote.cmd_run.DataType()
-                    await remote.cmd_run.start(run_data, timeout=3)
+                        run_data = remote.cmd_run.DataType()
+                        await remote.cmd_run.start(run_data, timeout=3)
 
-                    await asyncio.wait_for(self.process.wait(), timeout=2)
-                    if fail:
-                        self.assertEqual(self.process.returncode, 1)
-                    else:
-                        self.assertEqual(self.process.returncode, 0)
+                        await asyncio.wait_for(process.wait(), timeout=2)
+                        if fail:
+                            self.assertEqual(process.returncode, 1)
+                        else:
+                            self.assertEqual(process.returncode, 0)
+                    finally:
+                        if process.returncode is None:
+                            process.terminate()
+                            warnings.warn("Killed a process that was not properly terminated")
 
         asyncio.get_event_loop().run_until_complete(doit())
 

@@ -178,7 +178,7 @@ class BaseScript(salobj.Controller, abc.ABC):
 
         Parameters
         ----------
-        state : `ScriptState` (optional)
+        state : `ScriptState` or `int` (optional)
             New state, or None if no change
         reason : `str` (optional)
             Reason for state change. None for no change.
@@ -189,9 +189,7 @@ class BaseScript(salobj.Controller, abc.ABC):
             Name of most recently seen checkpoint. None for no change.
         """
         if state is not None:
-            if state not in ScriptState:
-                raise ValueError(f"{state} is not in ScriptState")
-            self._state.state = state
+            self._state.state = ScriptState(state)
         if keep_old_reason:
             if reason:
                 sepstr = "; " if self._state.reason else ""

@@ -288,7 +288,7 @@ class ScriptQueueTestCase(unittest.TestCase):
 
         asyncio.get_event_loop().run_until_complete(doit())
 
-    def xtest_processState(self):
+    def test_processState(self):
         """Test the processState value of the queue event.
         """
         is_standard = True
@@ -376,7 +376,7 @@ class ScriptQueueTestCase(unittest.TestCase):
 
         asyncio.get_event_loop().run_until_complete(doit())
 
-    def xtest_move(self):
+    def test_move(self):
         """Test move, pause and showQueue
         """
         async def doit():
@@ -516,7 +516,7 @@ class ScriptQueueTestCase(unittest.TestCase):
 
         asyncio.get_event_loop().run_until_complete(doit())
 
-    def xtest_requeue(self):
+    def test_requeue(self):
         """Test requeue, move and terminate
         """
         async def doit():
@@ -657,7 +657,7 @@ class ScriptQueueTestCase(unittest.TestCase):
 
         asyncio.get_event_loop().run_until_complete(doit())
 
-    def xtest_showAvailableScripts(self):
+    def test_showAvailableScripts(self):
         async def doit():
             # make sure showAvailableScripts fails when not enabled
             with self.assertRaises(salobj.AckError):
@@ -693,7 +693,7 @@ class ScriptQueueTestCase(unittest.TestCase):
 
         asyncio.get_event_loop().run_until_complete(doit())
 
-    def xtest_showQueue(self):
+    def test_showQueue(self):
         async def doit():
             await self.assert_next_queue(enabled=False, running=True)
 

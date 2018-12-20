@@ -38,7 +38,7 @@ from .base_script import ScriptState
 _LOAD_TIMEOUT = 20  # seconds
 
 MIN_SAL_INDEX = 1000
-MAX_HISTORY = 1000
+MAX_HISTORY = 400
 
 
 class Scripts:

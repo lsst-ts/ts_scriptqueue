@@ -21,6 +21,7 @@
 
 import asyncio
 import os
+import shutil
 import unittest
 import warnings
 
@@ -717,6 +718,44 @@ class ScriptQueueTestCase(unittest.TestCase):
             await asyncio.wait_for(script_info.config_task, 60)
             # this will fail if the script was already run
             self.assertTrue(script_info.runnable)
+
+
+class CmdLineTestCase(unittest.TestCase):
+    def setUp(self):
+        salobj.set_random_lsst_dds_domain()
+        self.index = 1
+        self.datadir = os.path.abspath(os.path.join(os.path.dirname(__file__), "data"))
+        self.standardpath = os.path.join(self.datadir, "standard")
+        self.externalpath = os.path.join(self.datadir, "external")
+        self.process = None
+
+    def test_run(self):
+        exe_name = "run_script_queue.py"
+        exe_path = shutil.which(exe_name)
+        if exe_path is None:
+            self.fail(f"Could not find bin script {exe_name}; did you setup and scons this package?")
+
+        async def doit():
+            process = await asyncio.create_subprocess_exec(
+                exe_name, str(self.index), self.standardpath, self.externalpath, "--verbose")
+            try:
+                remote = salobj.Remote(SALPY_ScriptQueue, index=self.index)
+
+                summaryState_data = await remote.evt_summaryState.next(flush=False, timeout=10)
+                self.assertEqual(summaryState_data.summaryState, salobj.State.STANDBY)
+
+                id_ack = await remote.cmd_exitControl.start(timeout=2)
+                self.assertEqual(id_ack.ack.ack, remote.salinfo.lib.SAL__CMD_COMPLETE)
+                summaryState_data = await remote.evt_summaryState.next(flush=False, timeout=10)
+                self.assertEqual(summaryState_data.summaryState, salobj.State.OFFLINE)
+
+                await asyncio.wait_for(process.wait(), 2)
+            except Exception:
+                if process.returncode is None:
+                    process.terminate()
+                raise
+
+        asyncio.get_event_loop().run_until_complete(doit())
 
 
 if __name__ == "__main__":

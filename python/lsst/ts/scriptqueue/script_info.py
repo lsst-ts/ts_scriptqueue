@@ -51,14 +51,17 @@ class ScriptInfo:
         Configuration data as a YAML encoded string.
     descr : `str`
         A short explanation of why this script is being run.
+    verbose : `bool` (optional)
+        If True then print log messages from the script to stdout.
     """
-    def __init__(self, index, cmd_id, is_standard, path, config, descr):
+    def __init__(self, index, cmd_id, is_standard, path, config, descr, verbose=False):
         self._index = int(index)
         self.cmd_id = int(cmd_id)
         self.is_standard = bool(is_standard)
         self.path = str(path)
         self.config = config
         self.descr = descr
+        self.verbose = verbose
         self.salinfo = salobj.SalInfo(SALPY_Script, self.index)
         self.script_state = 0
         """Most recent state reported by the Script, or 0 if the script is not yet loaded."""
@@ -175,7 +178,7 @@ class ScriptInfo:
         if not self.runnable:
             raise RuntimeError("Script is not runnable")
         self._run_started = True
-        asyncio.ensure_future(self.remote.cmd_run.start(self.remote.cmd_run.DataType()))
+        asyncio.ensure_future(self.remote.cmd_run.start())
 
     @property
     def runnable(self):
@@ -249,6 +252,8 @@ class ScriptInfo:
         loop = asyncio.get_event_loop()
         await loop.run_in_executor(None, thread_func)
         self.remote.evt_state.callback = self._script_state_callback
+        if self.verbose:
+            self.remote.evt_logMessage.callback = self._log_message_callback
 
     def _cleanup(self, returncode=None):
         """Clean up when the Script subprocess exits.
@@ -279,12 +284,25 @@ class ScriptInfo:
                 raise RuntimeError(f"Cannot configure script because it is in state {self.script_state} "
                                    f"instead of {ScriptState.UNCONFIGURED}")
 
-            config_data = self.remote.cmd_configure.DataType()
-            config_data.config = self.config
-            await self.remote.cmd_configure.start(config_data, timeout=_CONFIGURE_TIMEOUT)
+            self.remote.cmd_configure.set(config=self.config)
+            await self.remote.cmd_configure.start(timeout=_CONFIGURE_TIMEOUT)
         except Exception:
             self.terminate()
             raise
+
+    def _log_message_callback(self, data):
+        """Print logMessage data to stdout.
+
+        To use: if self.verbose is true then set this as a callback
+        for the logMessage event.
+
+        Parameters
+        ----------
+        data : `Script_logevent_logMessageC`
+            Log message data.
+        """
+        print(f"Script {self.index} log message={data.message!r}; "
+              f"level={data.level}; traceback={data.traceback!r}")
 
     def _run_callback(self, *args):
         if self.callback:

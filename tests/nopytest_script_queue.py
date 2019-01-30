@@ -34,13 +34,14 @@ I0 = scriptqueue.script_queue.SCRIPT_INDEX_MULT  # initial Script SAL index
 
 class ScriptQueueTestCase(unittest.TestCase):
     def setUp(self):
-        salobj.test_utils.set_random_lsst_dds_domain()
+        salobj.set_random_lsst_dds_domain()
         self.datadir = os.path.abspath(os.path.join(os.path.dirname(__file__), "data"))
         standardpath = os.path.join(self.datadir, "standard")
         externalpath = os.path.join(self.datadir, "external")
         self.queue = scriptqueue.ScriptQueue(index=1,
                                              standardpath=standardpath,
-                                             externalpath=externalpath)
+                                             externalpath=externalpath,
+                                             verbose=True)
         self.queue.summary_state = salobj.State.DISABLED
         self.remote = salobj.Remote(SALPY_ScriptQueue, index=1)
         self.process = None
@@ -132,11 +133,11 @@ class ScriptQueueTestCase(unittest.TestCase):
             with self.assertRaises(salobj.AckError):
                 await self.remote.cmd_add.start(add_data, timeout=2)
 
-            await self.remote.cmd_enable.start(self.remote.cmd_enable.DataType(), timeout=2)
+            await self.remote.cmd_enable.start(timeout=2)
             await self.assert_next_queue(enabled=True, running=True)
 
             # pause the queue so we know what to expect of queue state
-            await self.remote.cmd_pause.start(self.remote.cmd_pause.DataType(), timeout=60)
+            await self.remote.cmd_pause.start(timeout=60)
             await self.assert_next_queue(running=False)
 
             # add script I0; queue is empty, so location is irrelevant
@@ -147,9 +148,8 @@ class ScriptQueueTestCase(unittest.TestCase):
             await self.assert_next_queue(salIndices=[I0])
 
             # run showScript for a script that has not been configured
-            showScript_data = self.remote.cmd_showScript.DataType()
-            showScript_data.salIndex = I0
-            id_ack = await self.remote.cmd_showScript.start(showScript_data, timeout=2)
+            self.remote.cmd_showScript.set(salIndex=I0)
+            id_ack = await self.remote.cmd_showScript.start(timeout=2)
             script_data = self.remote.evt_script.get()
             self.assertEqual(script_data.cmdId, cmd_id_0)
             self.assertEqual(script_data.salIndex, I0)
@@ -217,7 +217,7 @@ class ScriptQueueTestCase(unittest.TestCase):
                 await self.remote.cmd_add.start(add_data, timeout=60)
 
             # make sure the incorrect add commands did not alter the queue
-            await self.remote.cmd_showQueue.start(self.remote.cmd_showQueue.DataType(), timeout=2)
+            await self.remote.cmd_showQueue.start(timeout=2)
             await self.assert_next_queue(salIndices=[I0+5, I0+2, I0+4, I0+6, I0, I0+1, I0+3])
 
             # stop a few scripts, including one non-existent script
@@ -231,9 +231,8 @@ class ScriptQueueTestCase(unittest.TestCase):
             await self.wait_runnable(I0+1, I0+2, I0+3)
 
             # get script state for a script that has been configured but is not running
-            showScript_data = self.remote.cmd_showScript.DataType()
-            showScript_data.salIndex = I0+3
-            await self.remote.cmd_showScript.start(showScript_data, timeout=2)
+            self.remote.cmd_showScript.set(salIndex=I0+3)
+            await self.remote.cmd_showScript.start(timeout=2)
             script_data = self.remote.evt_script.get()
             self.assertEqual(script_data.salIndex, I0+3)
             self.assertEqual(script_data.cmdId, cmd_id3)
@@ -243,14 +242,13 @@ class ScriptQueueTestCase(unittest.TestCase):
             self.assertGreater(script_data.timestamp, 0)
             self.assertEqual(script_data.duration, 0)
 
-            await self.remote.cmd_resume.start(self.remote.cmd_resume.DataType(), timeout=60)
+            await self.remote.cmd_resume.start(timeout=60)
             await self.assert_next_queue(running=True, currentSalIndex=I0+2,
                                          salIndices=[I0+1, I0+3], pastSalIndices=[])
 
             # get script state for the script that is running
-            showScript_data = self.remote.cmd_showScript.DataType()
-            showScript_data.salIndex = I0+2
-            await self.remote.cmd_showScript.start(showScript_data, timeout=2)
+            self.remote.cmd_showScript.set(salIndex=I0+2)
+            await self.remote.cmd_showScript.start(timeout=2)
             script_data = self.remote.evt_script.get()
             self.assertEqual(script_data.salIndex, I0+2)
             self.assertEqual(script_data.cmdId, cmd_id2)
@@ -268,9 +266,8 @@ class ScriptQueueTestCase(unittest.TestCase):
                                          salIndices=[], pastSalIndices=[I0+3, I0+1, I0+2])
 
             # get script state for a script that has been run
-            showScript_data = self.remote.cmd_showScript.DataType()
-            showScript_data.salIndex = I0+1
-            await self.remote.cmd_showScript.start(showScript_data, timeout=2)
+            self.remote.cmd_showScript.set(salIndex=I0+1)
+            await self.remote.cmd_showScript.start(timeout=2)
             script_data = self.remote.evt_script.get()
             self.assertEqual(script_data.salIndex, I0+1)
             self.assertEqual(script_data.cmdId, cmd_id1)
@@ -281,10 +278,9 @@ class ScriptQueueTestCase(unittest.TestCase):
             self.assertGreater(script_data.duration, 0.9)  # wait time is 1
 
             # get script state for non-existent script
-            showScript_data = self.remote.cmd_showScript.DataType()
-            showScript_data.salIndex = 3579
+            self.remote.cmd_showScript.set(salIndex=3579)
             with self.assertRaises(salobj.AckError):
-                await self.remote.cmd_showScript.start(showScript_data, timeout=2)
+                await self.remote.cmd_showScript.start(timeout=2)
 
         asyncio.get_event_loop().run_until_complete(doit())
 
@@ -297,7 +293,7 @@ class ScriptQueueTestCase(unittest.TestCase):
         async def doit():
             await self.assert_next_queue(enabled=False, running=True)
 
-            await self.remote.cmd_enable.start(self.remote.cmd_enable.DataType(), timeout=2)
+            await self.remote.cmd_enable.start(timeout=2)
             await self.assert_next_queue(enabled=True, running=True)
 
             def make_add_data(config):
@@ -311,7 +307,7 @@ class ScriptQueueTestCase(unittest.TestCase):
                 return add_data
 
             # pause the queue so we know what to expect of queue state
-            await self.remote.cmd_pause.start(self.remote.cmd_pause.DataType(), timeout=60)
+            await self.remote.cmd_pause.start(timeout=60)
             await self.assert_next_queue(running=False)
 
             # add script I0 that will fail, and so pause the queue
@@ -332,12 +328,12 @@ class ScriptQueueTestCase(unittest.TestCase):
             cmd_id2 = id_ack.cmd_id
             await self.assert_next_queue(salIndices=[I0, I0+1, I0+2])
 
-            # wait for both scripts to be runnable so future script output
+            # wait for all scripts to be runnable so future script output
             # is due to the scripts being run or terminated
             await self.wait_runnable(I0, I0+1, I0+2)
 
             # run the queue and let it pause on failure
-            await self.remote.cmd_resume.start(self.remote.cmd_resume.DataType(), timeout=60)
+            await self.remote.cmd_resume.start(timeout=60)
             await self.assert_next_queue(running=True, currentSalIndex=I0,
                                          salIndices=[I0+1, I0+2], pastSalIndices=[])
             await self.assert_next_queue(running=False, currentSalIndex=I0,
@@ -362,7 +358,7 @@ class ScriptQueueTestCase(unittest.TestCase):
             self.assertEqual(script_data1.scriptState, SALPY_Script.state_Configured)
 
             # resume the queue and let I0+2 run
-            await self.remote.cmd_resume.start(self.remote.cmd_resume.DataType(), timeout=60)
+            await self.remote.cmd_resume.start(timeout=60)
             await self.assert_next_queue(running=True, currentSalIndex=I0+2,
                                          salIndices=[], pastSalIndices=[I0])
             await self.assert_next_queue(running=True, currentSalIndex=0,
@@ -384,129 +380,128 @@ class ScriptQueueTestCase(unittest.TestCase):
 
             # pause the queue so we know what to expect of queue state
             # also check that pause works while not enabled
-            await self.remote.cmd_pause.start(self.remote.cmd_pause.DataType(), timeout=60)
+            await self.remote.cmd_pause.start(timeout=60)
             await self.assert_next_queue(enabled=False, running=False)
 
-            await self.remote.cmd_enable.start(self.remote.cmd_enable.DataType(), timeout=2)
+            await self.remote.cmd_enable.start(timeout=2)
             await self.assert_next_queue(enabled=True, running=False)
 
             # queue scripts I0, I0+1 and I0+2
             sal_indices = [I0, I0+1, I0+2]
             for i, index in enumerate(sal_indices):
-                add_data = self.remote.cmd_add.DataType()
-                add_data.isStandard = True
-                add_data.path = os.path.join("subdir", "script3")
-                add_data.config = "wait_time: 0.1"
-                add_data.location = SALPY_ScriptQueue.add_Last
-                add_data.descr = f"test_move {i}"
-                await self.remote.cmd_add.start(add_data, timeout=60)
+                self.remote.cmd_add.set(
+                    isStandard=True,
+                    path=os.path.join("subdir", "script3"),
+                    config="wait_time: 0.1",
+                    location=SALPY_ScriptQueue.add_Last,
+                    descr=f"test_move {i}",
+                )
+                await self.remote.cmd_add.start(timeout=60)
                 await self.assert_next_queue(salIndices=sal_indices[0:i+1])
 
             # move I0+2 first
-            move_data = self.remote.cmd_move.DataType()
-            move_data.salIndex = I0+2
-            move_data.location = SALPY_ScriptQueue.add_First
-            await self.remote.cmd_move.start(move_data, timeout=2)
+            self.remote.cmd_move.set(salIndex=I0+2,
+                                     location=SALPY_ScriptQueue.add_First)
+            await self.remote.cmd_move.start(timeout=2)
             await self.assert_next_queue(salIndices=[I0+2, I0, I0+1])
 
-            # move I0+2 first again (should be a no-op)
-            move_data = self.remote.cmd_move.DataType()
-            move_data.salIndex = I0+2
-            move_data.location = SALPY_ScriptQueue.add_First
-            await self.remote.cmd_move.start(move_data, timeout=2)
+            # move I0+2 first again; this should be a no-op
+            # but it should still output the queue event
+            self.remote.cmd_move.set(salIndex=I0+2,
+                                     location=SALPY_ScriptQueue.add_First)
+            await self.remote.cmd_move.start(timeout=2)
             await self.assert_next_queue(salIndices=[I0+2, I0, I0+1])
 
             # move I0 last
-            move_data = self.remote.cmd_move.DataType()
-            move_data.salIndex = I0
-            move_data.location = SALPY_ScriptQueue.add_Last
-            await self.remote.cmd_move.start(move_data, timeout=2)
+            self.remote.cmd_move.set(salIndex=I0,
+                                     location=SALPY_ScriptQueue.add_Last)
+            await self.remote.cmd_move.start(timeout=2)
             await self.assert_next_queue(salIndices=[I0+2, I0+1, I0])
 
-            # move I0 last again (should be a no-op)
-            move_data = self.remote.cmd_move.DataType()
-            move_data.salIndex = I0
-            move_data.location = SALPY_ScriptQueue.add_Last
-            await self.remote.cmd_move.start(move_data, timeout=2)
+            # move I0 last again; this should be a no-op
+            # but it should still output the queue event
+            self.remote.cmd_move.set(salIndex=I0,
+                                     location=SALPY_ScriptQueue.add_Last)
+            await self.remote.cmd_move.start(timeout=2)
             await self.assert_next_queue(salIndices=[I0+2, I0+1, I0])
 
             # move I0 before I0+2: before first
-            move_data.salIndex = I0
-            move_data.location = SALPY_ScriptQueue.add_Before
-            move_data.locationSalIndex = I0+2
-            await self.remote.cmd_move.start(move_data, timeout=2)
+            self.remote.cmd_move.set(salIndex=I0,
+                                     location=SALPY_ScriptQueue.add_Before,
+                                     locationSalIndex=I0+2)
+            await self.remote.cmd_move.start(timeout=2)
             await self.assert_next_queue(salIndices=[I0, I0+2, I0+1])
 
             # move I0+1 before I0+2: before not-first
-            move_data.salIndex = I0+1
-            move_data.location = SALPY_ScriptQueue.add_Before
-            move_data.locationSalIndex = I0+2
-            await self.remote.cmd_move.start(move_data, timeout=2)
+            self.remote.cmd_move.set(salIndex=I0+1,
+                                     location=SALPY_ScriptQueue.add_Before,
+                                     locationSalIndex=I0+2)
+            await self.remote.cmd_move.start(timeout=2)
             await self.assert_next_queue(salIndices=[I0, I0+1, I0+2])
 
             # move I0 after I0+2: after last
-            move_data.salIndex = I0
-            move_data.location = SALPY_ScriptQueue.add_After
-            move_data.locationSalIndex = I0+2
-            await self.remote.cmd_move.start(move_data, timeout=2)
+            self.remote.cmd_move.set(salIndex=I0,
+                                     location=SALPY_ScriptQueue.add_After,
+                                     locationSalIndex=I0+2)
+            await self.remote.cmd_move.start(timeout=2)
             await self.assert_next_queue(salIndices=[I0+1, I0+2, I0])
 
             # move I0+1 after I0+2: after not-last
-            move_data.salIndex = I0+1
-            move_data.location = SALPY_ScriptQueue.add_After
-            move_data.locationSalIndex = I0+2
-            await self.remote.cmd_move.start(move_data, timeout=2)
+            self.remote.cmd_move.set(salIndex=I0+1,
+                                     location=SALPY_ScriptQueue.add_After,
+                                     locationSalIndex=I0+2)
+            await self.remote.cmd_move.start(timeout=2)
             await self.assert_next_queue(salIndices=[I0+2, I0+1, I0])
 
             # move I0 after itself: this should be a no-op
             # but it should still output the queue event
-            move_data.salIndex = I0
-            move_data.location = SALPY_ScriptQueue.add_After
-            move_data.locationSalIndex = I0
-            await self.remote.cmd_move.start(move_data, timeout=2)
+            self.remote.cmd_move.set(salIndex=I0,
+                                     location=SALPY_ScriptQueue.add_After,
+                                     locationSalIndex=I0)
+            await self.remote.cmd_move.start(timeout=2)
             await self.assert_next_queue(salIndices=[I0+2, I0+1, I0])
 
             # move I0+1 before itself: this should be a no-op
             # but it should still output the queue event
-            move_data.salIndex = I0+1
-            move_data.location = SALPY_ScriptQueue.add_After
-            move_data.locationSalIndex = I0+1
-            await self.remote.cmd_move.start(move_data, timeout=2)
+            self.remote.cmd_move.set(salIndex=I0+1,
+                                     location=SALPY_ScriptQueue.add_Before,
+                                     locationSalIndex=I0+1)
+            await self.remote.cmd_move.start(timeout=2)
             await self.assert_next_queue(salIndices=[I0+2, I0+1, I0])
 
             # try some incorrect moves
-            move_data.salIndex = 1234  # no such script
-            move_data.location = SALPY_ScriptQueue.add_Last
+            self.remote.cmd_move.set(salIndex=1234,  # no such script
+                                     location=SALPY_ScriptQueue.add_Last)
             with self.assertRaises(salobj.AckError):
-                await self.remote.cmd_move.start(move_data, timeout=2)
+                await self.remote.cmd_move.start(timeout=2)
 
-            move_data.salIndex = I0+1
-            move_data.location = 21  # no such location
+            self.remote.cmd_move.set(salIndex=I0+1,
+                                     location=21)  # no such location
             with self.assertRaises(salobj.AckError):
-                await self.remote.cmd_move.start(move_data, timeout=2)
+                await self.remote.cmd_move.start(timeout=2)
 
-            move_data.salIndex = I0+1
-            move_data.location = SALPY_ScriptQueue.add_Before
-            move_data.locationSalIndex = 1234  # no such script
+            self.remote.cmd_move.set(salIndex=I0+1,
+                                     location=SALPY_ScriptQueue.add_Before,
+                                     locationSalIndex=1234)  # no such script
             with self.assertRaises(salobj.AckError):
-                await self.remote.cmd_move.start(move_data, timeout=2)
+                await self.remote.cmd_move.start(timeout=2)
 
             # try incorrect index and the same "before" locationSalIndex
-            move_data.salIndex = 1234
-            move_data.location = SALPY_ScriptQueue.add_Before
-            move_data.locationSalIndex = 1234
+            self.remote.cmd_move.set(salIndex=1234,  # no such script
+                                     location=SALPY_ScriptQueue.add_Before,
+                                     locationSalIndex=1234)  # no such script
             with self.assertRaises(salobj.AckError):
-                await self.remote.cmd_move.start(move_data, timeout=2)
+                await self.remote.cmd_move.start(timeout=2)
 
             # try incorrect index and the same "after" locationSalIndex
-            move_data.salIndex = 1234
-            move_data.location = SALPY_ScriptQueue.add_After
-            move_data.locationSalIndex = 1234
+            self.remote.cmd_move.set(salIndex=1234,  # no such script
+                                     location=SALPY_ScriptQueue.add_After,
+                                     locationSalIndex=1234)  # no such script
             with self.assertRaises(salobj.AckError):
-                await self.remote.cmd_move.start(move_data, timeout=2)
+                await self.remote.cmd_move.start(timeout=2)
 
             # make sure those commands did not alter the queue
-            await self.remote.cmd_showQueue.start(self.remote.cmd_showQueue.DataType(), timeout=2)
+            await self.remote.cmd_showQueue.start(timeout=2)
             await self.assert_next_queue(salIndices=[I0+2, I0+1, I0])
 
             await self.queue.model.wait_terminate_all(timeout=10)
@@ -522,96 +517,86 @@ class ScriptQueueTestCase(unittest.TestCase):
         async def doit():
             await self.assert_next_queue(enabled=False, running=True)
 
-            await self.remote.cmd_enable.start(self.remote.cmd_enable.DataType(), timeout=2)
+            await self.remote.cmd_enable.start(timeout=2)
             await self.assert_next_queue(enabled=True, running=True)
 
             # pause the queue so we know what to expect of queue state
-            await self.remote.cmd_pause.start(self.remote.cmd_pause.DataType(), timeout=60)
+            await self.remote.cmd_pause.start(timeout=60)
             await self.assert_next_queue(running=False)
 
             # queue scripts I0, I0+1 and I0+2
             sal_indices = [I0, I0+1, I0+2]
             for i, index in enumerate(sal_indices):
-                add_data = self.remote.cmd_add.DataType()
-                add_data.isStandard = True
-                add_data.path = "script2"
-                add_data.config = "wait_time: 0.1"
-                add_data.location = SALPY_ScriptQueue.add_Last
-                add_data.descr = f"test_requeue {i}"
-                await self.remote.cmd_add.start(add_data, timeout=60)
+                self.remote.cmd_add.set(
+                    isStandard=True,
+                    path="script2",
+                    config="wait_time: 0.1",
+                    location=SALPY_ScriptQueue.add_Last,
+                    descr=f"test_requeue {i}",
+                )
+                await self.remote.cmd_add.start(timeout=60)
                 await self.assert_next_queue(salIndices=sal_indices[0:i+1])
 
             # disable the queue and make sure requeue, move and resume fail
             # (I added some jobs before disabling so we have scripts
             # to try to requeue and move).
-            await self.remote.cmd_disable.start(self.remote.cmd_disable.DataType(), timeout=2)
+            await self.remote.cmd_disable.start(timeout=2)
             await self.assert_next_queue(enabled=False, running=False, salIndices=sal_indices)
 
-            requeue_data = self.remote.cmd_requeue.DataType()
-            requeue_data.salIndex = I0
-            requeue_data.location = SALPY_ScriptQueue.requeue_Last
+            self.remote.cmd_requeue.set(salIndex=I0,
+                                        location=SALPY_ScriptQueue.requeue_Last)
             with self.assertRaises(salobj.AckError):
-                await self.remote.cmd_requeue.start(requeue_data, timeout=60)
+                await self.remote.cmd_requeue.start(timeout=60)
 
-            move_data = self.remote.cmd_move.DataType()
-            move_data.salIndex = I0+2
-            move_data.location = SALPY_ScriptQueue.add_First
+            self.remote.cmd_move.set(salIndex=I0+2,
+                                     location=SALPY_ScriptQueue.add_First)
             with self.assertRaises(salobj.AckError):
-                await self.remote.cmd_move.start(move_data, timeout=2)
+                await self.remote.cmd_move.start(timeout=2)
 
             with self.assertRaises(salobj.AckError):
-                await self.remote.cmd_resume.start(self.remote.cmd_resume.DataType(), timeout=2)
+                await self.remote.cmd_resume.start(timeout=2)
 
             # re-enable the queue and proceed with the rest of the test
-            await self.remote.cmd_enable.start(self.remote.cmd_enable.DataType(), timeout=2)
+            await self.remote.cmd_enable.start(timeout=2)
             await self.assert_next_queue(enabled=True, running=False, salIndices=sal_indices)
 
-            # requeue I0 to last
-            requeue_data = self.remote.cmd_requeue.DataType()
-            requeue_data.salIndex = I0
-            requeue_data.location = SALPY_ScriptQueue.requeue_Last
-            await self.remote.cmd_requeue.start(requeue_data, timeout=60)
+            # requeue I0 to last, creating I0+3
+            self.remote.cmd_requeue.set(salIndex=I0,
+                                        location=SALPY_ScriptQueue.requeue_Last)
+            await self.remote.cmd_requeue.start(timeout=60)
             await self.assert_next_queue(salIndices=[I0, I0+1, I0+2, I0+3])
 
-            # requeue I0+1 to first
-            requeue_data = self.remote.cmd_requeue.DataType()
-            requeue_data.salIndex = I0
-            requeue_data.location = SALPY_ScriptQueue.requeue_First
-            await self.remote.cmd_requeue.start(requeue_data, timeout=60)
+            # requeue I0 to first, creating I0+4
+            self.remote.cmd_requeue.set(salIndex=I0,
+                                        location=SALPY_ScriptQueue.requeue_First)
+            await self.remote.cmd_requeue.start(timeout=60)
             await self.assert_next_queue(salIndices=[I0+4, I0, I0+1, I0+2, I0+3])
 
-            # requeue I0+2 to before I0+4: before first
-            requeue_data = self.remote.cmd_requeue.DataType()
-            requeue_data.salIndex = I0+2
-            requeue_data.location = SALPY_ScriptQueue.requeue_Before
-            requeue_data.locationSalIndex = I0+4
-            await self.remote.cmd_requeue.start(requeue_data, timeout=60)
+            # requeue I0+2 to before I0+4 (which is first), creating I0+5
+            self.remote.cmd_requeue.set(salIndex=I0+2,
+                                        location=SALPY_ScriptQueue.requeue_Before,
+                                        locationSalIndex=I0+4)
+            await self.remote.cmd_requeue.start(timeout=60)
             await self.assert_next_queue(salIndices=[I0+5, I0+4, I0, I0+1, I0+2, I0+3])
 
-            # requeue I0+3 to before I0+3: before not-first
-            # and check that matching indices is not a problem
-            requeue_data = self.remote.cmd_requeue.DataType()
-            requeue_data.salIndex = I0+3
-            requeue_data.location = SALPY_ScriptQueue.requeue_Before
-            requeue_data.locationSalIndex = I0+3
-            await self.remote.cmd_requeue.start(requeue_data, timeout=60)
+            # requeue I0+3 to before itself (which is not first), creating I0+6
+            self.remote.cmd_requeue.set(salIndex=I0+3,
+                                        location=SALPY_ScriptQueue.requeue_Before,
+                                        locationSalIndex=I0+3)
+            await self.remote.cmd_requeue.start(timeout=60)
             await self.assert_next_queue(salIndices=[I0+5, I0+4, I0, I0+1, I0+2, I0+6, I0+3])
 
-            # requeue I0+3 to after I0+3: after last
-            # and check that matching indices is not a problem
-            requeue_data = self.remote.cmd_requeue.DataType()
-            requeue_data.salIndex = I0+3
-            requeue_data.location = SALPY_ScriptQueue.requeue_After
-            requeue_data.locationSalIndex = I0+3
-            await self.remote.cmd_requeue.start(requeue_data, timeout=60)
+            # requeue I0+3 to after itself (which is last), creating I0+7
+            self.remote.cmd_requeue.set(salIndex=I0+3,
+                                        location=SALPY_ScriptQueue.requeue_After,
+                                        locationSalIndex=I0+3)
+            await self.remote.cmd_requeue.start(timeout=60)
             await self.assert_next_queue(salIndices=[I0+5, I0+4, I0, I0+1, I0+2, I0+6, I0+3, I0+7])
 
-            # requeue I0+5 to after I0+7: after last
-            requeue_data = self.remote.cmd_requeue.DataType()
-            requeue_data.salIndex = I0+5
-            requeue_data.location = SALPY_ScriptQueue.requeue_Last
-            requeue_data.locationSalIndex = I0+7
-            await self.remote.cmd_requeue.start(requeue_data, timeout=60)
+            # requeue I0+5 to last, creating I0+8
+            self.remote.cmd_requeue.set(salIndex=I0+5,
+                                        location=SALPY_ScriptQueue.requeue_Last)
+            await self.remote.cmd_requeue.start(timeout=60)
             await self.assert_next_queue(salIndices=[I0+5, I0+4, I0+0, I0+1, I0+2, I0+6, I0+3, I0+7, I0+8])
 
             # stop all scripts except I0+1 and I0+2
@@ -622,7 +607,7 @@ class ScriptQueueTestCase(unittest.TestCase):
             await self.wait_runnable(I0+1, I0+2)
 
             # run the queue and let it finish
-            await self.remote.cmd_resume.start(self.remote.cmd_resume.DataType(), timeout=60)
+            await self.remote.cmd_resume.start(timeout=60)
             await self.assert_next_queue(running=True, currentSalIndex=I0+1,
                                          salIndices=[I0+2], pastSalIndices=[])
             await self.assert_next_queue(running=True, currentSalIndex=I0+2,
@@ -631,15 +616,14 @@ class ScriptQueueTestCase(unittest.TestCase):
                                          salIndices=[], pastSalIndices=[I0+2, I0+1])
 
             # pause while we requeue from history
-            await self.remote.cmd_pause.start(self.remote.cmd_pause.DataType(), timeout=60)
+            await self.remote.cmd_pause.start(timeout=60)
             await self.assert_next_queue(running=False, currentSalIndex=0,
                                          salIndices=[], pastSalIndices=[I0+2, I0+1])
 
-            # requeue a script from the history queue
-            requeue_data = self.remote.cmd_requeue.DataType()
-            requeue_data.salIndex = I0+1
-            requeue_data.location = SALPY_ScriptQueue.requeue_First
-            await self.remote.cmd_requeue.start(requeue_data, timeout=60)
+            # requeue a script from the history queue, creating I0+9
+            self.remote.cmd_requeue.set(salIndex=I0+1,
+                                        location=SALPY_ScriptQueue.requeue_First)
+            await self.remote.cmd_requeue.start(timeout=60)
             await self.assert_next_queue(running=False, currentSalIndex=0,
                                          salIndices=[I0+9], pastSalIndices=[I0+2, I0+1])
 
@@ -649,7 +633,7 @@ class ScriptQueueTestCase(unittest.TestCase):
             await self.wait_runnable(I0+9)
 
             # run the queue and let it finish
-            await self.remote.cmd_resume.start(self.remote.cmd_resume.DataType(), timeout=60)
+            await self.remote.cmd_resume.start(timeout=60)
             await self.assert_next_queue(running=True, currentSalIndex=I0+9,
                                          salIndices=[], pastSalIndices=[I0+2, I0+1])
             await self.assert_next_queue(running=True, currentSalIndex=0,
@@ -661,18 +645,16 @@ class ScriptQueueTestCase(unittest.TestCase):
         async def doit():
             # make sure showAvailableScripts fails when not enabled
             with self.assertRaises(salobj.AckError):
-                await self.remote.cmd_showAvailableScripts.start(
-                    self.remote.cmd_showAvailableScripts.DataType(), timeout=60)
+                await self.remote.cmd_showAvailableScripts.start(timeout=60)
 
-            await self.remote.cmd_enable.start(self.remote.cmd_enable.DataType(), timeout=2)
+            await self.remote.cmd_enable.start(timeout=2)
 
             # this should output available scripts without sending the command
             available_scripts0 = await self.remote.evt_availableScripts.next(flush=False, timeout=2)
             with self.assertRaises(asyncio.TimeoutError):
                 await self.remote.evt_availableScripts.next(flush=False, timeout=0.1)
 
-            await self.remote.cmd_showAvailableScripts.start(
-                self.remote.cmd_showAvailableScripts.DataType(), timeout=60)
+            await self.remote.cmd_showAvailableScripts.start(timeout=60)
 
             available_scripts1 = await self.remote.evt_availableScripts.next(flush=False, timeout=2)
 
@@ -685,11 +667,10 @@ class ScriptQueueTestCase(unittest.TestCase):
                 self.assertEqual(external_set, expected_ext_set)
 
             # disable and again make sure showAvailableScripts fails
-            await self.remote.cmd_disable.start(self.remote.cmd_disable.DataType(), timeout=2)
+            await self.remote.cmd_disable.start(timeout=2)
 
             with self.assertRaises(salobj.AckError):
-                await self.remote.cmd_showAvailableScripts.start(
-                    self.remote.cmd_showAvailableScripts.DataType(), timeout=2)
+                await self.remote.cmd_showAvailableScripts.start(timeout=2)
 
         asyncio.get_event_loop().run_until_complete(doit())
 
@@ -699,27 +680,26 @@ class ScriptQueueTestCase(unittest.TestCase):
 
             # make sure showQueue fails when not enabled
             with self.assertRaises(salobj.AckError):
-                await self.remote.cmd_showQueue.start(
-                    self.remote.cmd_showQueue.DataType(), timeout=2)
+                await self.remote.cmd_showQueue.start(timeout=2)
 
-            await self.remote.cmd_enable.start(self.remote.cmd_enable.DataType(), timeout=2)
+            await self.remote.cmd_enable.start(timeout=2)
             await self.assert_next_queue(enabled=True, running=True)
 
             # make sure we have no more queue events
             with self.assertRaises(asyncio.TimeoutError):
                 await self.remote.evt_queue.next(flush=False, timeout=0.1)
 
-            await self.remote.cmd_showQueue.start(self.remote.cmd_showQueue.DataType(), timeout=2)
+            await self.remote.cmd_showQueue.start(timeout=2)
             await self.assert_next_queue(enabled=True, running=True)
 
             # make sure disabling the queue outputs the queue event with runnable False
             # and disables the showQueue command.
-            await self.remote.cmd_disable.start(self.remote.cmd_disable.DataType(), timeout=2)
+            await self.remote.cmd_disable.start(timeout=2)
             await self.assert_next_queue(enabled=False, running=True)
             with self.assertRaises(asyncio.TimeoutError):
                 await self.remote.evt_queue.next(flush=False, timeout=0.1)
             with self.assertRaises(salobj.AckError):
-                await self.remote.cmd_showQueue.start(self.remote.cmd_showQueue.DataType(), timeout=2)
+                await self.remote.cmd_showQueue.start(timeout=2)
 
         asyncio.get_event_loop().run_until_complete(doit())
 

@@ -24,6 +24,8 @@ __all__ = ["ScriptQueue"]
 import asyncio
 import os.path
 
+import numpy as np
+
 import SALPY_ScriptQueue
 from lsst.ts import salobj
 from .queue_model import QueueModel, ScriptInfo
@@ -51,6 +53,8 @@ class ScriptQueue(salobj.BaseCsc):
         Path to standard SAL scripts.
     externalpath : `str`, `bytes` or `os.PathLike`
         Path to external SAL scripts.
+    verbose : `bool`
+        If True then print diagnostic messages to stdout.
 
     Raises
     ------
@@ -112,13 +116,14 @@ class ScriptQueue(salobj.BaseCsc):
     * When each script is configured, the script (not `ScriptQueue`)
       outputs a ``metadata`` event that includes estimated duration.
     """
-    def __init__(self, index, standardpath, externalpath):
+    def __init__(self, index, standardpath, externalpath, verbose=False):
         if index < 0 or index > _MAX_SCRIPTQUEUE_INDEX:
             raise ValueError(f"index {index} must be >= 0 and <= {_MAX_SCRIPTQUEUE_INDEX}")
         if not os.path.isdir(standardpath):
             raise ValueError(f"No such dir standardpath={standardpath}")
         if not os.path.isdir(externalpath):
             raise ValueError(f"No such dir externalpath={externalpath}")
+        self.verbose = verbose
 
         min_sal_index = index * SCRIPT_INDEX_MULT
         max_sal_index = min_sal_index + SCRIPT_INDEX_MULT - 1
@@ -129,7 +134,8 @@ class ScriptQueue(salobj.BaseCsc):
                                 queue_callback=self.put_queue,
                                 script_callback=self.put_script,
                                 min_sal_index=min_sal_index,
-                                max_sal_index=max_sal_index)
+                                max_sal_index=max_sal_index,
+                                verbose=verbose)
 
         super().__init__(SALPY_ScriptQueue, index)
         self.put_queue()
@@ -144,10 +150,11 @@ class ScriptQueue(salobj.BaseCsc):
         """
         self.assert_enabled("showAvailableScripts")
         scripts = self.model.find_available_scripts()
-        evtdata = self.evt_availableScripts.DataType()
-        evtdata.standard = ":".join(scripts.standard)
-        evtdata.external = ":".join(scripts.external)
-        self.evt_availableScripts.put(evtdata, 1)
+        self.evt_availableScripts.set_put(
+            standard=":".join(scripts.standard),
+            external=":".join(scripts.external),
+            force_output=True,
+        )
 
     def do_showQueue(self, id_data):
         """Output the queue event.
@@ -171,7 +178,7 @@ class ScriptQueue(salobj.BaseCsc):
         self.assert_enabled("showScript")
         script_info = self.model.get_script_info(id_data.data.salIndex,
                                                  search_history=True)
-        self.put_script(script_info)
+        self.put_script(script_info, force_output=True)
 
     def do_pause(self, id_data):
         """Pause the queue. A no-op if already paused.
@@ -213,6 +220,7 @@ class ScriptQueue(salobj.BaseCsc):
             path=id_data.data.path,
             config=id_data.data.config,
             descr=id_data.data.descr,
+            verbose=self.verbose,
         )
         await self.model.add(
             script_info=script_info,
@@ -263,30 +271,35 @@ class ScriptQueue(salobj.BaseCsc):
 
     def put_queue(self):
         """Output the queued scripts as a ``queue`` event.
+
+        The data is put even if the queue has not changed. That way commands
+        which alter the queue can rely on the event being published,
+        even if the command has no effect (e.g. moving a script before itself).
         """
-        evtdata = self.evt_queue.DataType()
+        sal_indices = np.zeros_like(self.evt_queue.data.salIndices)
+        indlen = min(len(self.model.queue), len(sal_indices))
+        sal_indices[0:indlen] = [info.index for info in self.model.queue][0:indlen]
 
-        evtdata.enabled = self.model.enabled
-        evtdata.running = self.model.running
+        past_sal_indices = np.zeros_like(self.evt_queue.data.pastSalIndices)
+        pastlen = min(len(self.model.history), len(past_sal_indices))
+        past_sal_indices[0:pastlen] = [info.index for info in self.model.history][0:pastlen]
 
-        evtdata.currentSalIndex = self.model.current_index
+        if self.verbose:
+            print(f"put_queue: enabled={self.model.enabled}, running={self.model.running}, "
+                  f"currentSalIndex={self.model.current_index}, "
+                  f"salIndices={sal_indices[0:indlen]}, "
+                  f"pastSalIndices={past_sal_indices[0:pastlen]}")
+        self.evt_queue.set_put(
+            enabled=self.model.enabled,
+            running=self.model.running,
+            currentSalIndex=self.model.current_index,
+            length=indlen,
+            salIndices=sal_indices,
+            pastLength=pastlen,
+            pastSalIndices=past_sal_indices,
+            force_output=True)
 
-        evtdata.length = min(len(self.model.queue), len(evtdata.salIndices))
-        evtdata.salIndices[0:evtdata.length] = [info.index for info in self.model.queue][0:evtdata.length]
-        evtdata.salIndices[evtdata.length:] = 0
-
-        evtdata.pastLength = len(self.model.history)
-        evtdata.pastSalIndices[0:evtdata.pastLength] = \
-            [info.index for info in self.model.history][0:evtdata.pastLength]
-        evtdata.pastSalIndices[evtdata.pastLength:] = 0
-
-        # print(f"put_queue: enabled={self.model.enabled}, running={self.model.running}, "
-        #       f"currentSalIndex={self.model.current_index}, "
-        #       f"salIndices={evtdata.salIndices[0:evtdata.length]}, "
-        #       f"pastSalIndices={evtdata.pastSalIndices[0:evtdata.pastLength]}")
-        self.evt_queue.put(evtdata, 1)
-
-    def put_script(self, script_info):
+    def put_script(self, script_info, force_output=False):
         """Output information about a script as a ``script`` event.
 
         Designed to be used as a QueueModel script_callback.
@@ -295,20 +308,24 @@ class ScriptQueue(salobj.BaseCsc):
         ----------
         script_info : `ScriptInfo`
             Information about the script.
+        force_output : `bool` (optional)
+            If True the output even if not changed.
         """
         if script_info is None:
             return
 
-        evtdata = self.evt_script.DataType()
-        evtdata.cmdId = script_info.cmd_id
-        evtdata.salIndex = script_info.index
-        evtdata.path = script_info.path
-        evtdata.isStandard = script_info.is_standard
-        evtdata.timestamp = script_info.timestamp
-        evtdata.duration = script_info.duration
-        evtdata.processState = script_info.process_state
-        evtdata.scriptState = script_info.script_state
-        # print(f"put_script: index={script_info.index}, "
-        #       f"process_state={script_info.process_state}, "
-        #       f"script_state={script_info.script_state}")
-        self.evt_script.put(evtdata, 1)
+        if self.verbose:
+            print(f"put_script: index={script_info.index}, "
+                  f"process_state={script_info.process_state}, "
+                  f"script_state={script_info.script_state}")
+        self.evt_script.set_put(
+            cmdId=script_info.cmd_id,
+            salIndex=script_info.index,
+            path=script_info.path,
+            isStandard=script_info.is_standard,
+            timestamp=script_info.timestamp,
+            duration=script_info.duration,
+            processState=script_info.process_state,
+            scriptState=script_info.script_state,
+            force_output=force_output,
+        )

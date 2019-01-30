@@ -90,20 +90,16 @@ class BaseScript(salobj.Controller, abc.ABC):
             for attrname, remote in remotes_dict.items():
                 remote_names.append(_make_remote_name(remote))
                 setattr(self, attrname, remote)
-        self._description_data = self.evt_description.DataType()
-        self._description_data.classname = type(self).__name__
-        self._description_data.description = str(descr)
-        self._description_data.remotes = ",".join(remote_names)
-        self._metadata = self.evt_metadata.DataType()
-        self._checkpoints = self.evt_checkpoints.DataType()
-        self._state = self.evt_state.DataType()
-        self._state.state = ScriptState.UNCONFIGURED
         self._run_task = None
         self._pause_future = None
         self._final_state_future = asyncio.Future()
         self._is_exiting = False
-        self.evt_state.put(self.state)
-        self.evt_description.put(self._description_data)
+        self.evt_state.set_put(state=ScriptState.UNCONFIGURED)
+        self.evt_description.set_put(
+            classname=type(self).__name__,
+            description=str(descr),
+            remotes=",".join(remote_names),
+        )
         self._heartbeat_task = asyncio.ensure_future(self._heartbeat_loop())
         self.final_state_delay = 0.2
         """Delay (sec) to allow sending final state before exiting."""
@@ -139,23 +135,25 @@ class BaseScript(salobj.Controller, abc.ABC):
     def checkpoints(self):
         """Get the checkpoints at which to pause and stop.
 
-        An instance of ``self.evt_checkpoints.DataType()``
+        Returns ``self.evt_checkpoints.data`` which has these fields:
+
+        * ``pause``: checkpoints at which to pause, a regular expression
+        * ``stop``: checkpoints at which to stop, a regular expression
         """
-        return self._checkpoints
+        return self.evt_checkpoints.data
 
     @property
     def state(self):
         """Get the current state.
 
-        The returned state is an instance of ``evt_state.DataType()``;
-        as such, it has these fields:
+        Returns ``self.evt_state.data``, which has these fields:
 
         * ``state``: the current state; a `ScriptState`
         * ``last_checkpoint``: name of most recently seen checkpoint;
           a `str`
         * ``reason``: reason for this state, if any; a `str`
         """
-        return self._state
+        return self.evt_state.data
 
     @property
     def state_name(self):
@@ -181,24 +179,25 @@ class BaseScript(salobj.Controller, abc.ABC):
         state : `ScriptState` or `int` (optional)
             New state, or None if no change
         reason : `str` (optional)
-            Reason for state change. None for no change.
+            Reason for state change. `None` for no new reason.
         keep_old_reason : `bool`
-            If True, keep old reason, else replace with reason,
-            or "" if reason is None.
+            If True, keep old reason; append the ``reason`` argument after ";"
+            if it is is a non-empty string.
+            If False replace with ``reason``, or "" if ``reason`` is `None`.
         last_checkpoint : `str` (optional)
             Name of most recently seen checkpoint. None for no change.
         """
         if state is not None:
-            self._state.state = ScriptState(state)
+            self.evt_state.data.state = ScriptState(state)
         if keep_old_reason:
             if reason:
-                sepstr = "; " if self._state.reason else ""
-                self._state.reason = self._state.reason + sepstr + reason
+                sepstr = "; " if self.evt_state.data.reason else ""
+                self.evt_state.data.reason = self.evt_state.data.reason + sepstr + reason
         else:
-            self._state.reason = "" if reason is None else reason
+            self.evt_state.data.reason = "" if reason is None else reason
         if last_checkpoint is not None:
-            self._state.lastCheckpoint = last_checkpoint
-        self.evt_state.put(self._state)
+            self.evt_state.data.lastCheckpoint = last_checkpoint
+        self.evt_state.put()
 
     async def checkpoint(self, name=""):
         """Await this at any "nice" point your script can be paused or stopped.
@@ -424,9 +423,11 @@ class BaseScript(salobj.Controller, abc.ABC):
             re.compile(id_data.data.pause)
         except Exception as e:
             raise salobj.ExpectedError(f"pause={id_data.data.pause!r} not a valid regex: {e}")
-        self.checkpoints.pause = id_data.data.pause
-        self.checkpoints.stop = id_data.data.stop
-        self.evt_checkpoints.put(self.checkpoints)
+        self.evt_checkpoints.set(
+            pause=id_data.data.pause,
+            stop=id_data.data.stop,
+        )
+        self.evt_checkpoints.put()
 
     async def do_stop(self, id_data):
         """Stop the script.
@@ -455,7 +456,7 @@ class BaseScript(salobj.Controller, abc.ABC):
         while True:
             try:
                 await asyncio.sleep(HEARTBEAT_INTERVAL)
-                self.evt_heartbeat.put(self.evt_heartbeat.DataType())
+                self.evt_heartbeat.put()
             except asyncio.CancelledError:
                 break
             except Exception:

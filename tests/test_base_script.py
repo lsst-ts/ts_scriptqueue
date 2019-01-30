@@ -38,7 +38,7 @@ index_gen = salobj.index_generator()
 
 class BaseScriptTestCase(unittest.TestCase):
     def setUp(self):
-        salobj.test_utils.set_random_lsst_dds_domain()
+        salobj.set_random_lsst_dds_domain()
         self.datadir = os.path.abspath(os.path.join(os.path.dirname(__file__), "data"))
         self.index = next(index_gen)
 
@@ -410,8 +410,7 @@ class BaseScriptTestCase(unittest.TestCase):
                         log_msg = remote.evt_logMessage.get()
                         self.assertEqual(log_msg.message, "Configure succeeded")
 
-                        run_data = remote.cmd_run.DataType()
-                        await remote.cmd_run.start(run_data, timeout=3)
+                        await remote.cmd_run.start(timeout=3)
 
                         await asyncio.wait_for(process.wait(), timeout=2)
                         if fail:

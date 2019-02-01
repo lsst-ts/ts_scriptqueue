@@ -90,23 +90,23 @@ class BaseScript(salobj.Controller, abc.ABC):
             for attrname, remote in remotes_dict.items():
                 remote_names.append(_make_remote_name(remote))
                 setattr(self, attrname, remote)
-        self._description_data = self.evt_description.DataType()
-        self._description_data.classname = type(self).__name__
-        self._description_data.description = str(descr)
-        self._description_data.remotes = ",".join(remote_names)
-        self._metadata = self.evt_metadata.DataType()
-        self._checkpoints = self.evt_checkpoints.DataType()
-        self._state = self.evt_state.DataType()
-        self._state.state = ScriptState.UNCONFIGURED
         self._run_task = None
         self._pause_future = None
-        self._final_state_future = asyncio.Future()
+        self.done_task = asyncio.Future()
+        """A task that is set to None, or an exception if cleanup fails,
+        when the task is done.
+        """
         self._is_exiting = False
-        self.evt_state.put(self.state)
-        self.evt_description.put(self._description_data)
+        self.evt_state.set_put(state=ScriptState.UNCONFIGURED)
+        self.evt_description.set_put(
+            classname=type(self).__name__,
+            description=str(descr),
+            remotes=",".join(remote_names),
+        )
         self._heartbeat_task = asyncio.ensure_future(self._heartbeat_loop())
-        self.final_state_delay = 0.2
-        """Delay (sec) to allow sending final state before exiting."""
+        self.final_state_delay = 0.3
+        """Delay (sec) to allow sending the final state and acknowledging
+        the command before exiting."""
 
     @classmethod
     def main(cls, descr):
@@ -128,34 +128,35 @@ class BaseScript(salobj.Controller, abc.ABC):
                             help="Script SAL Component index; must be unique among running Scripts")
         args = parser.parse_args()
         script = cls(index=args.index, descr=descr)
-        asyncio.get_event_loop().run_until_complete(script.final_state_future)
-        final_state = script.final_state_future.result()
+        asyncio.get_event_loop().run_until_complete(script.done_task)
         return_code = {ScriptState.DONE: 0,
                        ScriptState.STOPPED: 0,
-                       ScriptState.FAILED: 1}.get(final_state.state, 2)
+                       ScriptState.FAILED: 1}.get(script.state.state, 2)
         sys.exit(return_code)
 
     @property
     def checkpoints(self):
         """Get the checkpoints at which to pause and stop.
 
-        An instance of ``self.evt_checkpoints.DataType()``
+        Returns ``self.evt_checkpoints.data`` which has these fields:
+
+        * ``pause``: checkpoints at which to pause, a regular expression
+        * ``stop``: checkpoints at which to stop, a regular expression
         """
-        return self._checkpoints
+        return self.evt_checkpoints.data
 
     @property
     def state(self):
         """Get the current state.
 
-        The returned state is an instance of ``evt_state.DataType()``;
-        as such, it has these fields:
+        Returns ``self.evt_state.data``, which has these fields:
 
         * ``state``: the current state; a `ScriptState`
         * ``last_checkpoint``: name of most recently seen checkpoint;
           a `str`
         * ``reason``: reason for this state, if any; a `str`
         """
-        return self._state
+        return self.evt_state.data
 
     @property
     def state_name(self):
@@ -166,14 +167,8 @@ class BaseScript(salobj.Controller, abc.ABC):
         except ValueError:
             return f"UNKNOWN({self.state.state})"
 
-    @property
-    def final_state_future(self):
-        """Get an asyncio.Future that returns the final state
-        of the script.
-        """
-        return self._final_state_future
-
-    def set_state(self, state=None, reason=None, keep_old_reason=False, last_checkpoint=None):
+    def set_state(self, state=None, reason=None, keep_old_reason=False, last_checkpoint=None,
+                  force_output=False):
         """Set the script state.
 
         Parameters
@@ -181,24 +176,26 @@ class BaseScript(salobj.Controller, abc.ABC):
         state : `ScriptState` or `int` (optional)
             New state, or None if no change
         reason : `str` (optional)
-            Reason for state change. None for no change.
+            Reason for state change. `None` for no new reason.
         keep_old_reason : `bool`
-            If True, keep old reason, else replace with reason,
-            or "" if reason is None.
+            If True, keep old reason; append the ``reason`` argument after ";"
+            if it is is a non-empty string.
+            If False replace with ``reason``, or "" if ``reason`` is `None`.
         last_checkpoint : `str` (optional)
             Name of most recently seen checkpoint. None for no change.
+        force_output : `bool` (optional)
+            If True the output even if not changed.
         """
         if state is not None:
-            self._state.state = ScriptState(state)
-        if keep_old_reason:
-            if reason:
-                sepstr = "; " if self._state.reason else ""
-                self._state.reason = self._state.reason + sepstr + reason
-        else:
-            self._state.reason = "" if reason is None else reason
-        if last_checkpoint is not None:
-            self._state.lastCheckpoint = last_checkpoint
-        self.evt_state.put(self._state)
+            state = ScriptState(state)
+        if keep_old_reason and reason is not None:
+            sepstr = "; " if self.evt_state.data.reason else ""
+            reason = self.evt_state.data.reason + sepstr + reason
+        self.evt_state.set_put(
+            state=state,
+            reason=reason,
+            lastCheckpoint=last_checkpoint,
+            force_output=force_output)
 
     async def checkpoint(self, name=""):
         """Await this at any "nice" point your script can be paused or stopped.
@@ -235,7 +232,7 @@ class BaseScript(salobj.Controller, abc.ABC):
             await self._pause_future
             self.set_state(ScriptState.RUNNING)
         else:
-            self.set_state(last_checkpoint=name)
+            self.set_state(last_checkpoint=name, force_output=True)
 
     @abc.abstractmethod
     async def configure(self):
@@ -424,9 +421,11 @@ class BaseScript(salobj.Controller, abc.ABC):
             re.compile(id_data.data.pause)
         except Exception as e:
             raise salobj.ExpectedError(f"pause={id_data.data.pause!r} not a valid regex: {e}")
-        self.checkpoints.pause = id_data.data.pause
-        self.checkpoints.stop = id_data.data.stop
-        self.evt_checkpoints.put(self.checkpoints)
+        self.evt_checkpoints.set_put(
+            pause=id_data.data.pause,
+            stop=id_data.data.stop,
+            force_output=True,
+        )
 
     async def do_stop(self, id_data):
         """Stop the script.
@@ -455,7 +454,7 @@ class BaseScript(salobj.Controller, abc.ABC):
         while True:
             try:
                 await asyncio.sleep(HEARTBEAT_INTERVAL)
-                self.evt_heartbeat.put(self.evt_heartbeat.DataType())
+                self.evt_heartbeat.put()
             except asyncio.CancelledError:
                 break
             except Exception:
@@ -485,21 +484,29 @@ class BaseScript(salobj.Controller, abc.ABC):
                 reason = f"unexpected state for _exit {self.state_name}"
                 final_state = ScriptState.FAILED
 
+            self.log.info(f"Setting final state to {final_state!r}")
             self.set_state(final_state, reason=reason, keep_old_reason=True)
+            asyncio.ensure_future(self._finish())
         except Exception as e:
             if not isinstance(e, salobj.ExpectedError):
                 self.log.exception("Error in run")
             self.set_state(ScriptState.FAILED, reason=f"failed in _exit: {e}", keep_old_reason=True)
-        finally:
-            # allow time for the final state to be output
-            await asyncio.sleep(self.final_state_delay)
-            asyncio.ensure_future(self._set_final_state())
+            asyncio.ensure_future(self._finish(e))
 
-    async def _set_final_state(self):
-        """Set the result of _final_state_future, if possible.
+    async def _finish(self, exception=None):
+        """Set the result of done_task.
 
-        Give up the event loop first, so whatever command triggered this
-        can be reported as finished.
+        A no-op if done_task already finished.
+
+        Asynchronous so that whatever SAL command triggered this call
+        can be reported as finished before the task result is set.
         """
-        if not self._final_state_future.done():
-            self._final_state_future.set_result(self.state)
+        # Give time for the final state to be reported
+        # and the command to be acknowledged by SAL
+        if self.done_task.done():
+            return
+        await asyncio.sleep(self.final_state_delay)
+        if exception is not None:
+            self.done_task.set_exception(exception)
+        else:
+            self.done_task.set_result(None)

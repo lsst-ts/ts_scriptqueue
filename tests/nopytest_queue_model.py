@@ -33,7 +33,7 @@ from lsst.ts import scriptqueue
 
 class QueueModelTestCase(unittest.TestCase):
     def setUp(self):
-        salobj.test_utils.set_random_lsst_dds_domain()
+        salobj.set_random_lsst_dds_domain()
         self.datadir = os.path.abspath(os.path.join(os.path.dirname(__file__), "data"))
         self.standardpath = os.path.join(self.datadir, "standard")
         self.externalpath = os.path.join(self.datadir, "external")
@@ -42,7 +42,7 @@ class QueueModelTestCase(unittest.TestCase):
                                             queue_callback=self.queue_callback,
                                             script_callback=self.script_callback,
                                             min_sal_index=1000,
-                                            )
+                                            verbose=True)
         # support assert_next_queue using a future and a queue callback
         self.queue_task = asyncio.Future()
         self.model.queue_callback = self.queue_callback
@@ -117,6 +117,7 @@ class QueueModelTestCase(unittest.TestCase):
               f"started={script_info.start_task.done()}; "
               f"configured={script_info.configured}; "
               f"done={script_info.done}; "
+              f"terminated={script_info.terminated}; "
               f"script_state={script_info.script_state}")
 
     def test_add(self):
@@ -131,6 +132,7 @@ class QueueModelTestCase(unittest.TestCase):
                     path=os.path.join("subdir", "script6"),
                     config="wait_time: 0.1",
                     descr=f"test_add {sal_index}",
+                    verbose=True,
                 ),
                 location=location,
                 location_sal_index=location_sal_index,
@@ -268,6 +270,7 @@ class QueueModelTestCase(unittest.TestCase):
                     path=os.path.join("subdir", "script6"),
                     config="wait_time: 0.5" if i == 1 else "",
                     descr=f"test_get_script_info {i}",
+                    verbose=True,
                 )
                 info_dict[script_info.index] = script_info
                 await asyncio.wait_for(self.model.add(script_info=script_info,
@@ -347,6 +350,7 @@ class QueueModelTestCase(unittest.TestCase):
                     path=os.path.join("subdir", "script3"),
                     config="wait_time: 0.1",
                     descr=f"test_move {i}",
+                    verbose=True,
                 )
                 await asyncio.wait_for(self.model.add(script_info=script_info,
                                                       location=SALPY_ScriptQueue.add_Last,
@@ -468,6 +472,7 @@ class QueueModelTestCase(unittest.TestCase):
                     path=os.path.join("subdir", "script6"),
                     config=config,
                     descr=f"test_pause_on_failure {sal_index}",
+                    verbose=True,
                 ),
                 location=SALPY_ScriptQueue.add_Last,
                 location_sal_index=0,
@@ -557,6 +562,7 @@ class QueueModelTestCase(unittest.TestCase):
                     path=os.path.join("subdir", "script6"),
                     config="wait_time: 1" if i == 1 else "",
                     descr=f"test_requeue {i}",
+                    verbose=True,
                 ) for i in range(3)]
 
             # add the scripts to the end of the queue
@@ -639,6 +645,7 @@ class QueueModelTestCase(unittest.TestCase):
                 path=os.path.join("subdir", "script6"),
                 config="wait_time: 0.1",
                 descr="test_resume_before_first_script_runnable",
+                verbose=True,
             )
             await asyncio.wait_for(self.model.add(script_info=script_info,
                                                   location=SALPY_ScriptQueue.add_Last,
@@ -671,6 +678,7 @@ class QueueModelTestCase(unittest.TestCase):
                 path=os.path.join("subdir", "script6"),
                 config="",
                 descr="test_run_immediately",
+                verbose=True,
             )
             await asyncio.wait_for(self.model.add(script_info=script_info,
                                                   location=SALPY_ScriptQueue.add_Last,
@@ -706,6 +714,7 @@ class QueueModelTestCase(unittest.TestCase):
                 path=os.path.join("subdir", "script6"),
                 config="wait_time: 10" if i == 1 else "",
                 descr=f"test_requeue {i}",
+                verbose=True,
             )
             info_dict[script_info.index] = script_info
             await asyncio.wait_for(self.model.add(script_info=script_info,
@@ -745,19 +754,29 @@ class QueueModelTestCase(unittest.TestCase):
 
         # script 1001 was running, so it was stopped gently
         # if terminate False, else terminated abruptly
+        self.assertTrue(script_info1.done)
+        self.assertFalse(script_info1.failed)
+        self.assertFalse(script_info1.running)
         if terminate:
             self.assertTrue(script_info1.terminated)
         else:
+            self.assertFalse(script_info1.terminated)
             self.assertEqual(script_info1.script_state, SALPY_Script.state_Stopped)
             self.assertEqual(script_info1.process_state, SALPY_ScriptQueue.script_Done)
 
         # script 1002 ran normally
+        self.assertTrue(script_info2.done)
+        self.assertFalse(script_info2.failed)
+        self.assertFalse(script_info2.running)
         self.assertFalse(script_info2.terminated)
         self.assertEqual(script_info2.process_state, SALPY_ScriptQueue.script_Done)
         self.assertEqual(script_info2.script_state, SALPY_Script.state_Done)
 
         # script 1003 was stopped while queued, so it was terminated,
         # regardless of the `terminate` argument
+        self.assertTrue(script_info3.done)
+        self.assertFalse(script_info3.failed)
+        self.assertFalse(script_info3.running)
         self.assertTrue(script_info3.terminated)
         self.assertEqual(script_info3.process_state, SALPY_ScriptQueue.script_Terminated)
         self.assertEqual(script_info3.script_state, SALPY_Script.state_Configured)

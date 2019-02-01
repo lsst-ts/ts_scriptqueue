@@ -38,7 +38,7 @@ index_gen = salobj.index_generator()
 
 class BaseScriptTestCase(unittest.TestCase):
     def setUp(self):
-        salobj.test_utils.set_random_lsst_dds_domain()
+        salobj.set_random_lsst_dds_domain()
         self.datadir = os.path.abspath(os.path.join(os.path.dirname(__file__), "data"))
         self.index = next(index_gen)
 
@@ -162,11 +162,7 @@ class BaseScriptTestCase(unittest.TestCase):
                 with self.assertRaises(RuntimeError):
                     await script.checkpoint("foo")
 
-        # check final_state_future
-        future1 = script.final_state_future
-        future2 = script.final_state_future
-        self.assertIs(future1, future2)
-        self.assertFalse(future1.done())
+            self.assertFalse(script.done_task.done())
 
         asyncio.get_event_loop().run_until_complete(doit())
 
@@ -235,7 +231,7 @@ class BaseScriptTestCase(unittest.TestCase):
             resume_id_data = salobj.CommandIdData(cmd_id=4, data=script.cmd_resume.DataType())
             script.do_resume(resume_id_data)
             await asyncio.wait_for(run_task, 2)
-            await asyncio.wait_for(script.final_state_future, 2)
+            await asyncio.wait_for(script.done_task, 2)
             duration = time.time() - start_time
             desired_duration = wait_time + script.final_state_delay
             print(f"test_pause duration={duration:0.2f}")
@@ -262,13 +258,12 @@ class BaseScriptTestCase(unittest.TestCase):
             start_time = time.time()
             run_id_data = salobj.CommandIdData(cmd_id=3, data=script.cmd_run.DataType())
             await asyncio.wait_for(script.do_run(run_id_data), 2)
-            final_state = await asyncio.wait_for(script.final_state_future, 2)
+            await asyncio.wait_for(script.done_task, 2)
             self.assertEqual(script.state.lastCheckpoint, checkpoint_named_end)
-            self.assertEqual(final_state.state, ScriptState.STOPPED)
             self.assertEqual(script.state.state, ScriptState.STOPPED)
             duration = time.time() - start_time
-            desired_duration = wait_time + script.final_state_delay
             # waited and then stopped at the "end" checkpoint
+            desired_duration = wait_time + script.final_state_delay
             print(f"test_stop_at_checkpoint duration={duration:0.2f}")
             self.assertLess(abs(duration - desired_duration), 0.2)
 
@@ -298,13 +293,12 @@ class BaseScriptTestCase(unittest.TestCase):
             self.assertEqual(script.state.state, ScriptState.PAUSED)
             stop_id_data = salobj.CommandIdData(cmd_id=4, data=script.cmd_stop.DataType())
             await script.do_stop(stop_id_data)
-            final_state = await asyncio.wait_for(script.final_state_future, 2)
+            await asyncio.wait_for(script.done_task, 2)
             self.assertEqual(script.state.lastCheckpoint, checkpoint_named_start)
-            self.assertEqual(final_state.state, ScriptState.STOPPED)
             self.assertEqual(script.state.state, ScriptState.STOPPED)
             duration = time.time() - start_time
-            desired_duration = script.final_state_delay
             # we did not wait because the script right after pausing at the "start" checkpoint
+            desired_duration = script.final_state_delay
             print(f"test_stop_while_paused duration={duration:0.2f}")
             self.assertGreater(duration, 0.0)
             self.assertLess(abs(duration - desired_duration), 0.2)
@@ -329,14 +323,13 @@ class BaseScriptTestCase(unittest.TestCase):
             await asyncio.sleep(pause_time)
             stop_id_data = salobj.CommandIdData(cmd_id=4, data=script.cmd_stop.DataType())
             await script.do_stop(stop_id_data)
-            final_state = await asyncio.wait_for(script.final_state_future, 2)
+            await asyncio.wait_for(script.done_task, 2)
             self.assertEqual(script.state.lastCheckpoint, checkpoint_named_start)
-            self.assertEqual(final_state.state, ScriptState.STOPPED)
             self.assertEqual(script.state.state, ScriptState.STOPPED)
             duration = time.time() - start_time
             # we waited `pause_time` seconds after the "start" checkpoint
-            print(f"test_stop_while_running duration={duration:0.2f}")
             desired_duration = pause_time + script.final_state_delay
+            print(f"test_stop_while_running duration={duration:0.2f}")
             self.assertLess(abs(duration - desired_duration), 0.2)
 
         asyncio.get_event_loop().run_until_complete(doit())
@@ -356,14 +349,12 @@ class BaseScriptTestCase(unittest.TestCase):
                 start_time = time.time()
                 run_id_data = salobj.CommandIdData(cmd_id=3, data=script.cmd_run.DataType())
                 await asyncio.wait_for(script.do_run(run_id_data), 2)
-                final_state = await asyncio.wait_for(script.final_state_future, 2)
+                await asyncio.wait_for(script.done_task, 2)
                 self.assertEqual(script.state.lastCheckpoint, desired_checkpoint)
-                self.assertEqual(final_state.state, ScriptState.FAILED)
                 self.assertEqual(script.state.state, ScriptState.FAILED)
                 duration = time.time() - start_time
                 # if fail_run then failed before waiting, otherwise failed after
-                overhead = 0.2  # seconds to output final state
-                desired_duration = (0 if fail_run else wait_time) + overhead
+                desired_duration = (0 if fail_run else wait_time) + script.final_state_delay
                 print(f"test_fail duration={duration:0.2f} with fail_run={fail_run}")
                 self.assertLess(abs(duration - desired_duration), 0.2)
 
@@ -379,6 +370,10 @@ class BaseScriptTestCase(unittest.TestCase):
                 with self.subTest(fail=fail):
                     index = next(index_gen)
                     remote = salobj.Remote(SALPY_Script, index)
+
+                    def logcallback(data):
+                        print(f"message={data.message}")
+                    remote.evt_logMessage.callback = logcallback
 
                     process = await asyncio.create_subprocess_exec(script_path, str(index))
                     try:
@@ -410,8 +405,7 @@ class BaseScriptTestCase(unittest.TestCase):
                         log_msg = remote.evt_logMessage.get()
                         self.assertEqual(log_msg.message, "Configure succeeded")
 
-                        run_data = remote.cmd_run.DataType()
-                        await remote.cmd_run.start(run_data, timeout=3)
+                        await remote.cmd_run.start(timeout=3)
 
                         await asyncio.wait_for(process.wait(), timeout=2)
                         if fail:

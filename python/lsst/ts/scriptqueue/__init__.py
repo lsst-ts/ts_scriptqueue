@@ -4,3 +4,4 @@ from .script_info import *
 from .script_queue import *
 from .utils import *
 from . import test_utils
+from .version import *

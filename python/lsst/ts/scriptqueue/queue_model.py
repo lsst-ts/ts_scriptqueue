@@ -100,6 +100,8 @@ class QueueModel:
         Minimum SAL index for Script SAL components
     max_sal_index : `int` (optional)
         Maximum SAL index for Script SAL components
+    verbose : `bool` (optional)
+        If True then print log messages from scripts to stdout.
 
     Raises
     ------
@@ -107,7 +109,8 @@ class QueueModel:
         If ``standardpath`` or ``externalpath`` does not exist.
     """
     def __init__(self, standardpath, externalpath, queue_callback=None, script_callback=None,
-                 min_sal_index=MIN_SAL_INDEX, max_sal_index=salobj.MAX_SAL_INDEX):
+                 min_sal_index=MIN_SAL_INDEX, max_sal_index=salobj.MAX_SAL_INDEX,
+                 verbose=False):
         if not os.path.isdir(standardpath):
             raise ValueError(f"No such dir standardpath={standardpath}")
         if not os.path.isdir(externalpath):
@@ -120,6 +123,7 @@ class QueueModel:
         self.standardpath = standardpath
         self.externalpath = externalpath
         self.queue_callback = queue_callback
+        self.verbose = verbose
         self.script_callback = script_callback
         # queue of ScriptInfo instances
         self.queue = collections.deque()
@@ -371,6 +375,7 @@ class QueueModel:
             path=old_script_info.path,
             config=old_script_info.config,
             descr=old_script_info.descr,
+            verbose=self.verbose,
         )
         await self.add(script_info=script_info,
                        location=location,
@@ -435,8 +440,7 @@ class QueueModel:
         if script_info.script_state == ScriptState.RUNNING:
             # process is running, so send the "stop" command
             try:
-                await script_info.remote.cmd_stop.start(script_info.remote.cmd_stop.DataType(),
-                                                        timeout=timeout)
+                await script_info.remote.cmd_stop.start(timeout=timeout)
                 # give the process time to terminate
                 await asyncio.wait_for(script_info.process.wait(), timeout=2)
                 # let the script be removed or moved

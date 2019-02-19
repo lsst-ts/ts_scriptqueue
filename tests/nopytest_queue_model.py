@@ -241,6 +241,47 @@ class QueueModelTestCase(unittest.TestCase):
 
         asyncio.get_event_loop().run_until_complete(doit())
 
+    def test_add_badconfig(self):
+        """Test adding a script with invalid configuration.
+        """
+        def make_add_kwargs(location, location_sal_index=0, config="wait_time: 0.1"):
+            sal_index = self.model.next_sal_index
+            return dict(
+                script_info=scriptqueue.ScriptInfo(
+                    index=sal_index,
+                    cmd_id=sal_index*2,  # arbitrary
+                    is_standard=False,
+                    path=os.path.join("subdir", "script6"),
+                    config=config,
+                    descr=f"test_add_badconfig {sal_index}",
+                    verbose=True,
+                ),
+                location=location,
+                location_sal_index=location_sal_index,
+            )
+
+        async def doit():
+            await self.assert_next_queue(enabled=False, running=True)
+
+            self.model.enable = True
+            await self.assert_next_queue(enabled=True, running=True)
+
+            # add script 1000; queue is empty to location is irrelevant
+            add_kwargs = make_add_kwargs(location=SALPY_ScriptQueue.add_Last, config="invalid: True")
+            script1000 = add_kwargs["script_info"]
+            add_coro = asyncio.wait_for(self.model.add(**add_kwargs), timeout=60)
+            assert_coro = self.assert_next_queue(sal_indices=[1000], running=True, wait=True)
+            await asyncio.gather(add_coro, assert_coro)
+            await self.assert_next_queue(current_sal_index=0, sal_indices=[], past_sal_indices=[],
+                                         running=True, wait=True)
+            await script1000.process_task
+            # self.assertTrue(script1000.configure_failed)
+            # self.assertFalse(script1000.configured)
+            self.assertEqual(script1000.done, True)
+            self.assertEqual(script1000.process_state, SALPY_ScriptQueue.script_ConfigureFailed)
+
+        asyncio.get_event_loop().run_until_complete(doit())
+
     def test_constructor_errors(self):
         nonexistentpath = os.path.join(self.datadir, "garbage")
         with self.assertRaises(ValueError):

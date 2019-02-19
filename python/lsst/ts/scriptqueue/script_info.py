@@ -117,8 +117,13 @@ class ScriptInfo:
 
     @property
     def configured(self):
-        """True if the the configuration command succeeded or failed."""
-        return self.config_task is not None and self.config_task.done()
+        """True if the configure command succeeded."""
+        return self._configure_run and self.config_task.exception() is None
+
+    @property
+    def configure_failed(self):
+        """True if the configure command failed."""
+        return self._configure_run and self.config_task.exception() is not None
 
     @property
     def running(self):
@@ -151,7 +156,7 @@ class ScriptInfo:
 
         One of the ``SALPY_ScriptQueue.script_`` enumeration constants.
         """
-        if self.configured and self.config_task.exception() is not None:
+        if self.configure_failed:
             return SALPY_ScriptQueue.script_ConfigureFailed
         elif self.terminated:
             return SALPY_ScriptQueue.script_Terminated
@@ -287,8 +292,17 @@ class ScriptInfo:
             self.remote.cmd_configure.set(config=self.config)
             await self.remote.cmd_configure.start(timeout=_CONFIGURE_TIMEOUT)
         except Exception:
-            self.terminate()
+            # terminate the script but first let configure_task fail
+            asyncio.ensure_future(self._start_terminate())
             raise
+
+    async def _start_terminate(self):
+        self.terminate()
+
+    @property
+    def _configure_run(self):
+        """Return True if the configure command was run."""
+        return self.config_task is not None and self.config_task.done()
 
     def _log_message_callback(self, data):
         """Print logMessage data to stdout.

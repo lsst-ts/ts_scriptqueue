@@ -103,6 +103,39 @@ class QueueModelTestCase(unittest.TestCase):
         self.assertEqual(info1.config, info2.config)
         self.assertEqual(info1.descr, info2.descr)
 
+    def make_add_kwargs(self, location=SALPY_ScriptQueue.add_Last, location_sal_index=0,
+                        path=None, config="wait_time: 0.1"):
+        """Make keyword arguments for QueueModel.add.
+
+        Parameters
+        ----------
+        location : `int` (optional)
+            One of SALPY_ScriptQueue.add_First, Last, Before or After.
+        location_sal_index : `int` (optional)
+            SAL index of script that ``location`` is relative to.
+        path : `str`, `bytes` or `os.PathLike` (optional)
+            Path to script, relative to standard or external root dir;
+            defaults to "subdir/script6".
+        config : `str` (optional)
+            Configuration data as a YAML encoded string.
+        """
+        sal_index = self.model.next_sal_index
+        if path is None:
+            path = os.path.join("subdir", "script6")
+        return dict(
+            script_info=scriptqueue.ScriptInfo(
+                index=sal_index,
+                cmd_id=sal_index*2,  # arbitrary
+                is_standard=False,
+                path=path,
+                config=config,
+                descr=f"test_add_badconfig {sal_index}",
+                verbose=True,
+            ),
+            location=location,
+            location_sal_index=location_sal_index,
+        )
+
     def queue_callback(self):
         print(f"queue_callback(): enabled={self.model.enabled}; "
               f"running={self.model.running}; "
@@ -116,28 +149,12 @@ class QueueModelTestCase(unittest.TestCase):
         print(f"script_callback for {script_info.index} at {time.time():0.1f}: "
               f"started={script_info.start_task.done()}; "
               f"configured={script_info.configured}; "
-              f"done={script_info.done}; "
+              f"process_done={script_info.process_done}; "
               f"terminated={script_info.terminated}; "
               f"script_state={script_info.script_state}")
 
     def test_add(self):
         """Test add."""
-        def make_add_kwargs(location, location_sal_index=0):
-            sal_index = self.model.next_sal_index
-            return dict(
-                script_info=scriptqueue.ScriptInfo(
-                    index=sal_index,
-                    cmd_id=sal_index*2,  # arbitrary
-                    is_standard=False,
-                    path=os.path.join("subdir", "script6"),
-                    config="wait_time: 0.1",
-                    descr=f"test_add {sal_index}",
-                    verbose=True,
-                ),
-                location=location,
-                location_sal_index=location_sal_index,
-            )
-
         async def doit():
             await self.assert_next_queue(enabled=False, running=True)
 
@@ -148,62 +165,62 @@ class QueueModelTestCase(unittest.TestCase):
             self.model.running = False
             await self.assert_next_queue(running=False)
 
-            # add script 1000; queue is empty to location is irrelevant
-            add_kwargs = make_add_kwargs(location=SALPY_ScriptQueue.add_Last)
+            # add script 1000; queue is empty, so location is irrelevant
+            add_kwargs = self.make_add_kwargs(location=SALPY_ScriptQueue.add_Last)
             await asyncio.wait_for(self.model.add(**add_kwargs), timeout=60)
             await self.assert_next_queue(sal_indices=[1000])
 
             # add script 1001 last: test add last
-            add_kwargs = make_add_kwargs(location=SALPY_ScriptQueue.add_Last)
+            add_kwargs = self.make_add_kwargs(location=SALPY_ScriptQueue.add_Last)
             await asyncio.wait_for(self.model.add(**add_kwargs), timeout=60)
             await self.assert_next_queue(sal_indices=[1000, 1001])
 
             # add script 1002 first: test add first
-            add_kwargs = make_add_kwargs(location=SALPY_ScriptQueue.add_First)
+            add_kwargs = self.make_add_kwargs(location=SALPY_ScriptQueue.add_First)
             await asyncio.wait_for(self.model.add(**add_kwargs), timeout=60)
             await self.assert_next_queue(sal_indices=[1002, 1000, 1001])
 
             # add script 1003 after 1001: test add after last
-            add_kwargs = make_add_kwargs(location=SALPY_ScriptQueue.add_After,
-                                         location_sal_index=1001)
+            add_kwargs = self.make_add_kwargs(location=SALPY_ScriptQueue.add_After,
+                                              location_sal_index=1001)
             await asyncio.wait_for(self.model.add(**add_kwargs), timeout=60)
             await self.assert_next_queue(sal_indices=[1002, 1000, 1001, 1003])
 
             # add script 1004 after 1002: test add after not-last
-            add_kwargs = make_add_kwargs(location=SALPY_ScriptQueue.add_After,
-                                         location_sal_index=1002)
+            add_kwargs = self.make_add_kwargs(location=SALPY_ScriptQueue.add_After,
+                                              location_sal_index=1002)
             await asyncio.wait_for(self.model.add(**add_kwargs), timeout=60)
             await self.assert_next_queue(sal_indices=[1002, 1004, 1000, 1001, 1003])
 
             # add script 1005 before 1002: test add before first
-            add_kwargs = make_add_kwargs(location=SALPY_ScriptQueue.add_Before,
-                                         location_sal_index=1002)
+            add_kwargs = self.make_add_kwargs(location=SALPY_ScriptQueue.add_Before,
+                                              location_sal_index=1002)
             await asyncio.wait_for(self.model.add(**add_kwargs), timeout=60)
             await self.assert_next_queue(sal_indices=[1005, 1002, 1004, 1000, 1001, 1003])
 
             # add script 1006 before 1000: test add before not first
-            add_kwargs = make_add_kwargs(location=SALPY_ScriptQueue.add_Before,
-                                         location_sal_index=1000)
+            add_kwargs = self.make_add_kwargs(location=SALPY_ScriptQueue.add_Before,
+                                              location_sal_index=1000)
             await asyncio.wait_for(self.model.add(**add_kwargs), timeout=60)
             await self.assert_next_queue(sal_indices=[1005, 1002, 1004, 1006, 1000, 1001, 1003])
 
             # try some failed adds
             # incorrect path
-            add_kwargs = make_add_kwargs(location=SALPY_ScriptQueue.add_First)
+            add_kwargs = self.make_add_kwargs(location=SALPY_ScriptQueue.add_First)
             add_kwargs["script_info"].path = "bogus_script_name"
             with self.assertRaises(ValueError):
                 await asyncio.wait_for(self.model.add(**add_kwargs), timeout=60)
             await self.assert_next_queue(sal_indices=[1005, 1002, 1004, 1006, 1000, 1001, 1003])
 
             # incorrect location
-            add_kwargs = make_add_kwargs(location=25)
+            add_kwargs = self.make_add_kwargs(location=25)
             with self.assertRaises(ValueError):
                 await asyncio.wait_for(self.model.add(**add_kwargs), timeout=60)
             await self.assert_next_queue(sal_indices=[1005, 1002, 1004, 1006, 1000, 1001, 1003])
 
             # incorrect location_sal_index
-            add_kwargs = make_add_kwargs(location=SALPY_ScriptQueue.add_After,
-                                         location_sal_index=4321)
+            add_kwargs = self.make_add_kwargs(location=SALPY_ScriptQueue.add_After,
+                                              location_sal_index=4321)
             with self.assertRaises(ValueError):
                 await asyncio.wait_for(self.model.add(**add_kwargs), timeout=60)
             await self.assert_next_queue(sal_indices=[1005, 1002, 1004, 1006, 1000, 1001, 1003])
@@ -244,30 +261,14 @@ class QueueModelTestCase(unittest.TestCase):
     def test_add_badconfig(self):
         """Test adding a script with invalid configuration.
         """
-        def make_add_kwargs(location, location_sal_index=0, config="wait_time: 0.1"):
-            sal_index = self.model.next_sal_index
-            return dict(
-                script_info=scriptqueue.ScriptInfo(
-                    index=sal_index,
-                    cmd_id=sal_index*2,  # arbitrary
-                    is_standard=False,
-                    path=os.path.join("subdir", "script6"),
-                    config=config,
-                    descr=f"test_add_badconfig {sal_index}",
-                    verbose=True,
-                ),
-                location=location,
-                location_sal_index=location_sal_index,
-            )
-
         async def doit():
             await self.assert_next_queue(enabled=False, running=True)
 
             self.model.enable = True
             await self.assert_next_queue(enabled=True, running=True)
 
-            # add script 1000; queue is empty to location is irrelevant
-            add_kwargs = make_add_kwargs(location=SALPY_ScriptQueue.add_Last, config="invalid: True")
+            # add script 1000 with invalid config
+            add_kwargs = self.make_add_kwargs(config="invalid: True")
             script1000 = add_kwargs["script_info"]
             add_coro = asyncio.wait_for(self.model.add(**add_kwargs), timeout=60)
             assert_coro = self.assert_next_queue(sal_indices=[1000], running=True, wait=True)
@@ -275,12 +276,44 @@ class QueueModelTestCase(unittest.TestCase):
             await self.assert_next_queue(current_sal_index=0, sal_indices=[], past_sal_indices=[],
                                          running=True, wait=True)
             await script1000.process_task
-            # self.assertTrue(script1000.configure_failed)
-            # self.assertFalse(script1000.configured)
-            self.assertEqual(script1000.done, True)
+            self.assertTrue(script1000.configure_failed)
+            self.assertFalse(script1000.configured)
+            self.assertEqual(script1000.process_done, True)
             self.assertEqual(script1000.process_state, SALPY_ScriptQueue.script_ConfigureFailed)
 
         asyncio.get_event_loop().run_until_complete(doit())
+
+    def check_add_then_stop_script(self, terminate):
+        """Test adding a script immediately followed by stoppping it.
+        """
+        async def doit():
+            await self.assert_next_queue(enabled=False, running=True)
+
+            self.model.enable = True
+            await self.assert_next_queue(enabled=True, running=True)
+
+            # add script 1000
+            add_kwargs = self.make_add_kwargs()
+            script1000 = add_kwargs["script_info"]
+            add_task = asyncio.ensure_future(asyncio.wait_for(self.model.add(**add_kwargs), timeout=60))
+            await self.assert_next_queue(sal_indices=[1000], running=True, wait=True)
+            await self.model.stop_scripts(sal_indices=[1000], terminate=terminate)
+            await self.assert_next_queue(sal_indices=[], running=True, wait=True)
+            with self.assertRaises(asyncio.CancelledError):
+                await add_task
+            self.assertFalse(script1000.process_done)
+            self.assertTrue(script1000.terminated)
+            self.assertFalse(script1000.configure_failed)
+            self.assertFalse(script1000.configured)
+            self.assertEqual(script1000.process_state, SALPY_ScriptQueue.script_Terminated)
+
+        asyncio.get_event_loop().run_until_complete(doit())
+
+    def test_add_then_stop_script(self):
+        self.check_add_then_stop_script(terminate=False)
+
+    def test_add_then_terminate_script(self):
+        self.check_add_then_stop_script(terminate=True)
 
     def test_constructor_errors(self):
         nonexistentpath = os.path.join(self.datadir, "garbage")
@@ -500,25 +533,6 @@ class QueueModelTestCase(unittest.TestCase):
     def test_pause_on_failure(self):
         """Test that a failed script pauses the queue.
         """
-        def make_add_kwargs(fail):
-            sal_index = self.model.next_sal_index
-            config = "wait_time: 0.1"
-            if fail:
-                config = config + "\nfail_run: True"
-            return dict(
-                script_info=scriptqueue.ScriptInfo(
-                    index=sal_index,
-                    cmd_id=sal_index*2,  # arbitrary
-                    is_standard=False,
-                    path=os.path.join("subdir", "script6"),
-                    config=config,
-                    descr=f"test_pause_on_failure {sal_index}",
-                    verbose=True,
-                ),
-                location=SALPY_ScriptQueue.add_Last,
-                location_sal_index=0,
-            )
-
         async def doit():
             await self.assert_next_queue(enabled=False, running=True)
 
@@ -530,15 +544,15 @@ class QueueModelTestCase(unittest.TestCase):
             await self.assert_next_queue(running=False)
 
             # add scripts 1000, 1001, 1002; 1001 fails
-            add_kwargs = make_add_kwargs(fail=False)
+            add_kwargs = self.make_add_kwargs()
             await asyncio.wait_for(self.model.add(**add_kwargs), timeout=60)
             await self.assert_next_queue(sal_indices=[1000])
 
-            add_kwargs = make_add_kwargs(fail=True)
+            add_kwargs = self.make_add_kwargs(config="wait_time: 0.1\nfail_run: True")
             await asyncio.wait_for(self.model.add(**add_kwargs), timeout=60)
             await self.assert_next_queue(sal_indices=[1000, 1001])
 
-            add_kwargs = make_add_kwargs(fail=False)
+            add_kwargs = self.make_add_kwargs()
             await asyncio.wait_for(self.model.add(**add_kwargs), timeout=60)
             await self.assert_next_queue(sal_indices=[1000, 1001, 1002])
 
@@ -561,7 +575,7 @@ class QueueModelTestCase(unittest.TestCase):
             # assert that the process return code is positive for failure
             # and that the final script state Failed is sent and recorded
             script_info = self.model.get_script_info(1001, search_history=False)
-            self.assertTrue(script_info.done)
+            self.assertTrue(script_info.process_done)
             self.assertGreater(script_info.process.returncode, 0)
             self.assertEqual(script_info.script_state, SALPY_Script.state_Failed)
 
@@ -576,7 +590,7 @@ class QueueModelTestCase(unittest.TestCase):
             # assert that the process return code is 0 for success
             # and that the final script state Done is sent and recorded
             script_info = self.model.get_script_info(1002, search_history=True)
-            self.assertTrue(script_info.done)
+            self.assertTrue(script_info.process_done)
             self.assertEqual(script_info.process.returncode, 0)
             self.assertEqual(script_info.script_state, SALPY_Script.state_Done)
 
@@ -795,7 +809,7 @@ class QueueModelTestCase(unittest.TestCase):
 
         # script 1001 was running, so it was stopped gently
         # if terminate False, else terminated abruptly
-        self.assertTrue(script_info1.done)
+        self.assertTrue(script_info1.process_done)
         self.assertFalse(script_info1.failed)
         self.assertFalse(script_info1.running)
         if terminate:
@@ -806,7 +820,7 @@ class QueueModelTestCase(unittest.TestCase):
             self.assertEqual(script_info1.process_state, SALPY_ScriptQueue.script_Done)
 
         # script 1002 ran normally
-        self.assertTrue(script_info2.done)
+        self.assertTrue(script_info2.process_done)
         self.assertFalse(script_info2.failed)
         self.assertFalse(script_info2.running)
         self.assertFalse(script_info2.terminated)
@@ -815,7 +829,7 @@ class QueueModelTestCase(unittest.TestCase):
 
         # script 1003 was stopped while queued, so it was terminated,
         # regardless of the `terminate` argument
-        self.assertTrue(script_info3.done)
+        self.assertTrue(script_info3.process_done)
         self.assertFalse(script_info3.failed)
         self.assertFalse(script_info3.running)
         self.assertTrue(script_info3.terminated)

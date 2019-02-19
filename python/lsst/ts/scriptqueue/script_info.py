@@ -64,11 +64,15 @@ class ScriptInfo:
         self.verbose = verbose
         self.salinfo = salobj.SalInfo(SALPY_Script, self.index)
         self.script_state = 0
-        """Most recent state reported by the Script, or 0 if the script is not yet loaded."""
+        """Most recent state reported by the Script, or 0 if the script
+        is not yet loaded."""
         self.timestamp = 0
         """Time at which the script process was started. 0 before that."""
         self.duration = 0
         """Duration of ``task`` (seconds), or 0 if still running."""
+        self.create_process_task = None
+        """Task for creating self.process, or None if just beginning to load.
+        """
         self.start_task = asyncio.Future()
         """Task that finishes when configuration starts.
 
@@ -128,22 +132,41 @@ class ScriptInfo:
     @property
     def running(self):
         """True if the script was commanded to run and is not done."""
-        return self._run_started and not self.done
+        return self._run_started and not self.process_done
 
     @property
-    def done(self):
-        """True if the script subprocess is done."""
+    def process_done(self):
+        """True if the script process was started and is done.
+
+        Notes
+        -----
+        This will be true if the script fails or is terminated *after*
+        the process has been created.
+        This will be false if the script is terminated *before*
+        the process has been created.
+        """
         return self.process_task is not None and self.process_task.done()
 
     @property
     def failed(self):
         """True if the script failed."""
-        return self.done and self.process.returncode > 0
+        return self.process_done and self.process.returncode > 0
 
     @property
     def terminated(self):
-        """True if the script subprocess was terminated."""
-        return self.done and (self.process.returncode < 0 or self._terminated)
+        """True if the script was terminated.
+
+        Notes
+        -----
+        If this is true the termination may be in progress.
+        To wait until termination is complete::
+
+            if self.terminated and not self.process_done:
+                await self.process_task
+        """
+        if self._terminated:
+            return True
+        return self.process_done and self.process.returncode < 0
 
     @property
     def index(self):
@@ -160,7 +183,7 @@ class ScriptInfo:
             return SALPY_ScriptQueue.script_ConfigureFailed
         elif self.terminated:
             return SALPY_ScriptQueue.script_Terminated
-        elif self.done:
+        elif self.process_done:
             return SALPY_ScriptQueue.script_Done
         elif self.running:
             return SALPY_ScriptQueue.script_Running
@@ -193,7 +216,7 @@ class ScriptInfo:
         the process must not have finished,
         and ``run`` must not have been called.
         """
-        return self.configured and not (self.done or self._run_started)
+        return self.configured and not (self.process_done or self._run_started)
 
     async def start_loading(self, fullpath):
         """Start the script process and start a task that will configure
@@ -202,38 +225,64 @@ class ScriptInfo:
         fullpath : `str`, `bytes` or `os.PathLike`
             Full path to the script.
         """
+        if self.create_process_task is not None:
+            raise RuntimeError("Already started loading")
+        if self._terminated:
+            # this can happen if the user stops a script with stopScript
+            # while the script is being added
+            return
         initialpath = os.environ["PATH"]
         scriptdir, scriptname = os.path.split(fullpath)
         try:
             os.environ["PATH"] = scriptdir + ":" + initialpath
-            self.process = await asyncio.create_subprocess_exec(scriptname, str(self.index))
+            self.create_process_task = asyncio.ensure_future(
+                asyncio.create_subprocess_exec(scriptname, str(self.index)))
+            self.process = await self.create_process_task
             self.timestamp = self.salinfo.manager.getCurrentTime()
             self.process_task = asyncio.ensure_future(self.process.wait())
             self.process_task.add_done_callback(self._cleanup)
             await self._add_remote()
+        except Exception:
+            self._terminated = True
+            raise
         finally:
             os.environ["PATH"] = initialpath
 
     def terminate(self):
-        """Terminate the script by sending SIGTERM.
+        """Terminate the script.
 
         Does not wait for termination to finish; to do that use::
 
-            `await script_info.process.wait()`
+            if script_info.process is not None:
+                await script_info.process.wait()
 
         Returns
         -------
         did_terminate : `bool`
-            True if termination was requested,
-            False if there is no process or it was already finished.
+            Returns True if the script was terminated (possibly by an earlier
+            call to terminate), False if the script process finished
+            before being terminated.
+
+        Notes
+        -----
+        If the process has finished then do nothing.
+        Otherwise set self._terminate to True and:
+
+        * If the process is running then terminate it by sending SIGTERM.
+        * If the process is being started then cancel that.
         """
-        if self.process is None:
-            return False
-        if self.process.returncode is not None:
-            return False
-        self._terminated = True
-        self.process.terminate()
-        return True
+        run_callback = False
+        if not self.process_done:
+            self._terminated = True
+            if self.create_process_task is not None and not self.create_process_task.done():
+                # cancel creating the process
+                self.create_process_task.cancel()
+                run_callback = True
+            if self.process is not None:
+                self.process.terminate()
+        if run_callback:
+            self._run_callback()
+        return self._terminated
 
     def __eq__(self, other):
         return self.index == other.index

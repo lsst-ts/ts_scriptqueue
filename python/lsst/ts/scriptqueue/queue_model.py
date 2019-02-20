@@ -402,7 +402,7 @@ class QueueModel:
                     script_info = self.get_script_info(index, search_history=False)
                 except ValueError:
                     continue
-                if script_info.done:
+                if script_info.process_done:
                     continue
                 if script_info.running and not terminate:
                     await self.stop_one_script(index)
@@ -411,11 +411,11 @@ class QueueModel:
         finally:
             self._scripts_being_stopped = set()
 
-    async def stop_one_script(self, sal_index, timeout=None):
+    async def stop_one_script(self, sal_index):
         """Stop a queued or running script, giving it time to clean up.
 
         First send the script the ``stop`` command, giving that ``timeout``
-        seconds to succeed or fail. If necessary, terminate the script
+        a few seconds to succeed or fail. If necessary, terminate the script
         by sending SIGTERM to the process.
 
         This is slower and than `terminate`, but gives the script
@@ -426,8 +426,6 @@ class QueueModel:
         ----------
         sal_index : `int`
             SAL index of script to move.
-        timeout : `float` (optional)
-            Time limit, in seconds. If None then no time limit.
 
         Raises
         ------
@@ -435,12 +433,12 @@ class QueueModel:
             If a script is not queued or running.
         """
         script_info = self.get_script_info(sal_index, search_history=False)
-        if script_info.done:
+        if script_info.process_done:
             return
         if script_info.script_state == ScriptState.RUNNING:
             # process is running, so send the "stop" command
             try:
-                await script_info.remote.cmd_stop.start(timeout=timeout)
+                await script_info.remote.cmd_stop.start(timeout=2)
                 # give the process time to terminate
                 await asyncio.wait_for(script_info.process.wait(), timeout=2)
                 # let the script be removed or moved
@@ -449,22 +447,16 @@ class QueueModel:
             except Exception:
                 # oh well, terminate it instead
                 pass
-        script_info.terminate()
-        if timeout is None:
-            await script_info.process.wait()
-        else:
-            await asyncio.wait_for(script_info.process.wait(), timeout=timeout)
-        # let the script be removed or moved
-        await asyncio.sleep(0)
+        await self.terminate_one_script(sal_index)
 
     async def terminate_one_script(self, sal_index):
-        """Terminate a queued or running script by sending SIGTERM
-        to the subprocess and wait for that to complete.
+        """Terminate a queued or running script.
 
         If successful (as it will be, unless the script catches SIGTERM),
         the script is removed from the the queue.
         If you have time please try `stop` first, as that gives the
-        script a chance to clean up.
+        script a chance to clean up. If `stop` fails then the script will
+        still be terminated.
 
         Parameters
         ----------
@@ -476,10 +468,15 @@ class QueueModel:
         ValueError
             If a script is not queued or running.
         """
+        if sal_index == 0:
+            raise ValueError("sal_index must be non-zero")
         script_info = self.get_script_info(sal_index, search_history=False)
+        if script_info.process_done:
+            return
         did_terminate = script_info.terminate()
         if did_terminate:
-            await script_info.process.wait()
+            if script_info.process is not None:
+                await script_info.process.wait()
             # let the script be removed or moved
             await asyncio.sleep(0)
 
@@ -514,9 +511,14 @@ class QueueModel:
             self._update_queue(pause_on_failure=False)
 
     def terminate_all(self):
-        """Terminate all subprocesses and info for the ones terminated.
+        """Terminate all scripts and return info for the ones terminated.
 
         Does not wait for termination to actually finish.
+
+        Returns
+        -------
+        info_list : `list` of `ScriptInfo`
+            List of all scripts that were terminated.
         """
         info_list = []
         for script_info in self.queue:
@@ -532,7 +534,8 @@ class QueueModel:
     async def wait_terminate_all(self, timeout=10):
         """Awaitable version of terminate_all"""
         term_info_list = self.terminate_all()
-        await asyncio.wait_for(asyncio.gather(*[info.process_task for info in term_info_list]), timeout)
+        await asyncio.wait_for(asyncio.gather(*[info.process_task for info in term_info_list
+                                                if not info.process_done]), timeout)
 
     def _insert_script(self, script_info, location, location_sal_index):
         """Insert a script info into the queue
@@ -604,7 +607,7 @@ class QueueModel:
             except Exception:
                 traceback.print_exc(file=sys.stderr)
 
-        if script_info.done:
+        if script_info.process_done or script_info.terminated:
             asyncio.ensure_future(self._remove_script(script_info.index))
         elif self.enabled and self.running \
                 and self.current_script is None and script_info.runnable \
@@ -633,7 +636,7 @@ class QueueModel:
               to allow the queue to resume after pausing on failure.
         """
         if self.current_script:
-            if self.current_script.done:
+            if self.current_script.process_done:
                 if self.current_script.failed and (pause_on_failure or not self.running):
                     # set `_running` instead of `running` so as to
                     # not trigger _update_queue
@@ -649,7 +652,7 @@ class QueueModel:
             # but it can happen
             while self.queue:
                 script_info = self.queue[0]
-                if script_info.done:
+                if script_info.process_done or script_info.terminated:
                     self.queue.popleft()
                     continue
                 if script_info.runnable and script_info.index not in self._scripts_being_stopped:

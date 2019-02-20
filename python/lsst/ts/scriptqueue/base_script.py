@@ -1,4 +1,4 @@
-__all__ = ["ScriptState", "BaseScript"]
+__all__ = ["ScriptState", "BaseScript", "ScriptProcessState"]
 
 import abc
 import argparse
@@ -10,6 +10,7 @@ import sys
 import yaml
 
 import SALPY_Script
+import SALPY_ScriptQueue
 from lsst.ts import salobj
 
 
@@ -19,6 +20,8 @@ HEARTBEAT_INTERVAL = 5  # seconds
 class ScriptState(enum.IntEnum):
     """ScriptState constants.
     """
+    UNKNOWN = 0
+    """Script state is unknown."""
     UNCONFIGURED = SALPY_Script.state_Unconfigured
     """Script is not configured and so cannot be run."""
     CONFIGURED = SALPY_Script.state_Configured
@@ -41,6 +44,25 @@ class ScriptState(enum.IntEnum):
     """Script exiting after being asked to stop."""
     FAILED = SALPY_Script.state_Failed
     """Script exiting after an error."""
+
+
+class ScriptProcessState(enum.IntEnum):
+    """processState constants.
+    """
+    UNKNOWN = 0
+    """Script process state is unknown."""
+    LOADING = SALPY_ScriptQueue.script_Loading
+    """Script is being loaded."""
+    CONFIGURED = SALPY_ScriptQueue.script_Configured
+    """Script successfully configured."""
+    RUNNING = SALPY_ScriptQueue.script_Running
+    """Script running."""
+    DONE = SALPY_ScriptQueue.script_Done
+    """Script completed."""
+    CONFIGUREFAILED = SALPY_ScriptQueue.script_ConfigureFailed
+    """Script failed in the configuration step."""
+    TERMINATED = SALPY_ScriptQueue.script_Terminated
+    """Script was terminated."""
 
 
 def _make_remote_name(remote):

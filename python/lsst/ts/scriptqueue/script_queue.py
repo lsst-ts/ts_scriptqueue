@@ -35,7 +35,7 @@ SCRIPT_INDEX_MULT = 100000
 and the maximum is SCRIPT_INDEX_MULT-1 more.
 """
 _MAX_SCRIPTQUEUE_INDEX = salobj.MAX_SAL_INDEX//SCRIPT_INDEX_MULT - 1
-_LOAD_TIMEOUT = 20  # seconds
+_LOAD_TIMEOUT = 60  # seconds
 
 
 class ScriptQueue(salobj.BaseCsc):

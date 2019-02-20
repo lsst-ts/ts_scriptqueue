@@ -35,7 +35,7 @@ from . import utils
 from .script_info import ScriptInfo
 from .base_script import ScriptState
 
-_LOAD_TIMEOUT = 20  # seconds
+_LOAD_TIMEOUT = 60  # seconds
 
 MIN_SAL_INDEX = 1000
 MAX_HISTORY = 400

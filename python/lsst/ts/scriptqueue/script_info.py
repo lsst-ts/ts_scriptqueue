@@ -29,8 +29,8 @@ import SALPY_Script
 import SALPY_ScriptQueue
 from .base_script import ScriptState
 
-_CONFIGURE_TIMEOUT = 15  # seconds
-_STATE_TIMEOUT = 15  # seconds; includes time to make Script SAL component
+_CONFIGURE_TIMEOUT = 60  # seconds
+_STATE_TIMEOUT = 30  # seconds; includes time to make Script SAL component
 
 
 class ScriptInfo:

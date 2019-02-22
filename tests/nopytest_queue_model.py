@@ -104,7 +104,7 @@ class QueueModelTestCase(unittest.TestCase):
         self.assertEqual(info1.descr, info2.descr)
 
     def make_add_kwargs(self, location=SALPY_ScriptQueue.add_Last, location_sal_index=0,
-                        path=None, config="wait_time: 0.1"):
+                        is_standard=False, path=None, config="wait_time: 0.1"):
         """Make keyword arguments for QueueModel.add.
 
         Parameters
@@ -113,6 +113,8 @@ class QueueModelTestCase(unittest.TestCase):
             One of SALPY_ScriptQueue.add_First, Last, Before or After.
         location_sal_index : `int` (optional)
             SAL index of script that ``location`` is relative to.
+        is_standard : `bool`
+            Is this a standard (True) or external (False) script?
         path : `str`, `bytes` or `os.PathLike` (optional)
             Path to script, relative to standard or external root dir;
             defaults to "subdir/script6".
@@ -126,10 +128,10 @@ class QueueModelTestCase(unittest.TestCase):
             script_info=scriptqueue.ScriptInfo(
                 index=sal_index,
                 cmd_id=sal_index*2,  # arbitrary
-                is_standard=False,
+                is_standard=is_standard,
                 path=path,
                 config=config,
-                descr=f"test_add_badconfig {sal_index}",
+                descr=f"{sal_index}",
                 verbose=True,
             ),
             location=location,

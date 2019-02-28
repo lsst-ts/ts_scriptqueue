@@ -19,6 +19,8 @@ HEARTBEAT_INTERVAL = 5  # seconds
 class ScriptState(enum.IntEnum):
     """ScriptState constants.
     """
+    UNKNOWN = 0
+    """Script state is unknown."""
     UNCONFIGURED = SALPY_Script.state_Unconfigured
     """Script is not configured and so cannot be run."""
     CONFIGURED = SALPY_Script.state_Configured
@@ -348,6 +350,7 @@ class BaseScript(salobj.Controller, abc.ABC):
         try:
             await self.configure(**config)
         except Exception as e:
+            self.log.exception(f"{e}")
             raise salobj.ExpectedError(f"config({config}) failed: {e}") from e
 
         metadata = self.evt_metadata.DataType()

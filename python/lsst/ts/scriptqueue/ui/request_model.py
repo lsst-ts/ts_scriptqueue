@@ -37,7 +37,7 @@ class RequestModel:
         """
 
         self.scripts = {}
-        """A dictionary to store the state of scripts in the queue. 
+        """A dictionary to store the state of scripts in the queue.
         """
 
         # Initialize information about the queue. If the queue is not enable or offline state
@@ -113,17 +113,17 @@ class RequestModel:
 
         try:
             self.run(self.queue.cmd_disable.start(timeout=self.cmd_timeout))
-        except Exception as e:
+        except Exception:
             pass
 
         try:
             self.run(self.queue.cmd_standby.start(timeout=self.cmd_timeout))
-        except Exception as e:
+        except Exception:
             pass
 
         try:
             self.run(self.queue.cmd_exitControl.start(timeout=self.cmd_timeout))
-        except Exception as e:
+        except Exception:
             pass
 
         return True

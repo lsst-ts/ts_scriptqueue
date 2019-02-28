@@ -8,7 +8,7 @@ from lsst.ts.salobj import AckError
 
 try:
     from cmd2 import Cmd
-except ModuleNotFoundError as e:
+except ModuleNotFoundError:
     warnings.warn("Could not find module cmd2. Fallback to standard "
                   "cmd library. This may limit the functionality of the shell.")
     from cmd import Cmd
@@ -60,7 +60,7 @@ class RequestCmd(Cmd):
         if len(arg) > 0:
             try:
                 nbeats = int(arg)
-            except ValueError as e:
+            except ValueError:
                 self.log.warning(f"Could not parse {arg!r} as an integer; "
                                  f"using {nbeats} heartbeats (the default) instead.")
         for i in range(nbeats):

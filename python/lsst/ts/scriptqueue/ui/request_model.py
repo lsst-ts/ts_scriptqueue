@@ -120,17 +120,17 @@ class RequestModel:
 
         try:
             self.run(self.queue.cmd_disable.start(timeout=self.cmd_timeout))
-        except Exception as e:
+        except Exception:
             pass
 
         try:
             self.run(self.queue.cmd_standby.start(timeout=self.cmd_timeout))
-        except Exception as e:
+        except Exception:
             pass
 
         try:
             self.run(self.queue.cmd_exitControl.start(timeout=self.cmd_timeout))
-        except Exception as e:
+        except Exception:
             pass
 
         return True
@@ -474,7 +474,7 @@ class RequestModel:
                 nlost_subsequent = 0
                 self.log.debug(f"[{salindex}]:[heartbeat:{nbeats}] - ["
                                f"total lost:{nlost_total}]")
-            except asyncio.TimeoutError as e:
+            except asyncio.TimeoutError:
                 nlost_subsequent += 1
                 nlost_total += 1
                 self.log.warning(f"[{salindex}]:[heartbeat:{nbeats}] - "

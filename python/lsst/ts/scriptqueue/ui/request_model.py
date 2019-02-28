@@ -4,14 +4,17 @@ import asyncio
 import logging
 
 from lsst.ts import salobj
-from lsst.ts.scriptqueue import ScriptState, ScriptProcessState
+from lsst.ts.scriptqueue import ScriptProcessState
+from lsst.ts.scriptqueue.base_script import HEARTBEAT_INTERVAL
 import SALPY_ScriptQueue
 import SALPY_Script
 
+from .queue_state import QueueState
+
 
 class RequestModel:
-    """A model class that represents the user interface to the queue. It contains stores the current
-    state of the queue as well as for the scripts in the queue. It provides methods to update its
+    """A model class that represents the user interface to the queue. It stores the current
+    state of the queue as well as for scripts in the queue. It provides methods to update its
     internal information and also callback functions that can be scheduled to update in an event loop.
 
     It also provides methods to send request to the queue and methods to monitor the state of
@@ -26,18 +29,13 @@ class RequestModel:
         self.evt_loop = asyncio.get_event_loop()
 
         self.cmd_timeout = 120.
-
-        self.state = {'state': "Unknown",
-                      'length': 0,
-                      'past_length': 0,
-                      'queue_scripts': [],
-                      'past_scripts': [],
-                      'current': None}
-        """Store the overall state of the queue.
+        self.max_lost_heartbeats = 5
+        """Specify the tolerance in subsequent heartbeats lost when
+        monitoring a script.
         """
 
-        self.scripts = {}
-        """A dictionary to store the state of scripts in the queue. 
+        self.state = QueueState()
+        """Store the overall state of the queue.
         """
 
         # Initialize information about the queue. If the queue is not enable or offline state
@@ -47,41 +45,50 @@ class RequestModel:
                              "in enabled state.")
             return
 
-        # Initialize information about scripts
-        for i in range(self.state['length']):
-            self.query_script_info(self.state['queue_scripts'][i])
-
-        for i in range(self.state['past_length']):
-            self.query_script_info(self.state['past_scripts'][i])
-
-        if self.state['current'] is not None:
-            self.query_script_info(self.state['current'])
+        self.query_scripts_info()  # This will force the queue to output the state of all its scripts
+        self.update_scripts_info()  # Now update the internal information
 
     def enable_queue(self):
         """A method to enable the queue. It will try to identify the current state of the
         queue and if it fails, assumes the queue is in STANDBY.
         """
-        state = self.queue.evt_summaryState.get()
-        if state is None:
-            print("No information about current state of the queue... Trying to enable.")
-        elif state.summaryState == salobj.State.STANDBY:
-            print("Enabling the queue.")
-        else:
-            print(f"Queue in {salobj.State(state.summaryState)} state, cannot enable.")
+        try:
+            self.run(salobj.enable_csc(self.queue, timeout=self.cmd_timeout))
+        except Exception as e:
+            self.log.error("Could not start queue using enable_csc. Trying to force "
+                           "enable from standby.")
+            self.log.exception(e)
+            pass
 
-        self.run(self.queue.cmd_start.start(timeout=self.cmd_timeout))
-        self.run(self.queue.cmd_enable.start(timeout=self.cmd_timeout))
-        print(f"Queue enabled. [{self.queue.evt_summaryState.get().summaryState}]")
+        try:
+            self.run(self.queue.cmd_start.start(timeout=self.cmd_timeout))
+        except Exception as e:
+            self.log.exception(e)
+            pass
+
+        try:
+            self.run(self.queue.cmd_enable.start(timeout=self.cmd_timeout))
+        except Exception as e:
+            self.log.exception(e)
+            pass
+
+        summary_state = self.queue.evt_summaryState.get()
+        if summary_state is None:
+            self.log.error("Can not determine state of the queue. Try listening for heartbeats "
+                           "to make sure queue is running.")
+        else:
+            self.log.info(f"Queue state: {salobj.State(summary_state.summaryState)}")
 
         return False
 
-    def list(self):
+    def get_scripts(self):
         """Return available scripts.
 
         Returns
         -------
-        available_scripts : dict
-            A dictionary with "external" and "standard" list of scripts.
+        available_scripts : `dict` [`str`, `list` [`str`]]
+            A dictionary with the available "external" and "standard" scripts. Each
+            script is represented by their relative paths as seen by the queue.
 
         """
 
@@ -100,11 +107,11 @@ class RequestModel:
 
     def pause_queue(self):
         """Pause the queue."""
-        self.run(self.queue.cmd_pause.start())
+        self.run(self.queue.cmd_pause.start(timeout=self.cmd_timeout))
 
     def resume_queue(self):
         """Resume queue operation"""
-        self.run(self.queue.cmd_resume.start())
+        self.run(self.queue.cmd_resume.start(timeout=self.cmd_timeout))
 
     def quit_queue(self):
         """Quit queue by sending it to exit control. Assume the queue is in enable state
@@ -140,10 +147,13 @@ class RequestModel:
             Should the script be terminated?
 
         """
-        self.queue.cmd_stopScripts.set(salIndices=sal_indices,
-                                       length=len(sal_indices),
-                                       terminate=terminate)
-        self.run(self.queue.cmd_stopScripts.start(timeout=self.cmd_timeout))
+        topic = self.queue.cmd_stopScripts.DataType()
+        for i in range(len(sal_indices)):
+            topic.salIndices[i] = sal_indices[i]
+        topic.length = len(sal_indices)
+        topic.terminate = terminate
+
+        self.run(self.queue.cmd_stopScripts.start(topic, timeout=self.cmd_timeout))
 
     def get_queue_state(self):
         """A method to get the state of the queue and the scripts running on the queue.
@@ -153,68 +163,12 @@ class RequestModel:
         state : dict
 
         """
+
         self.update_queue_state()
 
-        state = {'state': self.state['state'],
-                 'length': self.state['length'],
-                 'past_length': self.state['past_length'],
-                 'queue_scripts': {},
-                 'past_scripts': {},
-                 'current': None}
+        self.update_scripts_info()
 
-        for i in range(self.state['length']):
-            state['queue_scripts'][self.state['queue_scripts'][i]] = \
-                self.get_script_info(self.state['queue_scripts'][i])
-
-        for i in range(self.state['past_length']):
-            state['past_scripts'][self.state['past_scripts'][i]] = \
-                self.get_script_info(self.state['past_scripts'][i])
-
-        if self.state['current'] is not None:
-            state['current'] = self.get_script_info(self.state['current'])
-
-        return state
-
-    def get_script_info(self, salindex):
-        """Get info about a script with `salindex`.
-
-        Parameters
-        ----------
-        salindex : int
-            Index of the sal script to get info.
-
-        Returns
-        -------
-        script_info : dict
-
-        """
-        if (salindex in self.scripts and
-                self.scripts[salindex]['process_state'] >= ScriptProcessState.DONE):
-            # if a script is in a final state it will not be updated anymore so
-            # just retrieve stored information
-            # self.log.debug(f"Done {salindex}")
-            self.scripts[salindex]['updated'] = False
-            return self.scripts[salindex]
-        elif salindex in self.scripts:
-            # if script is in the list update all script info and grab the stored information
-            # if the script was updated in updata_script_info, mark it as such, otherwise
-            # flag it as not updated.
-            # self.log.debug(f"Updating {salindex}")
-            updated = self.update_script_info()
-            self.scripts[salindex]['updated'] = salindex in updated
-            return self.scripts[salindex]
-        else:
-            # It may happen that a script is in the queue but no information is available,
-            # for instance, while it is still pre-loading. In this case, pass an empty
-            # state.
-            # self.log.debug(f"Adding {salindex}")
-            info = self.queue.evt_script.DataType()
-            info.salIndex = salindex
-            # this will add the script to the list of script, but there's no real information about it
-            # except for the sal index
-            self.parse_script_info(info)
-            self.scripts[salindex]['updated'] = True
-            return self.scripts[salindex]
+        return self.state.parse()
 
     def add(self, path, is_standard, config):
         """Add a script to the queue.
@@ -241,6 +195,8 @@ class RequestModel:
 
         ack = self.run(self.queue.cmd_add.start(timeout=self.cmd_timeout))
 
+        self.state.add_script(int(ack.ack.result))
+
         return int(ack.ack.result)
 
     def set_queue_log_level(self, level):
@@ -252,12 +208,24 @@ class RequestModel:
             Log level; error=40, warning=30, info=20, debug=10
 
         """
-        valid_level = [40, 30, 20, 10]
-        if level not in valid_level:
-            raise RuntimeError(f"Level {level} not valid. Must be one of {valid_level}.")
-
         self.queue.cmd_setLogLevel.set(level=level)
         self.run(self.queue.cmd_setLogLevel.start(timeout=self.cmd_timeout))
+
+    def set_script_log_level(self, index, level):
+        """Set the log level for a script.
+
+        Parameters
+        ----------
+        index : int
+            Script index. It will raise an exception if the script is not in the queue.
+        level : int
+            Log level.
+
+        """
+        if self.state.scripts[index]['remote'] is None:
+            self.get_script_remote(index)
+
+        self.state.scripts[index]['remote'].cmd_setLogLevel.set(level=level)
 
     def listen_heartbeat(self):
         """Listen for queue heartbeats."""
@@ -267,14 +235,16 @@ class RequestModel:
     def get_script_remote(self, salindex):
         """Listen for a script log messages."""
 
-        self.update_script_info()
-        info = self.get_script_info(salindex)
+        self.update_scripts_info()
+        info = self.state.scripts[salindex]
 
         if (info["process_state"] < ScriptProcessState.DONE and
-                self.scripts[salindex]['remote'] is None):
+                self.state.scripts[salindex]['remote'] is None):
             self.log.debug('Starting script remote')
-            self.scripts[salindex]['remote'] = salobj.Remote(SALPY_Script, salindex)
-            self.scripts[salindex]['remote'].cmd_setLogLevel.set(level=10)
+            self.state.scripts[salindex]['remote'] = salobj.Remote(SALPY_Script, salindex)
+            self.state.scripts[salindex]['remote'].cmd_setLogLevel.set(level=10)
+        elif info["process_state"] >= ScriptProcessState.DONE:
+            raise RuntimeError(f"Script {salindex} in a final state.")
 
     def run(self, coro):
         """Run `coro` in the event loop.
@@ -294,7 +264,7 @@ class RequestModel:
     def queue_state_callback(self, queue):
         """Call back function to update the state of the queue.
         """
-        self.parse_queue_state(queue)
+        self.state.update(queue)
 
     def update_queue_state(self):
         """Run `get_oldest` in `self.queue.evt_queue` until there is nothing left.
@@ -311,14 +281,14 @@ class RequestModel:
                 return n_topics
             else:
                 n_topics += 1
-                self.parse_queue_state(queue)
+                self.state.update(queue)
 
     def query_queue_state(self):
         """Query state of the queue."""
         queue_coro = self.queue.evt_queue.next(flush=True, timeout=self.cmd_timeout)
 
         try:
-            self.run(self.queue.cmd_showQueue.start())
+            self.run(self.queue.cmd_showQueue.start(timeout=self.cmd_timeout))
         except Exception as e:
             self.log.warning('Could not get state of the queue.')
             self.log.exception(e)
@@ -326,38 +296,11 @@ class RequestModel:
 
         queue = self.run(queue_coro)
 
-        self.parse_queue_state(queue)
+        self.state.update(queue)
+
+        self.update_scripts_info()
 
         return 0
-
-    def parse_queue_state(self, queue):
-        """A method to parse information about the queue.
-
-        Parameters
-        ----------
-        queue : SALPY_ScriptQueue.ScriptQueue_logevent_queueC
-
-        """
-
-        self.state['state'] = 'Running' if queue.running else 'Stopped'
-        self.state['length'] = queue.length
-        self.state['past_length'] = queue.pastLength
-
-        self.state['queue_scripts'] = [queue.salIndices[i] for i in range(queue.length)]
-        self.state['past_scripts'] = [queue.pastSalIndices[i] for i in range(queue.pastLength)]
-
-        if queue.currentSalIndex > 0:
-            self.state['current'] = queue.currentSalIndex
-        else:
-            self.state['current'] = None
-
-        # clear script list
-        current_indices = list(self.scripts.keys())
-        for salindex in current_indices:
-            if salindex not in self.state['queue_scripts'] and salindex not in self.state['past_scripts']\
-                    and salindex != self.state['current']:
-                self.log.debug(f"Removing script {salindex}")
-                del self.scripts[salindex]
 
     def script_info_callback(self, info):
         """A callback function to monitor the state of the scripts.
@@ -367,11 +310,12 @@ class RequestModel:
         info : SALPY_ScriptQueue.ScriptQueue_logevent_scriptC
 
         """
-        self.parse_script_info(info)
+        self.state.update_script_info(info)
 
-    def update_script_info(self):
+    def update_scripts_info(self):
         """Run `get_oldest` in `self.queue.evt_script` and pass it to `self.parse_script_info`
-        until there is nothing left."""
+        until there is nothing left.
+        """
         updated = []
         while True:
             info = self.queue.evt_script.get_oldest()
@@ -380,71 +324,18 @@ class RequestModel:
             else:
                 if info.salIndex not in updated:
                     updated.append(info.salIndex)
-                self.parse_script_info(info)
+                self.state.update_script_info(info)
 
-    def query_script_info(self, salindex):
-        """Get info about a script with `salindex`.
-
-        Parameters
-        ----------
-        salindex : int
-            Index of the sal script to get info.
-
-        Returns
-        -------
-        info : dict
-
+    def query_scripts_info(self):
+        """Send a command to the queue to output information about all scripts.
         """
-        updated = self.update_script_info()
-        if salindex in updated:
-            return salindex
-
-        self.queue.cmd_showScript.set(salIndex=salindex)
-
-        self.run(self.queue.cmd_showScript.start(timeout=self.cmd_timeout))
-
-        updated = self.update_script_info()
-        if salindex in updated:
-            return salindex
-        else:
-            raise RuntimeError(f"Could not update script[{salindex}] information.")
-
-    def parse_script_info(self, info):
-        """A method to parse information about scripts.
-
-        Parameters
-        ----------
-        info : SALPY_ScriptQueue.ScriptQueue_logevent_scriptC
-
-        """
-
-        s_type = 'Standard' if info.isStandard else 'External'
-        if info.salIndex not in self.scripts:
-            self.scripts[info.salIndex] = {
-                'index': info.salIndex,
-                'type': s_type,
-                'path': info.path,
-                'duration': info.duration,
-                'timestamp': info.timestamp,
-                'script_state': ScriptState(info.scriptState),
-                'process_state': ScriptProcessState(info.processState),
-                'remote': None,
-                'updated': True
-            }
-        else:
-            self.scripts[info.salIndex]['type'] = s_type
-            self.scripts[info.salIndex]['path'] = info.path
-            self.scripts[info.salIndex]['duration'] = info.duration
-            self.scripts[info.salIndex]['timestamp'] = info.timestamp
-            self.scripts[info.salIndex]['script_state'] = ScriptState(info.scriptState)
-            self.scripts[info.salIndex]['process_state'] = ScriptProcessState(info.processState)
-            self.scripts[info.salIndex]['updated'] = True
-
-            # delete remote if script is done
-            if (self.scripts[info.salIndex]['process_state'] >= ScriptProcessState.DONE and
-                    self.scripts[info.salIndex]['remote'] is not None):
-                del self.scripts[info.salIndex]['remote']
-                self.scripts[info.salIndex]['remote'] = None
+        for salindex in self.state.script_indices:
+            self.queue.cmd_showScript.set(salIndex=salindex)
+            try:
+                self.run(self.queue.cmd_showScript.start(timeout=self.cmd_timeout))
+            except salobj.AckError as ack_err:
+                self.log.error(f"Could not get info on script {salindex}. "
+                               f"Failed with ack.result={ack_err.ack.result}")
 
     @staticmethod
     def parse_info(info):
@@ -483,7 +374,8 @@ class RequestModel:
         finished, unfinished = self.evt_loop.run_until_complete(
             asyncio.wait([self.monitor_script_info(salindex),
                           self.monitor_script_log(salindex),
-                          self.monitor_script_checkpoint(salindex)],
+                          self.monitor_script_checkpoint(salindex),
+                          self.monitor_script_heartbeat(salindex)],
                          return_when=asyncio.FIRST_COMPLETED))
         for task in unfinished:
             task.cancel()
@@ -496,20 +388,17 @@ class RequestModel:
         salindex : int
 
         """
-        if self.scripts[salindex]['remote'] is None:
+        if self.state.scripts[salindex]['remote'] is None:
             raise RuntimeError(f"No remote for script {salindex}")
-
-        self.log.debug("Waiting for heartbeat from script")
-        await self.scripts[salindex]['remote'].evt_heartbeat.next(flush=False,
-                                                                  timeout=self.cmd_timeout)
 
         while True:
 
-            if self.scripts[salindex]["process_state"] >= ScriptProcessState.DONE:
+            if self.state.scripts[salindex]["process_state"] >= ScriptProcessState.DONE:
                 return
-            log_message = await self.scripts[salindex]['remote'].evt_logMessage.next(
-                flush=False,
-                timeout=self.cmd_timeout)
+            # I won't set a timeout here because a script may never send a log message
+            # or may be running a long task where it won't be logging at all, like
+            # during a long exposure.
+            log_message = await self.state.scripts[salindex]['remote'].evt_logMessage.next(flush=False)
             self.log.log(log_message.level,
                          f'[{salindex}]:{log_message.message}{log_message.traceback}')
 
@@ -523,18 +412,21 @@ class RequestModel:
         """
 
         while True:
-            info = await self.queue.evt_script.next(flush=False,
-                                                    timeout=self.cmd_timeout)
-            self.parse_script_info(info)
+            # I won't set a timeout here because a script state may be unchanged for a really
+            # long period of time. For instance, during a long exposure.
+
+            info = await self.queue.evt_script.next(flush=False)
+            self.state.update_script_info(info)
+
             if info.salIndex == salindex:
-                print(self.parse_info(self.get_script_info(salindex)))
+                print(self.parse_info(self.state.scripts[salindex]))
             else:
-                self.log.debug(self.parse_info(self.get_script_info(salindex)))
+                self.log.debug(self.parse_info(self.state.scripts[salindex]))
             if info.processState >= ScriptProcessState.DONE:
                 return
 
     async def monitor_script_checkpoint(self, salindex):
-        """Coroutine to monitor check a script checkpoint.
+        """Coroutine to monitor a script checkpoint.
 
         Parameters
         ----------
@@ -542,6 +434,50 @@ class RequestModel:
 
         """
         while True:
-            state = await self.scripts[salindex]['remote'].evt_state.next(flush=False,
-                                                                          timeout=self.cmd_timeout)
+            # I won't set a timeout here because a script may be running a long task
+            # and not reporting any new checkpoint for a really
+            # long period of time. For instance, during a long exposure.
+            state = await self.state.scripts[salindex]['remote'].evt_state.next(flush=False)
             self.log.debug(f"[{salindex}]:[checkpoint]{state.lastCheckpoint}")
+
+    async def monitor_script_heartbeat(self, salindex):
+        """Coroutine to monitor script heart beats.
+
+        Parameters
+        ----------
+        salindex : int
+
+        """
+        nbeats = 0
+        nlost_total = 0
+        nlost_subsequent = 0
+
+        while True:
+
+            if self.state.scripts[salindex]['process_state'] >= ScriptProcessState.DONE:
+                self.log.debug(f"Script {salindex} finalized.")
+                return
+            elif self.state.scripts[salindex]['remote'] is None:
+                self.log.debug(f"No remote for script {salindex}.")
+                return
+            elif nlost_subsequent > self.max_lost_heartbeats:
+                self.log.error(f"Script is not responding. Lost {nlost_subsequent} "
+                               f"subsequent heartbeats. You may have to interrupt the script execution."
+                               f"If this is an expected behaviour you should be able to restart the "
+                               f"monitoring routine.")
+                return
+
+            try:
+                await self.state.scripts[salindex]['remote'].evt_heartbeat.next(flush=False,
+                                                                                timeout=HEARTBEAT_INTERVAL*3)
+                nbeats += 1
+                nlost_subsequent = 0
+                self.log.debug(f"[{salindex}]:[heartbeat:{nbeats}] - ["
+                               f"total lost:{nlost_total}]")
+            except asyncio.TimeoutError as e:
+                nlost_subsequent += 1
+                nlost_total += 1
+                self.log.warning(f"[{salindex}]:[heartbeat:{nbeats}] - "
+                                 f"[total lost:{nlost_total} - "
+                                 f"subsequent lost: {nlost_subsequent}]:"
+                                 f"[Missing heartbeats from script.]")

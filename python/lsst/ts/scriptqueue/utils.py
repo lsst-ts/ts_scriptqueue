@@ -1,15 +1,8 @@
-__all__ = ["find_public_scripts", "configure_logging", "generate_logfile", "DETAIL_LEVEL"]
+__all__ = ["find_public_scripts", "configure_logging", "generate_logfile"]
 
 import os
 import logging
 import time
-
-DETAIL_LEVEL = {
-    0: logging.ERROR,
-    1: logging.WARNING,
-    2: logging.INFO,
-    3: logging.DEBUG,
-}
 
 
 def find_public_scripts(root):
@@ -42,15 +35,14 @@ def configure_logging(verbose=0, console_format=None, filename=None):
     Parameters
     ----------
     verbose : int
-        An integer from 0 to 3 specifying the log level.
-            error=0, warning=1, info=2, debug=3
+        Log level.
     console_format : str
         Format string for the console.
     filename : str
         A name, including path, for a log file. If None, will create a file.
     """
-    console_detail = verbose if verbose <= 3 else 3
-    file_detail = 3
+    console_detail = verbose
+    file_detail = logging.DEBUG
 
     main_level = max(console_detail, file_detail)
 
@@ -60,19 +52,19 @@ def configure_logging(verbose=0, console_format=None, filename=None):
     else:
         console_format = console_format
 
-    logging.basicConfig(level=DETAIL_LEVEL[main_level], format=console_format)
+    logging.basicConfig(level=main_level, format=console_format)
     logging.captureWarnings(True)
     # Remove old console logger as it will double up messages when levels match.
     logging.getLogger().removeHandler(logging.getLogger().handlers[0])
 
     ch = logging.StreamHandler()
-    ch.setLevel(DETAIL_LEVEL[console_detail])
+    ch.setLevel(console_detail)
     ch.setFormatter(logging.Formatter(console_format))
     logging.getLogger().addHandler(ch)
 
     log_file = logging.FileHandler(filename)
     log_file.setFormatter(logging.Formatter(log_format))
-    log_file.setLevel(DETAIL_LEVEL[file_detail])
+    log_file.setLevel(file_detail)
     logging.getLogger().addHandler(log_file)
 
 

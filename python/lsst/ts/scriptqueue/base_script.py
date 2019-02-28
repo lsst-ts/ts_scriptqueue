@@ -1,4 +1,4 @@
-__all__ = ["ScriptState", "BaseScript", "ScriptProcessState"]
+__all__ = ["ScriptState", "BaseScript"]
 
 import abc
 import argparse
@@ -10,7 +10,6 @@ import sys
 import yaml
 
 import SALPY_Script
-import SALPY_ScriptQueue
 from lsst.ts import salobj
 
 
@@ -44,25 +43,6 @@ class ScriptState(enum.IntEnum):
     """Script exiting after being asked to stop."""
     FAILED = SALPY_Script.state_Failed
     """Script exiting after an error."""
-
-
-class ScriptProcessState(enum.IntEnum):
-    """processState constants.
-    """
-    UNKNOWN = 0
-    """Script process state is unknown."""
-    LOADING = SALPY_ScriptQueue.script_Loading
-    """Script is being loaded."""
-    CONFIGURED = SALPY_ScriptQueue.script_Configured
-    """Script successfully configured."""
-    RUNNING = SALPY_ScriptQueue.script_Running
-    """Script running."""
-    DONE = SALPY_ScriptQueue.script_Done
-    """Script completed."""
-    CONFIGUREFAILED = SALPY_ScriptQueue.script_ConfigureFailed
-    """Script failed in the configuration step."""
-    TERMINATED = SALPY_ScriptQueue.script_Terminated
-    """Script was terminated."""
 
 
 def _make_remote_name(remote):
@@ -370,6 +350,7 @@ class BaseScript(salobj.Controller, abc.ABC):
         try:
             await self.configure(**config)
         except Exception as e:
+            self.log.exception(f"{e}")
             raise salobj.ExpectedError(f"config({config}) failed: {e}") from e
 
         metadata = self.evt_metadata.DataType()

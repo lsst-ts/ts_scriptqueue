@@ -19,10 +19,11 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-__all__ = ["ScriptInfo"]
+__all__ = ["ScriptInfo", "ScriptProcessState"]
 
 import asyncio
 import os
+import enum
 
 from lsst.ts import salobj
 import SALPY_Script
@@ -31,6 +32,25 @@ from .base_script import ScriptState
 
 _CONFIGURE_TIMEOUT = 60  # seconds
 _STATE_TIMEOUT = 30  # seconds; includes time to make Script SAL component
+
+
+class ScriptProcessState(enum.IntEnum):
+    """processState constants.
+    """
+    UNKNOWN = 0
+    """Script process state is unknown."""
+    LOADING = SALPY_ScriptQueue.script_Loading
+    """Script is being loaded."""
+    CONFIGURED = SALPY_ScriptQueue.script_Configured
+    """Script successfully configured."""
+    RUNNING = SALPY_ScriptQueue.script_Running
+    """Script running."""
+    DONE = SALPY_ScriptQueue.script_Done
+    """Script completed."""
+    CONFIGUREFAILED = SALPY_ScriptQueue.script_ConfigureFailed
+    """Script failed in the configuration step."""
+    TERMINATED = SALPY_ScriptQueue.script_Terminated
+    """Script was terminated."""
 
 
 class ScriptInfo:
@@ -177,19 +197,19 @@ class ScriptInfo:
     def process_state(self):
         """State of the script subprocess.
 
-        One of the ``SALPY_ScriptQueue.script_`` enumeration constants.
+        One of the ``ScriptProcessState`` enumeration constants.
         """
         if self.configure_failed:
-            return SALPY_ScriptQueue.script_ConfigureFailed
+            return ScriptProcessState.CONFIGUREFAILED
         elif self.terminated:
-            return SALPY_ScriptQueue.script_Terminated
+            return ScriptProcessState.TERMINATED
         elif self.process_done:
-            return SALPY_ScriptQueue.script_Done
+            return ScriptProcessState.DONE
         elif self.running:
-            return SALPY_ScriptQueue.script_Running
+            return ScriptProcessState.RUNNING
         elif self.configured:
-            return SALPY_ScriptQueue.script_Configured
-        return SALPY_ScriptQueue.script_Loading
+            return ScriptProcessState.CONFIGURED
+        return ScriptProcessState.LOADING
 
     def run(self):
         """Start the script running.

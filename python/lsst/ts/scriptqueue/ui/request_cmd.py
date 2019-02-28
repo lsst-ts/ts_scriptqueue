@@ -4,8 +4,8 @@ import logging
 import warnings
 import argparse
 import yaml
+from lsst.ts.salobj import AckError
 
-from lsst.ts.scriptqueue.utils import DETAIL_LEVEL
 try:
     from cmd2 import Cmd
 except ModuleNotFoundError as e:
@@ -30,98 +30,71 @@ class RequestCmd(Cmd):
         Type help or ? to list commands."""
         self.prompt = '(cmd): '
 
-        Cmd.__init__(self)
+        super().__init__()
 
         self.log = logging.getLogger("request")
         self.model = RequestModel(index)
 
+        # Defining an argparse to handle arguments for the do_run method
         self.__run_parser = argparse.ArgumentParser(prog="run")
-        self.__run_parser.add_argument('-e', '--external', help="Run an external script.")
-        self.__run_parser.add_argument('-s', '--standard', help="Run a standard script.")
-        self.__run_parser.add_argument('-c', '--config', help="Configuration file for the script.")
-        self.__run_parser.add_argument('-p', '--parameters', nargs='+',
-                                       help="In line configuration string for the script. Must be "
-                                            "in yaml format.")
+        self.__run_parser.add_argument('type',
+                                       help="Choose the type of script to run (standard or external).",
+                                       choices=("standard", "std", "s", "external", "ext", "e"))
+        self.__run_parser.add_argument('script',
+                                       help="Name of script to run.")
+
+        config_group = self.__run_parser.add_mutually_exclusive_group(required=False)
+        config_group.add_argument('-c', '--config', help="Configuration file for the script.")
+        config_group.add_argument('-p', '--parameters', nargs='+',
+                                  help="In line configuration string for the script. Must be "
+                                       "in yaml format.")
         self.__run_parser.add_argument("--monitor", dest="monitor", action="store_true",
                                        help="Monitor script execution all the way to the end.")
         self.__run_parser.add_argument("--timeout", dest="timeout", default=120., type=float,
                                        help="Timeout for monitoring scripts.")
 
-        self.__set_log_parser = argparse.ArgumentParser(prog="log_parser")
-        self.__set_log_parser.add_argument("-v", "--verbose", dest="verbose",
-                                           action='count', default=0,
-                                           help="Set the verbosity for the console logging.")
-
-        self.__set_script_log_parser = argparse.ArgumentParser(prog="script_log")
-        self.__set_script_log_parser.add_argument("-v", "--verbose", dest="verbose",
-                                                  action='count',
-                                                  default=0,
-                                                  help="Set the verbosity for the console logging.")
-        self.__set_script_log_parser.add_argument("-i", "--index",
-                                                  type=int,
-                                                  help="SalIndex of script to change log level.")
-
     def do_heartbeat(self, arg):
-        """Listen for queue heartbeat."""
-        try:
-            nbeats = 10
+        """Listen for heartbeats from the queue."""
+
+        nbeats = 10
+        if len(arg) > 0:
             try:
                 nbeats = int(arg)
             except ValueError as e:
-                self.log.debug(f"Using default heartbeat number {nbeats}")
-            for i in range(nbeats):
-                self.model.listen_heartbeat()
-                self.log.info(f"Heartbeat {i+1}/{nbeats}...")
-        except Exception as e:
-            self.log.exception(e)
-
-        return False
+                self.log.warning(f"Could not parse {arg!r} as an integer; "
+                                 f"using {nbeats} heartbeats (the default) instead.")
+        for i in range(nbeats):
+            self.model.listen_heartbeat()
+            self.log.info(f"Heartbeat {i+1}/{nbeats}...")
 
     def do_enable(self, arg):
         """Enable the queue."""
-        try:
-            self.model.enable_queue()
-        except Exception as e:
-            self.log.exception(e)
-
-        return False
+        self.model.enable_queue()
 
     def do_list(self, arg):
         """List available scripts."""
-        try:
-            print("Listing all available scripts.")
 
-            script_list = self.model.list()
+        print("Listing all available scripts.")
 
-            print('List of external scripts:')
-            for script in script_list["external"]:
-                print(f'\t - {script}', )
+        scripts = self.model.get_scripts()
 
-            print('List of standard scripts:')
-            for script in script_list["standard"]:
-                print(f'\t - {script}', )
-        except Exception as e:
-            self.log.exception(e)
+        print('List of external scripts:')
+        for script in scripts["external"]:
+            print(f'\t - {script}', )
 
-        return False
+        print('List of standard scripts:')
+        for script in scripts["standard"]:
+            print(f'\t - {script}', )
 
     def do_pause(self, arg):
         """Pause the queue."""
         print("Pausing queue.")
-        try:
-            self.model.pause_queue()
-        except Exception as e:
-            self.log.exception(e)
-
-        return False
+        self.model.pause_queue()
 
     def do_resume(self, arg):
         """Resume queue."""
         print("Resuming queue.")
-        try:
-            self.model.resume_queue()
-        except Exception as e:
-            self.log.exception(e)
+        self.model.resume_queue()
 
     def do_exit(self, arg):
         """Exit shell."""
@@ -129,8 +102,11 @@ class RequestCmd(Cmd):
         return True
 
     def do_quitQueue(self, arg):
-        """Interrupt the queue by sending it the exitControl command and exit request script.
-        If it fails to quit the queue
+        """Shut down the script queue and exit.
+
+        Interrupt the queue by sending it the exitControl command and exit.
+
+        If it fails to quit the queue exit anyway.
         """
         try:
             retval = self.model.quit_queue()
@@ -141,9 +117,8 @@ class RequestCmd(Cmd):
         except Exception as e:
             print("Could not quit queue.")
             self.log.exception(e)
-            retval = False
 
-        return retval
+        return True
 
     def do_stop(self, args):
         """Stop list of scripts.
@@ -154,11 +129,8 @@ class RequestCmd(Cmd):
             Comma separated list of scripts indices.
         """
         print(f'Stopping script {args}.')
-        try:
-            sal_indices = [int(i) for i in args.split(",")]
-            self.model.stop_scripts(sal_indices, terminate=False)
-        except Exception as e:
-            self.log.exception(e)
+        sal_indices = [int(i) for i in args.split(",")]
+        self.model.stop_scripts(sal_indices, terminate=False)
 
         return 0
 
@@ -171,11 +143,9 @@ class RequestCmd(Cmd):
             Comma separated list of scripts indices.
         """
         print(f'Terminating script {args}')
-        try:
-            sal_indices = [int(i) for i in args.split(",")]
-            self.model.stop_scripts(sal_indices, terminate=True)
-        except Exception as e:
-            self.log.exception(e)
+
+        sal_indices = [int(i) for i in args.split(",")]
+        self.model.stop_scripts(sal_indices, terminate=True)
 
         return 0
 
@@ -183,31 +153,26 @@ class RequestCmd(Cmd):
         """Show current state information about the queue."""
 
         print("#\n# Showing tasks in the queue.\n#")
+        queue_state = self.model.get_queue_state()
 
-        try:
-            queue_state = self.model.get_queue_state()
+        print(f'\tQueue state: {queue_state["state"]}')
+        print(f'\tCurrent running: {self.model.parse_info(queue_state["current"])}')
+        print(f'\tCurrent queue size: {len(queue_state["queue_scripts"])}')
+        print(f'\tPast queue size: {len(queue_state["past_scripts"])}')
 
-            print(f'\tQueue state: {queue_state["state"]}')
-            print(f'\tCurrent running: {self.model.parse_info(queue_state["current"])}')
-            print(f'\tCurrent queue size: {queue_state["length"]}')
-            print(f'\tPast queue size: {queue_state["past_length"]}')
+        if len(queue_state["queue_scripts"]) > 0:
+            print(f'\nItems on queue:')
+            for item in queue_state['queue_scripts']:
+                print(f"{item}: {self.model.parse_info(queue_state['queue_scripts'][item])}")
+        else:
+            print('\nNo items on queue.')
 
-            if queue_state['length'] > 0:
-                print(f'\nItems on queue:')
-                for item in queue_state['queue_scripts']:
-                    print(f"{item}: {self.model.parse_info(queue_state['queue_scripts'][item])}")
-            else:
-                print('\nNo items on queue.')
-
-            if queue_state["past_length"] > 0:
-                print(f'\nItems on past queue:')
-                for item in queue_state['past_scripts']:
-                    print(self.model.parse_info(queue_state['past_scripts'][item]))
-            else:
-                print('\nNo items on past queue.')
-
-        except Exception as e:
-            self.log.exception(e)
+        if len(queue_state["past_scripts"]) > 0:
+            print(f'\nItems on past queue:')
+            for item in queue_state['past_scripts']:
+                print(self.model.parse_info(queue_state['past_scripts'][item]))
+        else:
+            print('\nNo items on past queue.')
 
         return 0
 
@@ -229,61 +194,50 @@ class RequestCmd(Cmd):
         except SystemExit:
             return
 
-        if parsed.external is not None and parsed.standard is not None:
-            self.log.error("Cannot run with standard and external scripts "
-                           "at the same time. Pick one.")
-            return
-        elif parsed.external is None and parsed.standard is None:
-            self.log.error("Choose external or standard script.")
-            return
+        scripts = self.model.get_scripts()
 
-        if parsed.config is not None and parsed.parameters is not None:
-            self.log.error("Can either run with configuration file or in line parameters.")
+        is_standard = True if parsed.type in ('standard', 'std', 's') else False
+
+        if is_standard and parsed.script not in scripts['standard']:
+            self.log.error('Requested script %s not in the list of standard scripts.', parsed.script)
             return
 
-        try:
-            script_list = self.model.list()
+        if not is_standard and parsed.script not in scripts['external']:
+            self.log.error('Requested script %s not in the list of external scripts.', parsed.script)
+            return
 
-            if parsed.external is not None and parsed.external not in script_list['external']:
-                self.log.error('Requested script %s not in the list of external scripts.', parsed.external)
-                return
-
-            if parsed.standard is not None and parsed.standard not in script_list['standard']:
-                self.log.error('Requested script %s not in the list of standard scripts.', parsed.standard)
-                return
-
-            # Reading in input file
-            config = ""
-            if parsed.config is not None:
-                self.log.debug("Reading configuration from %s", parsed.config)
-                with open(parsed.config, 'r') as stream:
-                    yconfig = yaml.load(stream)
-                    config = yaml.safe_dump(yconfig)
-                    self.log.debug('Configuration: %s', config)
-            elif parsed.parameters is not None:
-                self.log.debug("Parsing parameters: %s", parsed.parameters)
-                yconfig = {}
-                for i in range(int(len(parsed.parameters)/2)):
-                    yconfig[parsed.parameters[i*2]] = parsed.parameters[i*2+1]
+        # Reading in input file
+        config = ""
+        if parsed.config is not None:
+            self.log.debug("Reading configuration from %s", parsed.config)
+            with open(parsed.config, 'r') as stream:
+                yconfig = yaml.load(stream)
                 config = yaml.safe_dump(yconfig)
                 self.log.debug('Configuration: %s', config)
-            else:
-                self.log.debug("No configuration file or in line parameters.")
+        elif parsed.parameters is not None:
+            self.log.debug("Parsing parameters: %s", parsed.parameters)
+            yconfig = {}
 
-            # Preparing to load script
-            script, is_standard = (parsed.standard, True) if parsed.standard is not None \
-                else (parsed.external, False)
+            if len(parsed.parameters) % 2 > 0:
+                self.log.warning(f"Parameters has wrong number of items. "
+                                 f"Must be key/value pair. Ignoring {parsed.parameters[-1]}")
 
-            # Add to the queue
-            self.log.debug(f"Adding {script} to the queue.")
-            salindex = self.model.add(script, is_standard, config)
+            for i in range(len(parsed.parameters) // 2):
+                yconfig[parsed.parameters[i * 2]] = parsed.parameters[i * 2 + 1]
+            config = yaml.safe_dump(yconfig)
+            self.log.debug('Configuration: %s', config)
+        else:
+            self.log.debug("No configuration file or in line parameters.")
 
-            if parsed.monitor:
-                self.monitor_script(salindex, parsed.timeout)
-            else:
-                self.log.info(f"Script index: {salindex}.")
-        except Exception as e:
-            self.log.exception(e)
+        # Preparing to load script
+        # Add to the queue
+        self.log.debug(f"Adding {parsed.script} to the queue.")
+        salindex = self.model.add(parsed.script, is_standard, config)
+
+        if parsed.monitor:
+            self.monitor_script(salindex, parsed.timeout)
+        else:
+            self.log.info(f"Script index: {salindex}.")
 
         return
 
@@ -294,59 +248,55 @@ class RequestCmd(Cmd):
 
     def do_set_log_level(self, args):
         """Set log level of the shell script.
+
+        Parameters
+        ----------
+        args : str
+            A string that can be converted to an int.
         """
         try:
-            parsed = self.__set_log_parser.parse_args(args.split())
-            logging.basicConfig(level=parsed.vebose)
-        except SystemExit:
-            return
-
-    def help_set_log_level(self):
-        """Helper for set_log_level."""
-        self.__set_log_parser.print_help()
+            level = int(args)
+            logging.basicConfig(level=level)
+        except ValueError:
+            self.log.error(f"*** Could not parse {args!r} as two integers")
 
     def do_set_script_log_level(self, args):
         """Set log level of a script.
+
+        Parameters
+        ----------
+        args : str
+            index level
+
         """
         try:
-            parsed = self.__set_script_log_parser.parse_args(args.split())
-            self.log.debug(f"Setting script {parsed.index} log level to {DETAIL_LEVEL[parsed.verbose]}")
-            self.model.set_script_log_level(parsed.index,
-                                            DETAIL_LEVEL[parsed.verbose])
-        except SystemExit:
-            return
-        except Exception as e:
-            self.log.exception(e)
+            arglist = args.split()
+            assert len(arglist) == 2
+            index, level = [int(arg) for arg in arglist]
 
-    def help_set_script_log_level(self):
-        """Helper for set_script_log_level."""
-        self.__set_script_log_parser.print_help()
+            self.log.debug(f"Setting script {index} log level to {level}")
+            self.model.set_script_log_level(index,
+                                            level)
+        except (AssertionError, ValueError):
+            self.log.error(f"*** Could not parse {args!r} as two integers")
 
     def do_set_queue_log_level(self, args):
         """Set log level of the queue.
         """
         try:
-            parsed = self.__set_log_parser.parse_args(args.split())
-            self.log.debug(f"Setting queue log level to {DETAIL_LEVEL[parsed.verbose]}")
-            self.model.set_queue_log_level(DETAIL_LEVEL[parsed.verbose])
-        except SystemExit:
-            return
-        except Exception as e:
-            self.log.exception(e)
+            level = int(args)
+            self.log.debug(f"Setting queue log level to {level}")
+            self.model.set_queue_log_level(level)
+        except ValueError:
+            self.log.error(f"*** Could not parse {args!r} as two integers")
 
-    def help_set_queue_log_level(self):
-        """Helper for set_log_level."""
-        self.__set_log_parser.print_help()
-
-    def monitor_script(self, salindex, timeout):
+    def monitor_script(self, salindex):
         """Monitor the execution of a script. Will block until
         script is in a final state.
 
         Parameters
         ----------
         salindex : int
-        timeout : float
-            How long to wait until give up on script. If None, will wait forever.
 
         """
         queue_state = self.model.get_queue_state()
@@ -356,30 +306,14 @@ class RequestCmd(Cmd):
             return
 
         self.log.info(f"Monitoring execution of script {salindex}.")
+        self.model.monitor_script(salindex)
+
+    def onecmd(self, *args):
+        """Encapsulate all commands with a try/except clause.
+        """
         try:
-            self.model.monitor_script(salindex)
+            return super().onecmd(*args)
+        except AckError as ack_err:
+            self.log.error(f"Failed with ack.result={ack_err.ack.result}")
         except Exception as e:
             self.log.exception(e)
-            return
-
-        # while True:
-        #     try:
-        #         info = self.model.get_script_info(salindex)
-        #         if info is None:
-        #             pass
-        #         elif info["updated"]:
-        #             print(self.parse_info(info))
-        #         elif info["process_state"] >= ScriptProcessState.DONE:
-        #             break
-        #
-        #         if info["process_state"] > ScriptProcessState.UNKNOWN:
-        #             level, message, traceback, is_alive = self.model.listen_script_log(int(salindex))
-        #             if not is_alive:
-        #                 break
-        #             elif level > 0:
-        #                 self.log.log(level,
-        #                              f'[{salindex}]:{message}')
-        #         time.sleep(0.1)
-        #
-        #     except ValueError as value_error:
-        #         self.log.debug(repr(value_error))

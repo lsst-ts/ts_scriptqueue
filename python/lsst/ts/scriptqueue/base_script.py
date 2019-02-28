@@ -481,9 +481,6 @@ class BaseScript(salobj.Controller, abc.ABC):
                 await self.cleanup()
             self._heartbeat_task.cancel()
 
-            # wait for final log messages, if any
-            await self.stop_logging()
-
             reason = None
             final_state = {
                 ScriptState.ENDING: ScriptState.DONE,

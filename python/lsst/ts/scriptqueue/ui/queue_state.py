@@ -79,7 +79,7 @@ class QueueState:
             if (salindex not in self._queue_script_indices and
                     salindex not in self._past_script_indices and
                     salindex != self._current_script_index and
-                    salindex < max(self._queue_script_indices)):
+                    salindex < max(self._queue_script_indices, default=salindex)):
                 self.log.debug(f"Removing script {salindex}")
                 del self.scripts[salindex]
 

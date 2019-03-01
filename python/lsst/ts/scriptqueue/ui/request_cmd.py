@@ -184,7 +184,7 @@ class RequestCmd(Cmd):
         salindex : int
             The salindex of the script to monitor.
         """
-        self.monitor_script(int(salindex), self.model.cmd_timeout)
+        self.monitor_script(int(salindex))
 
     def do_run(self, args):
         """Request a script to run on the queue.
@@ -235,7 +235,7 @@ class RequestCmd(Cmd):
         salindex = self.model.add(parsed.script, is_standard, config)
 
         if parsed.monitor:
-            self.monitor_script(salindex, parsed.timeout)
+            self.monitor_script(salindex)
         else:
             self.log.info(f"Script index: {salindex}.")
 

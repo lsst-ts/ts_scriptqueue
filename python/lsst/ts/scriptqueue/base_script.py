@@ -19,6 +19,8 @@ HEARTBEAT_INTERVAL = 5  # seconds
 class ScriptState(enum.IntEnum):
     """ScriptState constants.
     """
+    UNKNOWN = 0
+    """Script state is unknown."""
     UNCONFIGURED = SALPY_Script.state_Unconfigured
     """Script is not configured and so cannot be run."""
     CONFIGURED = SALPY_Script.state_Configured
@@ -109,13 +111,17 @@ class BaseScript(salobj.Controller, abc.ABC):
         the command before exiting."""
 
     @classmethod
-    def main(cls, descr):
+    def main(cls, descr=None):
         """Start the script from the command line.
 
         Parameters
         ----------
-        descr : `str`
-            Short description of why you are running this script.
+        descr : `str` (optional)
+            Short description of what the script does, for operator display.
+            Leave at None if the script already has a description, which is
+            the most common case. Primarily intended for unit tests,
+            e.g. running `TestScript`.
+
 
         The final return code will be:
 
@@ -127,7 +133,10 @@ class BaseScript(salobj.Controller, abc.ABC):
         parser.add_argument("index", type=int,
                             help="Script SAL Component index; must be unique among running Scripts")
         args = parser.parse_args()
-        script = cls(index=args.index, descr=descr)
+        kwargs = dict(index=args.index)
+        if descr is not None:
+            kwargs["descr"] = descr
+        script = cls(**kwargs)
         asyncio.get_event_loop().run_until_complete(script.done_task)
         return_code = {ScriptState.DONE: 0,
                        ScriptState.STOPPED: 0,
@@ -348,6 +357,7 @@ class BaseScript(salobj.Controller, abc.ABC):
         try:
             await self.configure(**config)
         except Exception as e:
+            self.log.exception(f"{e}")
             raise salobj.ExpectedError(f"config({config}) failed: {e}") from e
 
         metadata = self.evt_metadata.DataType()
@@ -470,9 +480,6 @@ class BaseScript(salobj.Controller, abc.ABC):
             if self._run_task is not None:
                 await self.cleanup()
             self._heartbeat_task.cancel()
-
-            # wait for final log messages, if any
-            await self.stop_logging()
 
             reason = None
             final_state = {

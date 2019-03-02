@@ -17,6 +17,16 @@ from .request_model import RequestModel
 
 queue_names = ["Main", "Auxiliary"]
 
+LOG_LEVEL_DICT = dict(debug=logging.DEBUG,
+                      info=logging.INFO,
+                      warning=logging.WARNING,
+                      error=logging.ERROR,
+                      critical=logging.CRITICAL)
+
+
+class CmdError(RuntimeError):
+    pass
+
 
 class RequestCmd(Cmd):
     """This class provides a command line interface to the RequestModel class.
@@ -48,7 +58,7 @@ class RequestCmd(Cmd):
         config_group.add_argument('-p', '--parameters', nargs='+',
                                   help="In line configuration string for the script. Must be "
                                        "in yaml format.")
-        self.__run_parser.add_argument("--monitor", dest="monitor", action="store_true",
+        self.__run_parser.add_argument("-m", "--monitor", dest="monitor", action="store_true",
                                        help="Monitor script execution all the way to the end.")
         self.__run_parser.add_argument("--timeout", dest="timeout", default=120., type=float,
                                        help="Timeout for monitoring scripts.")
@@ -246,49 +256,60 @@ class RequestCmd(Cmd):
         """
         self.__run_parser.print_help()
 
+    def parse_log_level(self, strlevel):
+        level = LOG_LEVEL_DICT.get(strlevel.lower())
+        if level is None:
+            try:
+                level = int(strlevel)
+            except ValueError:
+                raise CmdError(f"*** Log level {strlevel!r} must be one of "
+                               f"{tuple(LOG_LEVEL_DICT.keys())} or an integer")
+        return level
+
     def do_set_log_level(self, args):
         """Set log level of the shell script.
 
         Parameters
         ----------
         args : str
-            A string that can be converted to an int.
+            A string that is a level name or can be converted to an int.
+            Allowed names are debug, info, warning, error, critical.
         """
-        try:
-            level = int(args)
-            logging.basicConfig(level=level)
-        except ValueError:
-            self.log.error(f"*** Could not parse {args!r} as two integers")
+        level = self.parse_log_level(args)
+        logging.basicConfig(level=level)
 
     def do_set_script_log_level(self, args):
-        """Set log level of a script.
+        """Set log level of a script: index, level: 10=DEBUG, 20
 
         Parameters
         ----------
         args : str
-            index level
-
+            Two space-separated values:
+            * Script SAL index
+            * log level as a name or integer; the allowed names are:
+              debug, info, warning, error, critical.
         """
         try:
             arglist = args.split()
             assert len(arglist) == 2
-            index, level = [int(arg) for arg in arglist]
-
-            self.log.debug(f"Setting script {index} log level to {level}")
-            self.model.set_script_log_level(index,
-                                            level)
+            index = int(arglist[0])
         except (AssertionError, ValueError):
-            self.log.error(f"*** Could not parse {args!r} as two integers")
+            self.log.error(f"*** Could not parse {args!r} as: script_index log_level")
+            return
+        level = self.parse_log_level(arglist[1])
+
+        self.log.debug(f"Setting script {index} log level to {level}")
+        try:
+            self.model.set_script_log_level(index, level)
+        except KeyError:
+            self.log.error(f"*** Unknown script {index}")
 
     def do_set_queue_log_level(self, args):
         """Set log level of the queue.
         """
-        try:
-            level = int(args)
-            self.log.debug(f"Setting queue log level to {level}")
-            self.model.set_queue_log_level(level)
-        except ValueError:
-            self.log.error(f"*** Could not parse {args!r} as two integers")
+        level = self.parse_log_level(args)
+        self.log.debug(f"Setting queue log level to {level}")
+        self.model.set_queue_log_level(level)
 
     def monitor_script(self, salindex):
         """Monitor the execution of a script. Will block until
@@ -315,5 +336,7 @@ class RequestCmd(Cmd):
             return super().onecmd(*args)
         except AckError as ack_err:
             self.log.error(f"Failed with ack.result={ack_err.ack.result}")
+        except CmdError as e:
+            self.log.error(f"*** {e.args[0]}")
         except Exception as e:
             self.log.exception(e)

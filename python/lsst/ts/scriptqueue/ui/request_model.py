@@ -231,7 +231,9 @@ class RequestModel:
         if self.state.scripts[index]['remote'] is None:
             self.get_script_remote(index)
 
-        self.state.scripts[index]['remote'].cmd_setLogLevel.set(level=level)
+        remote = self.state.scripts[index]['remote']
+        remote.cmd_setLogLevel.set(level=level)
+        self.run(remote.cmd_setLogLevel.start(timeout=self.cmd_timeout))
 
     def listen_heartbeat(self):
         """Listen for queue heartbeats."""
@@ -246,8 +248,10 @@ class RequestModel:
         if (info["process_state"] < ScriptProcessState.DONE and
                 self.state.scripts[salindex]['remote'] is None):
             self.log.debug('Starting script remote')
-            self.state.scripts[salindex]['remote'] = salobj.Remote(SALPY_Script, salindex)
-            self.state.scripts[salindex]['remote'].cmd_setLogLevel.set(level=10)
+            remote = salobj.Remote(SALPY_Script, salindex)
+            self.state.scripts[salindex]['remote'] = remote
+            remote.cmd_setLogLevel.set(level=10)
+            self.run(remote.cmd_setLogLevel.start(timeout=self.cmd_timeout))
         elif info["process_state"] >= ScriptProcessState.DONE:
             raise RuntimeError(f"Script {salindex} in a final state.")
 

@@ -8,7 +8,7 @@ from lsst.ts.scriptqueue import ScriptState, ScriptProcessState
 class QueueState:
 
     def __init__(self):
-        """A class to represent the state of the Script Queue for the User Interface model.
+        """State of the Script Queue for the User Interface model.
         """
         self.log = logging.getLogger(__name__)
 
@@ -68,10 +68,10 @@ class QueueState:
         self.clear_scripts()
 
     def clear_scripts(self):
-        """Remove items from `self.scripts` if they are not in the queue anymore.
+        """Remove items from `self.scripts` that are no longer in the queue.
 
-        Script index should either be in `self._queue_script_indices`, `self._past_script_indices` or
-        `self._current_script_index` otherwise they will be removed.
+        Script indices will be removed if not in `self._queue_script_indices`,
+        `self._past_script_indices` or `self._current_script_index`.
         """
 
         current_indices = list(self.scripts.keys())

@@ -145,7 +145,10 @@ class RequestCmd(Cmd):
         return 0
 
     def do_terminate(self, args):
-        """Terminate list of scripts. Similar to stop but will set `terminate` flag to True.
+        """Terminate scripts.
+
+        Similar to stop but terminates a running script without giving
+        it time to clean up.
 
         Parameters
         ----------

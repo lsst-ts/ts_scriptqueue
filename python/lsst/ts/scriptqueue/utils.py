@@ -54,7 +54,8 @@ def configure_logging(verbose=0, console_format=None, filename=None):
 
     logging.basicConfig(level=main_level, format=console_format)
     logging.captureWarnings(True)
-    # Remove old console logger as it will double up messages when levels match.
+    # Remove old console logger, as it will double up messages
+    # when levels match.
     logging.getLogger().removeHandler(logging.getLogger().handlers[0])
 
     ch = logging.StreamHandler()

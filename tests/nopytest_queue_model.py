@@ -690,7 +690,8 @@ class QueueModelTestCase(unittest.TestCase):
             await self.assert_next_queue(running=True, current_sal_index=i0+1, wait=True,
                                          sal_indices=[i0+5, i0+3, i0+4, i0+2], past_sal_indices=[i0])
 
-            # now pause the queue and wait for all remaining scripts to be runnable, then resume
+            # now pause the queue and wait for all remaining scripts
+            # to be runnable, then resume
             self.model.running = False
             await self.wait_runnable(i0+2, i0+3, i0+4, i0+5)
             self.model.running = True

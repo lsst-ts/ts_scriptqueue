@@ -297,7 +297,8 @@ class BaseScriptTestCase(unittest.TestCase):
             self.assertEqual(script.state.lastCheckpoint, checkpoint_named_start)
             self.assertEqual(script.state.state, ScriptState.STOPPED)
             duration = time.time() - start_time
-            # we did not wait because the script right after pausing at the "start" checkpoint
+            # the script ran quickly because we stopped the script
+            # just as soon as it paused at the "start" checkpoint
             desired_duration = script.final_state_delay
             print(f"test_stop_while_paused duration={duration:0.2f}")
             self.assertGreater(duration, 0.0)
@@ -353,7 +354,8 @@ class BaseScriptTestCase(unittest.TestCase):
                 self.assertEqual(script.state.lastCheckpoint, desired_checkpoint)
                 self.assertEqual(script.state.state, ScriptState.FAILED)
                 duration = time.time() - start_time
-                # if fail_run then failed before waiting, otherwise failed after
+                # if fail_run then failed before waiting,
+                # otherwise failed after
                 desired_duration = (0 if fail_run else wait_time) + script.final_state_delay
                 print(f"test_fail duration={duration:0.2f} with fail_run={fail_run}")
                 self.assertLess(abs(duration - desired_duration), 0.2)

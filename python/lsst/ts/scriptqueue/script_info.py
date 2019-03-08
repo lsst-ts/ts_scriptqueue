@@ -31,7 +31,6 @@ import SALPY_ScriptQueue
 from .base_script import ScriptState
 
 _CONFIGURE_TIMEOUT = 60  # seconds
-_STATE_TIMEOUT = 30  # seconds; includes time to make Script SAL component
 
 
 class ScriptProcessState(enum.IntEnum):
@@ -358,6 +357,8 @@ class ScriptInfo:
                 raise RuntimeError(f"Cannot configure script because it is in state {self.script_state} "
                                    f"instead of {ScriptState.UNCONFIGURED}")
 
+            # without this sleep the configuration command is sometimes lost
+            await asyncio.sleep(0.1)
             self.remote.cmd_configure.set(config=self.config)
             await self.remote.cmd_configure.start(timeout=_CONFIGURE_TIMEOUT)
         except Exception:

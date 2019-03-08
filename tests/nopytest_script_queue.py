@@ -231,7 +231,8 @@ class ScriptQueueTestCase(unittest.TestCase):
             # may start up with no script running)
             await self.wait_runnable(I0+1, I0+2, I0+3)
 
-            # get script state for a script that has been configured but is not running
+            # get script state for a script that has been configured
+            # but is not running
             self.remote.cmd_showScript.set(salIndex=I0+3)
             await self.remote.cmd_showScript.start(timeout=2)
             script_data = self.remote.evt_script.get()
@@ -693,8 +694,8 @@ class ScriptQueueTestCase(unittest.TestCase):
             await self.remote.cmd_showQueue.start(timeout=2)
             await self.assert_next_queue(enabled=True, running=True)
 
-            # make sure disabling the queue outputs the queue event with runnable False
-            # and disables the showQueue command.
+            # make sure disabling the queue outputs the queue event,
+            # with runnable False, and disables the showQueue command.
             await self.remote.cmd_disable.start(timeout=2)
             await self.assert_next_queue(enabled=False, running=True)
             with self.assertRaises(asyncio.TimeoutError):

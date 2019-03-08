@@ -13,12 +13,15 @@ from .queue_state import QueueState
 
 
 class RequestModel:
-    """A model class that represents the user interface to the queue. It stores the current
-    state of the queue as well as for scripts in the queue. It provides methods to update its
-    internal information and also callback functions that can be scheduled to update in an event loop.
+    """Model for the script queue user interface.
 
-    It also provides methods to send request to the queue and methods to monitor the state of
-    executing script. It relies heavily in the ability of SAL to retrieve late joiner information.
+    It stores the current state of the queue and of scripts in the queue.
+    It provides methods to update its internal information and callback
+    functions that can be scheduled to update in an event loop.
+
+    It also provides methods to send request to the queue and methods to
+    monitor the state of an executing script. It relies heavily on the ability
+    of SAL to retrieve late joiner information.
     """
 
     def __init__(self, index):
@@ -38,19 +41,21 @@ class RequestModel:
         """Store the overall state of the queue.
         """
 
-        # Initialize information about the queue. If the queue is not enable or offline state
-        # will be left unchanged.
+        # Initialize information about the queue. If the queue is not in
+        # enable or offline state it will be left unchanged.
         if self.query_queue_state() < 0:
             self.log.warning("Could not get state of the queue. Make sure queue is running and is "
                              "in enabled state.")
             return
 
-        self.query_scripts_info()  # This will force the queue to output the state of all its scripts
-        self.update_scripts_info()  # Now update the internal information
+        self.query_scripts_info()  # Ask the queue for the state of all scripts
+        self.update_scripts_info()  # Update the internal information
 
     def enable_queue(self):
-        """A method to enable the queue. It will try to identify the current state of the
-        queue and if it fails, assumes the queue is in STANDBY.
+        """Enable the script queue.
+
+        It will try to identify the current state of the queue and if it fails,
+        assumes the queue is in STANDBY.
         """
         try:
             self.run(salobj.enable_csc(self.queue, timeout=self.cmd_timeout))
@@ -87,9 +92,11 @@ class RequestModel:
         Returns
         -------
         available_scripts : `dict` [`str`, `list` [`str`]]
-            A dictionary with the available "external" and "standard" scripts. Each
-            script is represented by their relative paths as seen by the queue.
-
+            A dictionary containing two items:
+            * "standard": a list of paths to standard scripts
+            * "external": a list of paths to external scripts
+            The paths are as reported by the script queue
+            and used when adding a script.
         """
 
         script_list = self.queue.evt_availableScripts.get()
@@ -114,10 +121,11 @@ class RequestModel:
         self.run(self.queue.cmd_resume.start(timeout=self.cmd_timeout))
 
     def quit_queue(self):
-        """Quit queue by sending it to exit control. Assume the queue is in enable state
-        but if it is not, will skip the rejected commands for disable and standby.
-        """
+        """Quit queue by sending it to exit control.
 
+        Assume the queue is in enable state but if it is not,
+        ignore the rejected commands for disable and standby.
+        """
         try:
             self.run(self.queue.cmd_disable.start(timeout=self.cmd_timeout))
         except Exception:
@@ -142,10 +150,8 @@ class RequestModel:
         ----------
         sal_indices : list(int)
             A list of script indices to stop.
-
         terminate : bool
             Should the script be terminated?
-
         """
         topic = self.queue.cmd_stopScripts.DataType()
         for i in range(len(sal_indices)):
@@ -156,14 +162,12 @@ class RequestModel:
         self.run(self.queue.cmd_stopScripts.start(topic, timeout=self.cmd_timeout))
 
     def get_queue_state(self):
-        """A method to get the state of the queue and the scripts running on the queue.
+        """Get the state of the queue and the scripts running on the queue.
 
         Returns
         -------
         state : dict
-
         """
-
         self.update_queue_state()
 
         self.update_scripts_info()
@@ -187,7 +191,6 @@ class RequestModel:
         salindex : int
             The salindex of the script added to the queue.
         """
-
         self.queue.cmd_add.set(isStandard=is_standard,
                                path=path,
                                config=config,
@@ -206,7 +209,6 @@ class RequestModel:
         ----------
         level : int
             Log level; error=40, warning=30, info=20, debug=10
-
         """
         self.queue.cmd_setLogLevel.set(level=level)
         self.run(self.queue.cmd_setLogLevel.start(timeout=self.cmd_timeout))
@@ -217,15 +219,21 @@ class RequestModel:
         Parameters
         ----------
         index : int
-            Script index. It will raise an exception if the script is not in the queue.
+            Script index.
         level : int
             Log level.
 
+        Raises
+        ------
+        KeyError
+            If the script is not on the queue.
         """
         if self.state.scripts[index]['remote'] is None:
             self.get_script_remote(index)
 
-        self.state.scripts[index]['remote'].cmd_setLogLevel.set(level=level)
+        remote = self.state.scripts[index]['remote']
+        remote.cmd_setLogLevel.set(level=level)
+        self.run(remote.cmd_setLogLevel.start(timeout=self.cmd_timeout))
 
     def listen_heartbeat(self):
         """Listen for queue heartbeats."""
@@ -234,15 +242,16 @@ class RequestModel:
 
     def get_script_remote(self, salindex):
         """Listen for a script log messages."""
-
         self.update_scripts_info()
         info = self.state.scripts[salindex]
 
         if (info["process_state"] < ScriptProcessState.DONE and
                 self.state.scripts[salindex]['remote'] is None):
             self.log.debug('Starting script remote')
-            self.state.scripts[salindex]['remote'] = salobj.Remote(SALPY_Script, salindex)
-            self.state.scripts[salindex]['remote'].cmd_setLogLevel.set(level=10)
+            remote = salobj.Remote(SALPY_Script, salindex)
+            self.state.scripts[salindex]['remote'] = remote
+            remote.cmd_setLogLevel.set(level=10)
+            self.run(remote.cmd_setLogLevel.start(timeout=self.cmd_timeout))
         elif info["process_state"] >= ScriptProcessState.DONE:
             raise RuntimeError(f"Script {salindex} in a final state.")
 
@@ -267,7 +276,10 @@ class RequestModel:
         self.state.update(queue)
 
     def update_queue_state(self):
-        """Run `get_oldest` in `self.queue.evt_queue` until there is nothing left.
+        """Update the internal queue state from the queue event.
+
+        Run `get_oldest` in `self.queue.evt_queue` until there is nothing left
+        and return a count of the number of entries read.
 
         Returns
         -------
@@ -313,7 +325,10 @@ class RequestModel:
         self.state.update_script_info(info)
 
     def update_scripts_info(self):
-        """Run `get_oldest` in `self.queue.evt_script` and pass it to `self.parse_script_info`
+        """Update internal script info from the `script` event.
+
+        Run `get_oldest` in `self.queue.evt_script`
+        and pass it to `self.parse_script_info`
         until there is nothing left.
         """
         updated = []
@@ -395,9 +410,8 @@ class RequestModel:
 
             if self.state.scripts[salindex]["process_state"] >= ScriptProcessState.DONE:
                 return
-            # I won't set a timeout here because a script may never send a log message
-            # or may be running a long task where it won't be logging at all, like
-            # during a long exposure.
+            # Don't set a timeout because we cannot predict when, if ever,
+            # scripts will output log messages.
             log_message = await self.state.scripts[salindex]['remote'].evt_logMessage.next(flush=False)
             self.log.log(log_message.level,
                          f'[{salindex}]:{log_message.message}{log_message.traceback}')
@@ -412,9 +426,8 @@ class RequestModel:
         """
 
         while True:
-            # I won't set a timeout here because a script state may be unchanged for a really
-            # long period of time. For instance, during a long exposure.
-
+            # Don't set a timeout because we cannot predict when script state
+            # will change.
             info = await self.queue.evt_script.next(flush=False)
             self.state.update_script_info(info)
 
@@ -434,9 +447,8 @@ class RequestModel:
 
         """
         while True:
-            # I won't set a timeout here because a script may be running a long task
-            # and not reporting any new checkpoint for a really
-            # long period of time. For instance, during a long exposure.
+            # Don't set a timeout because we cannot predict when, if ever,
+            # scripts will output checkpoint events.
             state = await self.state.scripts[salindex]['remote'].evt_state.next(flush=False)
             self.log.debug(f"[{salindex}]:[checkpoint]{state.lastCheckpoint}")
 

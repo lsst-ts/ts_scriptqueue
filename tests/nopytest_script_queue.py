@@ -750,7 +750,7 @@ class CmdLineTestCase(unittest.TestCase):
                 summaryState_data = await remote.evt_summaryState.next(flush=False, timeout=10)
                 self.assertEqual(summaryState_data.summaryState, salobj.State.OFFLINE)
 
-                await asyncio.wait_for(process.wait(), 2)
+                await asyncio.wait_for(process.wait(), timeout=5)
             except Exception:
                 if process.returncode is None:
                     process.terminate()

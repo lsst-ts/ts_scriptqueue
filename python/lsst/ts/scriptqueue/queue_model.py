@@ -440,7 +440,7 @@ class QueueModel:
             try:
                 await script_info.remote.cmd_stop.start(timeout=2)
                 # give the process time to terminate
-                await asyncio.wait_for(script_info.process.wait(), timeout=2)
+                await asyncio.wait_for(script_info.process.wait(), timeout=5)
                 # let the script be removed or moved
                 await asyncio.sleep(0)
                 return

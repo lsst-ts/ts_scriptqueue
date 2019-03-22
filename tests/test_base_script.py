@@ -409,7 +409,7 @@ class BaseScriptTestCase(unittest.TestCase):
 
                         await remote.cmd_run.start(timeout=3)
 
-                        await asyncio.wait_for(process.wait(), timeout=2)
+                        await asyncio.wait_for(process.wait(), timeout=5)
                         if fail:
                             self.assertEqual(process.returncode, 1)
                         else:

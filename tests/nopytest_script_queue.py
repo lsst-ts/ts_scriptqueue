@@ -31,6 +31,7 @@ from lsst.ts import salobj
 from lsst.ts import scriptqueue
 
 I0 = scriptqueue.script_queue.SCRIPT_INDEX_MULT  # initial Script SAL index
+STANDARD_TIMEOUT = 2
 
 
 class ScriptQueueTestCase(unittest.TestCase):
@@ -109,7 +110,7 @@ class ScriptQueueTestCase(unittest.TestCase):
         self.assertEqual(list(queue_data.salIndices[0:queue_data.length]), list(salIndices))
         self.assertEqual(list(queue_data.pastSalIndices[0:queue_data.pastLength]), list(pastSalIndices))
 
-    def test_add(self):
+    def xtest_add(self):
         """Test add, remove and showScript."""
         is_standard = False
         path = "script1"
@@ -286,7 +287,7 @@ class ScriptQueueTestCase(unittest.TestCase):
 
         asyncio.get_event_loop().run_until_complete(doit())
 
-    def test_processState(self):
+    def xtest_processState(self):
         """Test the processState value of the queue event.
         """
         is_standard = True
@@ -374,7 +375,28 @@ class ScriptQueueTestCase(unittest.TestCase):
 
         asyncio.get_event_loop().run_until_complete(doit())
 
-    def test_move(self):
+    def test_unloadable_script(self):
+        """Test adding a script that fails while loading.
+        """
+        async def doit():
+            await self.assert_next_queue(enabled=False, running=True)
+
+            await self.remote.cmd_enable.start(timeout=STANDARD_TIMEOUT)
+            await self.assert_next_queue(enabled=True, running=True)
+
+            self.remote.cmd_add.set(
+                isStandard=True,
+                path="unloadable",
+                config="",
+                location=SALPY_ScriptQueue.add_Last,
+                locationSalIndex=0,
+                descr="test_unloadable_script",
+            )
+            await self.remote.cmd_add.start(timeout=STANDARD_TIMEOUT)
+
+        asyncio.get_event_loop().run_until_complete(doit())
+
+    def xtest_move(self):
         """Test move, pause and showQueue
         """
         async def doit():
@@ -513,7 +535,7 @@ class ScriptQueueTestCase(unittest.TestCase):
 
         asyncio.get_event_loop().run_until_complete(doit())
 
-    def test_requeue(self):
+    def xtest_requeue(self):
         """Test requeue, move and terminate
         """
         async def doit():
@@ -643,7 +665,7 @@ class ScriptQueueTestCase(unittest.TestCase):
 
         asyncio.get_event_loop().run_until_complete(doit())
 
-    def test_showAvailableScripts(self):
+    def xtest_showAvailableScripts(self):
         async def doit():
             # make sure showAvailableScripts fails when not enabled
             with self.assertRaises(salobj.AckError):
@@ -660,7 +682,8 @@ class ScriptQueueTestCase(unittest.TestCase):
 
             available_scripts1 = await self.remote.evt_availableScripts.next(flush=False, timeout=2)
 
-            expected_std_set = set(["script1", "script2", "subdir/script3", "subdir/subsubdir/script4"])
+            expected_std_set = set(["script1", "script2", "unloadable",
+                                    "subdir/script3", "subdir/subsubdir/script4"])
             expected_ext_set = set(["script1", "script5", "subdir/script3", "subdir/script6"])
             for available_scripts in (available_scripts0, available_scripts1):
                 standard_set = set(available_scripts.standard.split(":"))
@@ -676,7 +699,7 @@ class ScriptQueueTestCase(unittest.TestCase):
 
         asyncio.get_event_loop().run_until_complete(doit())
 
-    def test_showQueue(self):
+    def xtest_showQueue(self):
         async def doit():
             await self.assert_next_queue(enabled=False, running=True)
 
@@ -730,7 +753,7 @@ class CmdLineTestCase(unittest.TestCase):
         self.externalpath = os.path.join(self.datadir, "external")
         self.process = None
 
-    def test_run(self):
+    def xtest_run(self):
         exe_name = "run_script_queue.py"
         exe_path = shutil.which(exe_name)
         if exe_path is None:

@@ -46,6 +46,8 @@ class ScriptProcessState(enum.IntEnum):
     """Script running."""
     DONE = SALPY_ScriptQueue.script_Done
     """Script completed."""
+    LOADFAILED = SALPY_ScriptQueue.script_LoadFailed
+    """Script could not be loaded."""
     CONFIGUREFAILED = SALPY_ScriptQueue.script_ConfigureFailed
     """Script failed in the configuration step."""
     TERMINATED = SALPY_ScriptQueue.script_Terminated
@@ -85,10 +87,21 @@ class ScriptInfo:
         self.script_state = 0
         """Most recent state reported by the Script, or 0 if the script
         is not yet loaded."""
-        self.timestamp = 0
+        self.timestamp_process_start = 0
         """Time at which the script process was started. 0 before that."""
-        self.duration = 0
-        """Duration of ``task`` (seconds), or 0 if still running."""
+        self.timestamp_configure_start = 0
+        """Time at which the _configure method was started. 0 before that.
+
+        Note: under unusual circumstances the _configure method may fail
+        before the configure command is sent to the task.
+        """
+        self.timestamp_configure_end = 0
+        """Time at which the configure command finished (succeeded or failed).
+        0 before that."""
+        self.timestamp_run_start = 0
+        """Time at which the script started running. 0 before that."""
+        self.timestamp_process_end = 0
+        """Time at which the script process finished. 0 before that."""
         self.create_process_task = None
         """Task for creating self.process, or None if just beginning to load.
         """
@@ -114,7 +127,6 @@ class ScriptInfo:
         """Task awaiting configuration to complete,
         or None if not yet started."""
         self._callback = None
-        self._run_started = False  # `run` successfully called
 
         # The following guarantees that if we terminate a process
         # and it sucessfully stops, then we can report it as terminated;
@@ -149,9 +161,14 @@ class ScriptInfo:
         return self._configure_run and self.config_task.exception() is not None
 
     @property
+    def load_failed(self):
+        """True if the script could not be loaded."""
+        return self.process_done and self.timestamp_configure_start == 0
+
+    @property
     def running(self):
         """True if the script was commanded to run and is not done."""
-        return self._run_started and not self.process_done
+        return self.timestamp_run_start > 0 and not self.process_done
 
     @property
     def process_done(self):
@@ -198,7 +215,9 @@ class ScriptInfo:
 
         One of the ``ScriptProcessState`` enumeration constants.
         """
-        if self.configure_failed:
+        if self.load_failed:
+            return ScriptProcessState.LOADFAILED
+        elif self.configure_failed:
             return ScriptProcessState.CONFIGUREFAILED
         elif self.terminated:
             return ScriptProcessState.TERMINATED
@@ -224,8 +243,8 @@ class ScriptInfo:
         """
         if not self.runnable:
             raise RuntimeError("Script is not runnable")
-        self._run_started = True
         asyncio.ensure_future(self.remote.cmd_run.start())
+        self.timestamp_run_start = self.salinfo.manager.getCurrentTime()
 
     @property
     def runnable(self):
@@ -235,7 +254,7 @@ class ScriptInfo:
         the process must not have finished,
         and ``run`` must not have been called.
         """
-        return self.configured and not (self.process_done or self._run_started)
+        return self.configured and not (self.process_done or self.timestamp_run_start > 0)
 
     async def start_loading(self, fullpath):
         """Start the script process and start a task that will configure
@@ -250,6 +269,7 @@ class ScriptInfo:
             # this can happen if the user stops a script with stopScript
             # while the script is being added
             return
+        self._run_callback()  # report loading
         initialpath = os.environ["PATH"]
         scriptdir, scriptname = os.path.split(fullpath)
         try:
@@ -257,7 +277,7 @@ class ScriptInfo:
             self.create_process_task = asyncio.ensure_future(
                 asyncio.create_subprocess_exec(scriptname, str(self.index)))
             self.process = await self.create_process_task
-            self.timestamp = self.salinfo.manager.getCurrentTime()
+            self.timestamp_process_start = self.salinfo.manager.getCurrentTime()
             self.process_task = asyncio.ensure_future(self.process.wait())
             self.process_task.add_done_callback(self._cleanup)
             await self._add_remote()
@@ -266,6 +286,26 @@ class ScriptInfo:
             raise
         finally:
             os.environ["PATH"] = initialpath
+
+    @property
+    def process_duration(self):
+        """How long the script process was alive (sec).
+
+        0 if the process has not yet started or is still running.
+        """
+        if self.timestamp_process_start > 0 and self.timestamp_process_end > 0:
+            return self.timestamp_process_end - self.timestamp_process_start
+        return 0
+
+    @property
+    def run_duration(self):
+        """How long it took to run the script (sec).
+
+        0 if the script has not been run, or is still running.
+        """
+        if self.timestamp_run_start > 0 and self.timestamp_process_end > 0:
+            return self.timestamp_process_end - self.timestamp_run_start
+        return 0
 
     def terminate(self):
         """Terminate the script.
@@ -324,6 +364,9 @@ class ScriptInfo:
 
         loop = asyncio.get_event_loop()
         await loop.run_in_executor(None, thread_func)
+        if self.remote is None:
+            # this may occur if the script cannot be executed
+            return
         self.remote.evt_state.callback = self._script_state_callback
         if self.verbose:
             self.remote.evt_logMessage.callback = self._log_message_callback
@@ -331,11 +374,11 @@ class ScriptInfo:
     def _cleanup(self, returncode=None):
         """Clean up when the Script subprocess exits.
 
-        Set the duration, cancel the config task if necessary,
+        Set the timestamp_process_end, cancel the config task if necessary,
         and delete the remote and the salinfo as they are no
         longer useful and consume resources.
         """
-        self.duration = self.salinfo.manager.getCurrentTime() - self.timestamp
+        self.timestamp_process_end = self.salinfo.manager.getCurrentTime()
         if self.config_task and not self.config_task.done():
             self.config_task.cancel()
         self.remote = None
@@ -362,16 +405,18 @@ class ScriptInfo:
             self.remote.cmd_configure.set(config=self.config)
             await self.remote.cmd_configure.start(timeout=_CONFIGURE_TIMEOUT)
         except Exception:
-            # terminate the script but first let configure_task fail
+            # terminate the script but first let the configure_task fail
             asyncio.ensure_future(self._start_terminate())
             raise
+        finally:
+            self.timestamp_configure_end = self.salinfo.manager.getCurrentTime()
 
     async def _start_terminate(self):
         self.terminate()
 
     @property
     def _configure_run(self):
-        """Return True if the configure command was run."""
+        """Return True if the _configure method was run."""
         return self.config_task is not None and self.config_task.done()
 
     def _log_message_callback(self, data):
@@ -395,6 +440,7 @@ class ScriptInfo:
     def _script_state_callback(self, state):
         self.script_state = state.state
         if self.script_state == ScriptState.UNCONFIGURED and self.config_task is None:
+            self.timestamp_configure_start = self.salinfo.manager.getCurrentTime()
             self.config_task = asyncio.ensure_future(self._configure())
             self.config_task.add_done_callback(self._run_callback)
             self.start_task.set_result(None)

@@ -110,7 +110,7 @@ class ScriptQueueTestCase(unittest.TestCase):
         self.assertEqual(list(queue_data.salIndices[0:queue_data.length]), list(salIndices))
         self.assertEqual(list(queue_data.pastSalIndices[0:queue_data.pastLength]), list(pastSalIndices))
 
-    def xtest_add(self):
+    def test_add(self):
         """Test add, remove and showScript."""
         is_standard = False
         path = "script1"
@@ -158,8 +158,8 @@ class ScriptQueueTestCase(unittest.TestCase):
             self.assertEqual(script_data.isStandard, is_standard)
             self.assertEqual(script_data.path, path)
             self.assertEqual(script_data.processState, SALPY_ScriptQueue.script_Loading)
-            self.assertGreater(script_data.timestamp, 0)
-            self.assertEqual(script_data.duration, 0)
+            self.assertGreater(script_data.timestampProcessStart, 0)
+            self.assertEqual(script_data.timestampProcessEnd, 0)
 
             # add script I0+1 last: test add last
             add_data = make_add_data(location=SALPY_ScriptQueue.add_Last)
@@ -242,8 +242,8 @@ class ScriptQueueTestCase(unittest.TestCase):
             self.assertEqual(script_data.isStandard, is_standard)
             self.assertEqual(script_data.path, path)
             self.assertEqual(script_data.processState, SALPY_ScriptQueue.script_Configured)
-            self.assertGreater(script_data.timestamp, 0)
-            self.assertEqual(script_data.duration, 0)
+            self.assertGreater(script_data.timestampProcessStart, 0)
+            self.assertEqual(script_data.timestampProcessEnd, 0)
 
             await self.remote.cmd_resume.start(timeout=60)
             await self.assert_next_queue(running=True, currentSalIndex=I0+2,
@@ -258,8 +258,8 @@ class ScriptQueueTestCase(unittest.TestCase):
             self.assertEqual(script_data.isStandard, is_standard)
             self.assertEqual(script_data.path, path)
             self.assertEqual(script_data.processState, SALPY_ScriptQueue.script_Running)
-            self.assertGreater(script_data.timestamp, 0)
-            self.assertEqual(script_data.duration, 0)
+            self.assertGreater(script_data.timestampProcessStart, 0)
+            self.assertEqual(script_data.timestampProcessEnd, 0)
 
             await self.assert_next_queue(running=True, currentSalIndex=I0+1,
                                          salIndices=[I0+3], pastSalIndices=[I0+2])
@@ -277,8 +277,10 @@ class ScriptQueueTestCase(unittest.TestCase):
             self.assertEqual(script_data.isStandard, is_standard)
             self.assertEqual(script_data.path, path)
             self.assertEqual(script_data.processState, SALPY_ScriptQueue.script_Done)
-            self.assertGreater(script_data.timestamp, 0)
-            self.assertGreater(script_data.duration, 0.9)  # wait time is 1
+            self.assertGreater(script_data.timestampProcessStart, 0)
+            self.assertGreater(script_data.timestampProcessEnd, 0)
+            process_duration = script_data.timestampProcessEnd - script_data.timestampProcessStart
+            self.assertGreater(process_duration, 0.9)  # wait time is 1
 
             # get script state for non-existent script
             self.remote.cmd_showScript.set(salIndex=3579)
@@ -287,7 +289,7 @@ class ScriptQueueTestCase(unittest.TestCase):
 
         asyncio.get_event_loop().run_until_complete(doit())
 
-    def xtest_processState(self):
+    def test_processState(self):
         """Test the processState value of the queue event.
         """
         is_standard = True
@@ -394,9 +396,18 @@ class ScriptQueueTestCase(unittest.TestCase):
             )
             await self.remote.cmd_add.start(timeout=STANDARD_TIMEOUT)
 
+            await self.assert_next_queue(enabled=True, running=True, salIndices=[I0])
+
+            script_data0 = await self.remote.evt_script.next(flush=False, timeout=STANDARD_TIMEOUT)
+            self.assertEqual(script_data0.processState, SALPY_ScriptQueue.script_Loading)
+            script_data0 = await self.remote.evt_script.next(flush=False, timeout=STANDARD_TIMEOUT)
+            self.assertEqual(script_data0.processState, SALPY_ScriptQueue.script_LoadFailed)
+
+            await self.assert_next_queue(enabled=True, running=True)
+
         asyncio.get_event_loop().run_until_complete(doit())
 
-    def xtest_move(self):
+    def test_move(self):
         """Test move, pause and showQueue
         """
         async def doit():
@@ -535,7 +546,7 @@ class ScriptQueueTestCase(unittest.TestCase):
 
         asyncio.get_event_loop().run_until_complete(doit())
 
-    def xtest_requeue(self):
+    def test_requeue(self):
         """Test requeue, move and terminate
         """
         async def doit():
@@ -665,7 +676,7 @@ class ScriptQueueTestCase(unittest.TestCase):
 
         asyncio.get_event_loop().run_until_complete(doit())
 
-    def xtest_showAvailableScripts(self):
+    def test_showAvailableScripts(self):
         async def doit():
             # make sure showAvailableScripts fails when not enabled
             with self.assertRaises(salobj.AckError):
@@ -699,7 +710,7 @@ class ScriptQueueTestCase(unittest.TestCase):
 
         asyncio.get_event_loop().run_until_complete(doit())
 
-    def xtest_showQueue(self):
+    def test_showQueue(self):
         async def doit():
             await self.assert_next_queue(enabled=False, running=True)
 
@@ -753,7 +764,7 @@ class CmdLineTestCase(unittest.TestCase):
         self.externalpath = os.path.join(self.datadir, "external")
         self.process = None
 
-    def xtest_run(self):
+    def test_run(self):
         exe_name = "run_script_queue.py"
         exe_path = shutil.which(exe_name)
         if exe_path is None:

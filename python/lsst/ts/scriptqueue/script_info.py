@@ -269,16 +269,18 @@ class ScriptInfo:
             # this can happen if the user stops a script with stopScript
             # while the script is being added
             return
-        self._run_callback()  # report loading
         initialpath = os.environ["PATH"]
-        scriptdir, scriptname = os.path.split(fullpath)
         try:
+            scriptdir, scriptname = os.path.split(fullpath)
             os.environ["PATH"] = scriptdir + ":" + initialpath
             self.create_process_task = asyncio.ensure_future(
                 asyncio.create_subprocess_exec(scriptname, str(self.index)))
             self.process = await self.create_process_task
-            self.timestamp_process_start = self.salinfo.manager.getCurrentTime()
             self.process_task = asyncio.ensure_future(self.process.wait())
+            self.timestamp_process_start = self.salinfo.manager.getCurrentTime()
+            self._run_callback()
+            # note: process_task may already be done if the script cannot
+            # be run, in which case the callback will be called immediately
             self.process_task.add_done_callback(self._cleanup)
             await self._add_remote()
         except Exception:
@@ -286,6 +288,8 @@ class ScriptInfo:
             raise
         finally:
             os.environ["PATH"] = initialpath
+            if not self.timestamp_process_start == 0:
+                self._run_callback()
 
     @property
     def process_duration(self):
@@ -330,16 +334,13 @@ class ScriptInfo:
         * If the process is running then terminate it by sending SIGTERM.
         * If the process is being started then cancel that.
         """
-        run_callback = False
         if not self.process_done:
             self._terminated = True
             if self.create_process_task is not None and not self.create_process_task.done():
                 # cancel creating the process
                 self.create_process_task.cancel()
-                run_callback = True
             if self.process is not None:
                 self.process.terminate()
-        if run_callback:
             self._run_callback()
         return self._terminated
 

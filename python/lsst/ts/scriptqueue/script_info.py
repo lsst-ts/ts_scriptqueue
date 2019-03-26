@@ -291,26 +291,6 @@ class ScriptInfo:
             if not self.timestamp_process_start == 0:
                 self._run_callback()
 
-    @property
-    def process_duration(self):
-        """How long the script process was alive (sec).
-
-        0 if the process has not yet started or is still running.
-        """
-        if self.timestamp_process_start > 0 and self.timestamp_process_end > 0:
-            return self.timestamp_process_end - self.timestamp_process_start
-        return 0
-
-    @property
-    def run_duration(self):
-        """How long it took to run the script (sec).
-
-        0 if the script has not been run, or is still running.
-        """
-        if self.timestamp_run_start > 0 and self.timestamp_process_end > 0:
-            return self.timestamp_process_end - self.timestamp_run_start
-        return 0
-
     def terminate(self):
         """Terminate the script.
 

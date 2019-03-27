@@ -29,7 +29,8 @@ class FindScriptsTestCase(unittest.TestCase):
     def test_find_public_scripts(self):
         root = os.path.join(os.path.dirname(__file__), "data/standard")
         scripts = scriptqueue.find_public_scripts(root)
-        expectedscripts = set(("script1", "script2", "subdir/script3", "subdir/subsubdir/script4"))
+        expectedscripts = set(("script1", "script2", "unloadable",
+                               "subdir/script3", "subdir/subsubdir/script4"))
         self.assertEqual(set(scripts), expectedscripts)
 
 

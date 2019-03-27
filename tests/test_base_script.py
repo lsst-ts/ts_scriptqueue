@@ -33,6 +33,9 @@ from lsst.ts import salobj
 from lsst.ts.scriptqueue import ScriptState
 from lsst.ts.scriptqueue.test_utils import TestScript
 
+STD_TIMEOUT = 2
+LONG_TIMEOUT = 60
+
 index_gen = salobj.index_generator()
 
 
@@ -381,14 +384,14 @@ class BaseScriptTestCase(unittest.TestCase):
                     try:
                         self.assertIsNone(process.returncode)
 
-                        state = await remote.evt_state.next(flush=False, timeout=60)
+                        state = await remote.evt_state.next(flush=False, timeout=LONG_TIMEOUT)
                         self.assertEqual(state.state, ScriptState.UNCONFIGURED)
 
                         logLevel_data = remote.evt_logLevel.get()
                         self.assertEqual(logLevel_data.level, logging.WARNING)
                         setLogLevel_data = remote.cmd_setLogLevel.DataType()
                         setLogLevel_data.level = logging.INFO
-                        await remote.cmd_setLogLevel.start(setLogLevel_data, timeout=2)
+                        await remote.cmd_setLogLevel.start(setLogLevel_data, timeout=STD_TIMEOUT)
                         logLevel_data = remote.evt_logLevel.get()
                         self.assertEqual(logLevel_data.level, logging.INFO)
 
@@ -399,7 +402,7 @@ class BaseScriptTestCase(unittest.TestCase):
                             config = config + f"\n{fail}: True"
                         print(f"config={config}")
                         configure_data.config = config
-                        await remote.cmd_configure.start(configure_data, timeout=2)
+                        await remote.cmd_configure.start(configure_data, timeout=STD_TIMEOUT)
 
                         metadata = remote.evt_metadata.get()
                         self.assertEqual(metadata.duration, wait_time)
@@ -407,7 +410,7 @@ class BaseScriptTestCase(unittest.TestCase):
                         log_msg = remote.evt_logMessage.get()
                         self.assertEqual(log_msg.message, "Configure succeeded")
 
-                        await remote.cmd_run.start(timeout=3)
+                        await remote.cmd_run.start(timeout=STD_TIMEOUT)
 
                         await asyncio.wait_for(process.wait(), timeout=5)
                         if fail:

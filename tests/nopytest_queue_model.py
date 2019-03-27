@@ -30,6 +30,9 @@ import SALPY_ScriptQueue
 from lsst.ts import salobj
 from lsst.ts import scriptqueue
 
+STD_TIMEOUT = 10
+LONG_TIMEOUT = 60
+
 
 def _min_sal_index_generator():
     min_sal_index = 1000
@@ -201,41 +204,41 @@ class QueueModelTestCase(unittest.TestCase):
             # add script i0; queue is empty, so location is irrelevant
             add_kwargs = self.make_add_kwargs(location=SALPY_ScriptQueue.add_Last)
             i0 = add_kwargs["script_info"].index
-            await asyncio.wait_for(self.model.add(**add_kwargs), timeout=60)
+            await asyncio.wait_for(self.model.add(**add_kwargs), timeout=LONG_TIMEOUT)
             await self.assert_next_queue(sal_indices=[i0])
 
             # add script i0+1 last: test add last
             add_kwargs = self.make_add_kwargs(location=SALPY_ScriptQueue.add_Last)
-            await asyncio.wait_for(self.model.add(**add_kwargs), timeout=60)
+            await asyncio.wait_for(self.model.add(**add_kwargs), timeout=LONG_TIMEOUT)
             await self.assert_next_queue(sal_indices=[i0, i0+1])
 
             # add script i0+2 first: test add first
             add_kwargs = self.make_add_kwargs(location=SALPY_ScriptQueue.add_First)
-            await asyncio.wait_for(self.model.add(**add_kwargs), timeout=60)
+            await asyncio.wait_for(self.model.add(**add_kwargs), timeout=LONG_TIMEOUT)
             await self.assert_next_queue(sal_indices=[i0+2, i0, i0+1])
 
             # add script i0+3 after i0+1: test add after last
             add_kwargs = self.make_add_kwargs(location=SALPY_ScriptQueue.add_After,
                                               location_sal_index=i0+1)
-            await asyncio.wait_for(self.model.add(**add_kwargs), timeout=60)
+            await asyncio.wait_for(self.model.add(**add_kwargs), timeout=LONG_TIMEOUT)
             await self.assert_next_queue(sal_indices=[i0+2, i0, i0+1, i0+3])
 
             # add script i0+4 after i0+2: test add after not-last
             add_kwargs = self.make_add_kwargs(location=SALPY_ScriptQueue.add_After,
                                               location_sal_index=i0+2)
-            await asyncio.wait_for(self.model.add(**add_kwargs), timeout=60)
+            await asyncio.wait_for(self.model.add(**add_kwargs), timeout=LONG_TIMEOUT)
             await self.assert_next_queue(sal_indices=[i0+2, i0+4, i0, i0+1, i0+3])
 
             # add script i0+5 before i0+2: test add before first
             add_kwargs = self.make_add_kwargs(location=SALPY_ScriptQueue.add_Before,
                                               location_sal_index=i0+2)
-            await asyncio.wait_for(self.model.add(**add_kwargs), timeout=60)
+            await asyncio.wait_for(self.model.add(**add_kwargs), timeout=LONG_TIMEOUT)
             await self.assert_next_queue(sal_indices=[i0+5, i0+2, i0+4, i0, i0+1, i0+3])
 
             # add script i0+6 before i0: test add before not first
             add_kwargs = self.make_add_kwargs(location=SALPY_ScriptQueue.add_Before,
                                               location_sal_index=i0)
-            await asyncio.wait_for(self.model.add(**add_kwargs), timeout=60)
+            await asyncio.wait_for(self.model.add(**add_kwargs), timeout=LONG_TIMEOUT)
             await self.assert_next_queue(sal_indices=[i0+5, i0+2, i0+4, i0+6, i0, i0+1, i0+3])
 
             # try some failed adds
@@ -243,25 +246,26 @@ class QueueModelTestCase(unittest.TestCase):
             add_kwargs = self.make_add_kwargs(location=SALPY_ScriptQueue.add_First)
             add_kwargs["script_info"].path = "bogus_script_name"
             with self.assertRaises(ValueError):
-                await asyncio.wait_for(self.model.add(**add_kwargs), timeout=60)
+                await asyncio.wait_for(self.model.add(**add_kwargs), timeout=LONG_TIMEOUT)
             await self.assert_next_queue(sal_indices=[i0+5, i0+2, i0+4, i0+6, i0, i0+1, i0+3])
 
             # incorrect location
             add_kwargs = self.make_add_kwargs(location=25)
             with self.assertRaises(ValueError):
-                await asyncio.wait_for(self.model.add(**add_kwargs), timeout=60)
+                await asyncio.wait_for(self.model.add(**add_kwargs), timeout=LONG_TIMEOUT)
             await self.assert_next_queue(sal_indices=[i0+5, i0+2, i0+4, i0+6, i0, i0+1, i0+3])
 
             # incorrect location_sal_index
             add_kwargs = self.make_add_kwargs(location=SALPY_ScriptQueue.add_After,
                                               location_sal_index=4321)
             with self.assertRaises(ValueError):
-                await asyncio.wait_for(self.model.add(**add_kwargs), timeout=60)
+                await asyncio.wait_for(self.model.add(**add_kwargs), timeout=LONG_TIMEOUT)
             await self.assert_next_queue(sal_indices=[i0+5, i0+2, i0+4, i0+6, i0, i0+1, i0+3])
 
             # stop a few scripts
             await asyncio.wait_for(
-                self.model.stop_scripts(sal_indices=[i0+6, i0+5, i0, i0+4], terminate=True), timeout=5)
+                self.model.stop_scripts(sal_indices=[i0+6, i0+5, i0, i0+4], terminate=True),
+                timeout=STD_TIMEOUT)
             await self.assert_next_queue(sal_indices=[i0+2, i0+1, i0+3])
 
             # make sure all scripts are runnable before starting the queue
@@ -305,7 +309,7 @@ class QueueModelTestCase(unittest.TestCase):
             add_kwargs = self.make_add_kwargs(config="invalid: True")
             script0 = add_kwargs["script_info"]
             i0 = script0.index
-            add_coro = asyncio.wait_for(self.model.add(**add_kwargs), timeout=60)
+            add_coro = asyncio.wait_for(self.model.add(**add_kwargs), timeout=LONG_TIMEOUT)
             assert_coro = self.assert_next_queue(sal_indices=[i0], running=True, wait=True)
             await asyncio.gather(add_coro, assert_coro)
             await self.assert_next_queue(current_sal_index=0, sal_indices=[], past_sal_indices=[],
@@ -331,7 +335,8 @@ class QueueModelTestCase(unittest.TestCase):
             add_kwargs = self.make_add_kwargs()
             script0 = add_kwargs["script_info"]
             i0 = script0.index
-            add_task = asyncio.ensure_future(asyncio.wait_for(self.model.add(**add_kwargs), timeout=60))
+            add_task = asyncio.ensure_future(asyncio.wait_for(self.model.add(**add_kwargs),
+                                                              timeout=LONG_TIMEOUT))
             await self.assert_next_queue(sal_indices=[i0], running=True, wait=True)
             await self.model.stop_scripts(sal_indices=[i0], terminate=terminate)
             await self.assert_next_queue(sal_indices=[], running=True, wait=True)
@@ -383,7 +388,7 @@ class QueueModelTestCase(unittest.TestCase):
                 info_dict[script_info.index] = script_info
                 await asyncio.wait_for(self.model.add(script_info=script_info,
                                                       location=SALPY_ScriptQueue.add_Last,
-                                                      location_sal_index=0), timeout=60)
+                                                      location_sal_index=0), timeout=LONG_TIMEOUT)
 
             await self.assert_next_queue(sal_indices=[i0, i0+1, i0+2])
 
@@ -406,7 +411,7 @@ class QueueModelTestCase(unittest.TestCase):
                 script_info = self.model.get_script_info(sal_index=sal_index, search_history=True)
                 self.assert_script_info_equal(script_info, expected_script_info)
 
-            await self.model.wait_terminate_all(timeout=10)
+            await self.model.wait_terminate_all(timeout=STD_TIMEOUT)
 
         asyncio.get_event_loop().run_until_complete(doit())
 
@@ -455,7 +460,7 @@ class QueueModelTestCase(unittest.TestCase):
                 sal_indices.append(script_info.index)
                 await asyncio.wait_for(self.model.add(script_info=script_info,
                                                       location=SALPY_ScriptQueue.add_Last,
-                                                      location_sal_index=0), timeout=60)
+                                                      location_sal_index=0), timeout=LONG_TIMEOUT)
                 await self.assert_next_queue(sal_indices=sal_indices)
             i0 = sal_indices[0]
 
@@ -554,7 +559,7 @@ class QueueModelTestCase(unittest.TestCase):
                                 location_sal_index=1234)
             await self.assert_next_queue(sal_indices=[i0+2, i0+1, i0])
 
-            await self.model.wait_terminate_all(timeout=10)
+            await self.model.wait_terminate_all(timeout=STD_TIMEOUT)
 
         asyncio.get_event_loop().run_until_complete(doit())
 
@@ -574,15 +579,15 @@ class QueueModelTestCase(unittest.TestCase):
             # add scripts i0, i0+1, i0+2; i0+1 fails
             add_kwargs = self.make_add_kwargs()
             i0 = add_kwargs["script_info"].index
-            await asyncio.wait_for(self.model.add(**add_kwargs), timeout=60)
+            await asyncio.wait_for(self.model.add(**add_kwargs), timeout=LONG_TIMEOUT)
             await self.assert_next_queue(sal_indices=[i0])
 
             add_kwargs = self.make_add_kwargs(config="wait_time: 0.1\nfail_run: True")
-            await asyncio.wait_for(self.model.add(**add_kwargs), timeout=60)
+            await asyncio.wait_for(self.model.add(**add_kwargs), timeout=LONG_TIMEOUT)
             await self.assert_next_queue(sal_indices=[i0, i0+1])
 
             add_kwargs = self.make_add_kwargs()
-            await asyncio.wait_for(self.model.add(**add_kwargs), timeout=60)
+            await asyncio.wait_for(self.model.add(**add_kwargs), timeout=LONG_TIMEOUT)
             await self.assert_next_queue(sal_indices=[i0, i0+1, i0+2])
 
             # make sure all scripts are runnable before starting the queue
@@ -654,7 +659,7 @@ class QueueModelTestCase(unittest.TestCase):
             for info in info_list:
                 await asyncio.wait_for(self.model.add(script_info=info,
                                                       location=SALPY_ScriptQueue.add_Last,
-                                                      location_sal_index=0), timeout=60)
+                                                      location_sal_index=0), timeout=LONG_TIMEOUT)
 
             await self.assert_next_queue(sal_indices=[i0, i0+1, i0+2])
 
@@ -672,21 +677,21 @@ class QueueModelTestCase(unittest.TestCase):
             rq1 = await asyncio.wait_for(self.model.requeue(sal_index=i0+1,
                                                             cmd_id=32,  # arbitrary but unique
                                                             location=SALPY_ScriptQueue.add_First,
-                                                            location_sal_index=0), timeout=60)
+                                                            location_sal_index=0), timeout=LONG_TIMEOUT)
             await self.assert_next_queue(running=True, current_sal_index=i0+1,
                                          sal_indices=[i0+3, i0+2], past_sal_indices=[i0])
 
             rq2 = await asyncio.wait_for(self.model.requeue(sal_index=i0+2,
                                                             cmd_id=30,
                                                             location=SALPY_ScriptQueue.add_After,
-                                                            location_sal_index=i0+3), timeout=60)
+                                                            location_sal_index=i0+3), timeout=LONG_TIMEOUT)
             await self.assert_next_queue(running=True, current_sal_index=i0+1,
                                          sal_indices=[i0+3, i0+4, i0+2], past_sal_indices=[i0])
 
             rq0 = await asyncio.wait_for(self.model.requeue(sal_index=i0,
                                                             cmd_id=31,
                                                             location=SALPY_ScriptQueue.add_Before,
-                                                            location_sal_index=i0+3), timeout=60)
+                                                            location_sal_index=i0+3), timeout=LONG_TIMEOUT)
             await self.assert_next_queue(running=True, current_sal_index=i0+1, wait=True,
                                          sal_indices=[i0+5, i0+3, i0+4, i0+2], past_sal_indices=[i0])
 
@@ -730,7 +735,7 @@ class QueueModelTestCase(unittest.TestCase):
             i0 = info0.index
             await asyncio.wait_for(self.model.add(script_info=info0,
                                                   location=SALPY_ScriptQueue.add_Last,
-                                                  location_sal_index=0), timeout=60)
+                                                  location_sal_index=0), timeout=LONG_TIMEOUT)
             await self.assert_next_queue(sal_indices=[i0])
 
             self.model.running = True
@@ -758,7 +763,7 @@ class QueueModelTestCase(unittest.TestCase):
             i0 = info0.index
             await asyncio.wait_for(self.model.add(script_info=info0,
                                                   location=SALPY_ScriptQueue.add_Last,
-                                                  location_sal_index=0), timeout=60)
+                                                  location_sal_index=0), timeout=LONG_TIMEOUT)
 
             await self.assert_next_queue(running=True, current_sal_index=0,
                                          sal_indices=[i0], past_sal_indices=[], wait=True)
@@ -792,7 +797,7 @@ class QueueModelTestCase(unittest.TestCase):
             info_dict[script_info.index] = script_info
             await asyncio.wait_for(self.model.add(script_info=script_info,
                                                   location=SALPY_ScriptQueue.add_Last,
-                                                  location_sal_index=0), timeout=60)
+                                                  location_sal_index=0), timeout=LONG_TIMEOUT)
 
         await self.assert_next_queue(sal_indices=[i0, i0+1, i0+2, i0+3])
 
@@ -812,7 +817,7 @@ class QueueModelTestCase(unittest.TestCase):
 
         # stop the current script and a queued script
         await asyncio.wait_for(self.model.stop_scripts(sal_indices=[i0+1, i0+3], terminate=terminate),
-                               timeout=5)
+                               timeout=STD_TIMEOUT)
 
         script_info1 = info_dict[i0+1]
         script_info2 = info_dict[i0+2]
@@ -820,7 +825,7 @@ class QueueModelTestCase(unittest.TestCase):
 
         await asyncio.wait_for(asyncio.gather(script_info1.process_task,
                                               script_info2.process_task,
-                                              script_info3.process_task), timeout=10)
+                                              script_info3.process_task), timeout=STD_TIMEOUT)
         # i0 and i0+2 both ran; i0+1 was stopped while it was running
         # and i0+3 was stopped while on the queue
         # (so it also goes on the history)
@@ -892,7 +897,7 @@ class QueueModelTestCase(unittest.TestCase):
                                    f"did_start={did_start}; did_config={did_config}; "
                                    f"elapsed time={dt:0.1f}") from e
 
-    async def wait_running(self, sal_index, timeout=5):
+    async def wait_running(self, sal_index, timeout=STD_TIMEOUT):
         """Wait for the specified script to report that it is running.
 
         Parameters

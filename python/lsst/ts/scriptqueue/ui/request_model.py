@@ -372,7 +372,9 @@ class RequestModel:
         parsed_str = f"[salIndex:{info['index']}]" \
                      f"[{info['type']}]" \
                      f"[path:{info['path']}]" \
-                     f"[duration:{round(info['duration'], 2)}]" \
+                     f"[timestamp_process_start:{round(info['timestamp_process_start'], 2)}]" \
+                     f"[timestamp_run_start:{round(info['timestamp_run_start'], 2)}]" \
+                     f"[timestamp_process_end:{round(info['timestamp_process_end'], 2)}]" \
                      f"[{str(info['script_state'])}]" \
                      f"[{str(info['process_state'])}]"
         return parsed_str

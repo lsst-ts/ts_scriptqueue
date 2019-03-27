@@ -385,33 +385,41 @@ class QueueModel:
     async def stop_scripts(self, sal_indices, terminate):
         """Stop one or more queued scripts and/or the current script.
 
+        Silently ignores scripts that cannot be found or are already stopped.
+
         Parameters
         ----------
         sal_indices : ``iterable`` of `int`
             SAL indices of scripts to stop.
-            Scripts whose indices are not found are ignored,
-            but if no scripts are stopped the command fails.
+            Scripts whose indices are not found are ignored.
         terminate : `bool`
             Give the current script (or any other running script)
             a chance to clean up?
         """
-        self._scripts_being_stopped = set(sal_indices)
+        self._scripts_being_stopped = set()
+        script_info_list = []
+        for index in sal_indices:
+            try:
+                script_info = self.get_script_info(index, search_history=False)
+            except ValueError:
+                continue
+            if script_info.process_done:
+                continue
+            self._scripts_being_stopped.add(index)
+            script_info_list.append(script_info)
+
         try:
-            for index in sal_indices:
-                try:
-                    script_info = self.get_script_info(index, search_history=False)
-                except ValueError:
-                    continue
+            for script_info in script_info_list:
                 if script_info.process_done:
                     continue
                 if script_info.running and not terminate:
-                    await self.stop_one_script(index)
+                    await self.stop_one_script(script_info)
                 else:
-                    await self.terminate_one_script(index)
+                    await self.terminate_one_script(script_info)
         finally:
             self._scripts_being_stopped = set()
 
-    async def stop_one_script(self, sal_index):
+    async def stop_one_script(self, script_info):
         """Stop a queued or running script, giving it time to clean up.
 
         First send the script the ``stop`` command, giving that ``timeout``
@@ -424,15 +432,9 @@ class QueueModel:
 
         Parameters
         ----------
-        sal_index : `int`
-            SAL index of script to move.
-
-        Raises
-        ------
-        ValueError
-            If a script is not queued or running.
+        script_info : `ScriptInfo`
+            Script info for script stop.
         """
-        script_info = self.get_script_info(sal_index, search_history=False)
         if script_info.process_done:
             return
         if script_info.script_state == ScriptState.RUNNING:
@@ -447,9 +449,9 @@ class QueueModel:
             except Exception:
                 # oh well, terminate it instead
                 pass
-        await self.terminate_one_script(sal_index)
+        await self.terminate_one_script(script_info)
 
-    async def terminate_one_script(self, sal_index):
+    async def terminate_one_script(self, script_info):
         """Terminate a queued or running script.
 
         If successful (as it will be, unless the script catches SIGTERM),
@@ -460,17 +462,14 @@ class QueueModel:
 
         Parameters
         ----------
-        sal_index : `int`
-            SAL index of script to move.
+        script_info : `ScriptInfo`
+            Script info for script terminate.
 
         Raises
         ------
         ValueError
             If a script is not queued or running.
         """
-        if sal_index == 0:
-            raise ValueError("sal_index must be non-zero")
-        script_info = self.get_script_info(sal_index, search_history=False)
         if script_info.process_done:
             return
         did_terminate = script_info.terminate()

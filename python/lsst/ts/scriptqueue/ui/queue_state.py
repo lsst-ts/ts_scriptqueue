@@ -99,8 +99,9 @@ class QueueState:
 
             self.scripts[script.salIndex]['type'] = s_type
             self.scripts[script.salIndex]['path'] = script.path
-            self.scripts[script.salIndex]['duration'] = script.duration
-            self.scripts[script.salIndex]['timestamp'] = script.timestamp
+            self.scripts[script.salIndex]['timestamp_process_start'] = script.timestamp_process_start
+            self.scripts[script.salIndex]['timestamp_run_start'] = script.timestamp_run_start
+            self.scripts[script.salIndex]['timestamp_process_end'] = script.timestamp_process_end
             self.scripts[script.salIndex]['script_state'] = ScriptState(script.scriptState)
             self.scripts[script.salIndex]['process_state'] = ScriptProcessState(script.processState)
             self.scripts[script.salIndex]['updated'] = True
@@ -108,8 +109,9 @@ class QueueState:
         else:
             self.scripts[script.salIndex]['type'] = s_type
             self.scripts[script.salIndex]['path'] = script.path
-            self.scripts[script.salIndex]['duration'] = script.duration
-            self.scripts[script.salIndex]['timestamp'] = script.timestamp
+            self.scripts[script.salIndex]['timestamp_process_start'] = script.timestamp_process_start
+            self.scripts[script.salIndex]['timestamp_run_start'] = script.timestamp_run_start
+            self.scripts[script.salIndex]['timestamp_process_end'] = script.timestamp_process_end
             self.scripts[script.salIndex]['script_state'] = ScriptState(script.scriptState)
             self.scripts[script.salIndex]['process_state'] = ScriptProcessState(script.processState)
             self.scripts[script.salIndex]['updated'] = True
@@ -132,8 +134,9 @@ class QueueState:
             'index': salindex,
             'type': "UNKNOWN",
             'path': "UNKNOWN",
-            'duration': 0.,
-            'timestamp': 0.,
+            'timestamp_process_start': 0.,
+            'timestamp_run_start': 0.,
+            'timestamp_process_end': 0.,
             'script_state': ScriptState.UNKNOWN,
             'process_state': ScriptProcessState.UNKNOWN,
             'remote': None,

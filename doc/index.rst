@@ -119,7 +119,7 @@ The default implementation does nothing, but you are free to override it.::
     async def cleanup(self):
         # ....
 
-If your cleanup code cares about why the script is ending it can look at the `BaseScript.state` property, which will be one of:
+If your cleanup code cares about why the script is ending, examine ``self.state.state``. It will be one of:
 
 * `ScriptState.ENDING`: the script is ending because ``run`` exited normally.
 * `ScriptState.STOPPING`: the script is ending because it was commanded to stop.

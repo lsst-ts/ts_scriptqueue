@@ -120,7 +120,7 @@ class BaseScript(salobj.Controller, abc.ABC):
             Short description of what the script does, for operator display.
             Leave at None if the script already has a description, which is
             the most common case. Primarily intended for unit tests,
-            e.g. running `TestScript`.
+            e.g. running ``TestScript``.
 
 
         The final return code will be:
@@ -336,13 +336,13 @@ class BaseScript(salobj.Controller, abc.ABC):
         * Receive the configuration as a ``yaml`` string.
         * Parse the configuration as a `dict`.
         * Call `configure`, using the dict as keyword arguments.
-        * Call `set_metadata(metadata)`.
+        * Call `set_metadata`.
         * Output the metadata event.
         * Change the script state to `ScriptState.CONFIGURED`.
 
         Raises
         ------
-        `salobj.ExpectedError`
+        salobj.ExpectedError
             If `state`.state is not `ScriptState.UNCONFIGURED`.
         """
         self.assert_state("configure", [ScriptState.UNCONFIGURED])
@@ -376,7 +376,7 @@ class BaseScript(salobj.Controller, abc.ABC):
 
         Raises
         ------
-        `salobj.ExpectedError`
+        salobj.ExpectedError
             If `state`.state is not `ScriptState.CONFIGURED`.
         """
         self.assert_state("run", [ScriptState.CONFIGURED])
@@ -399,7 +399,7 @@ class BaseScript(salobj.Controller, abc.ABC):
 
         Raises
         ------
-        `salobj.ExpectedError`
+        salobj.ExpectedError
             If `state`.state is not `ScriptState.PAUSED`.
         """
         self.assert_state("resume", [ScriptState.PAUSED])
@@ -416,7 +416,7 @@ class BaseScript(salobj.Controller, abc.ABC):
 
         Raises
         ------
-        `salobj.ExpectedError`
+        salobj.ExpectedError
             If `state`.state is not `ScriptState.UNCONFIGURED`,
             `ScriptState.CONFIGURED`, `ScriptState.RUNNING`
             or `ScriptState.PAUSED`.

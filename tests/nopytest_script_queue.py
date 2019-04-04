@@ -48,7 +48,6 @@ class ScriptQueueTestCase(unittest.TestCase):
                                              verbose=True)
         self.queue.summary_state = salobj.State.DISABLED
         self.remote = salobj.Remote(SALPY_ScriptQueue, index=1)
-        self.process = None
 
     def tearDown(self):
         nkilled = len(self.queue.model.terminate_all())
@@ -766,7 +765,6 @@ class CmdLineTestCase(unittest.TestCase):
         self.datadir = os.path.abspath(os.path.join(os.path.dirname(__file__), "data"))
         self.standardpath = os.path.join(self.datadir, "standard")
         self.externalpath = os.path.join(self.datadir, "external")
-        self.process = None
 
     def test_run(self):
         exe_name = "run_script_queue.py"

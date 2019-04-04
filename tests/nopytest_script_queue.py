@@ -30,7 +30,7 @@ import SALPY_ScriptQueue
 from lsst.ts import salobj
 from lsst.ts import scriptqueue
 
-STD_TIMEOUT = 2
+STD_TIMEOUT = 10
 LONG_TIMEOUT = 60
 
 I0 = scriptqueue.script_queue.SCRIPT_INDEX_MULT  # initial Script SAL index

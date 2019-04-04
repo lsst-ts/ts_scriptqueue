@@ -22,7 +22,7 @@
 __all__ = ["ScriptQueue"]
 
 import asyncio
-import os.path
+import os
 
 import numpy as np
 
@@ -48,10 +48,12 @@ class ScriptQueue(salobj.BaseCsc):
         * 1 for the Main telescope.
         * 2 for AuxTel.
         * Any allowed value (see ``Raises``) for unit tests.
-    standardpath : `str`, `bytes` or `os.PathLike`
-        Path to standard SAL scripts.
-    externalpath : `str`, `bytes` or `os.PathLike`
-        Path to external SAL scripts.
+    standardpath : `str`, `bytes` or `os.PathLike` (optional)
+        Path to standard SAL scripts. If None then use
+        environment variable ``TS_STANDARDSCRIPTS_DIR``.
+    externalpath : `str`, `bytes` or `os.PathLike` (optional)
+        Path to external SAL scripts. If None then use
+        environment variable ``TS_EXTERNALSCRIPTS_DIR``.
     verbose : `bool`
         If True then print diagnostic messages to stdout.
 
@@ -59,7 +61,9 @@ class ScriptQueue(salobj.BaseCsc):
     ------
     ValueError
         If ``index`` < 0 or > MAX_SAL_INDEX//100,000 - 1.
-        If ``standardpath`` or ``externalpath`` is not an existing dir.
+        If ``standardpath`` or ``externalpath`` is not an existing directory,
+        or is None and the associated environment variable is missing
+        or does not point to a directory.
 
     Notes
     -----
@@ -115,13 +119,11 @@ class ScriptQueue(salobj.BaseCsc):
     * When each script is configured, the script (not `ScriptQueue`)
       outputs a ``metadata`` event that includes estimated duration.
     """
-    def __init__(self, index, standardpath, externalpath, verbose=False):
+    def __init__(self, index, standardpath=None, externalpath=None, verbose=False):
         if index < 0 or index > _MAX_SCRIPTQUEUE_INDEX:
             raise ValueError(f"index {index} must be >= 0 and <= {_MAX_SCRIPTQUEUE_INDEX}")
-        if not os.path.isdir(standardpath):
-            raise ValueError(f"No such dir standardpath={standardpath}")
-        if not os.path.isdir(externalpath):
-            raise ValueError(f"No such dir externalpath={externalpath}")
+        standardpath = self._get_scripts_path(standardpath, is_standard=True)
+        externalpath = self._get_scripts_path(externalpath, is_standard=False)
         self.verbose = verbose
 
         min_sal_index = index * SCRIPT_INDEX_MULT
@@ -137,6 +139,53 @@ class ScriptQueue(salobj.BaseCsc):
                                 verbose=verbose)
 
         super().__init__(SALPY_ScriptQueue, index)
+
+    def _get_scripts_path(self, arg, is_standard):
+        """Get the scripts path from the ``standardpath`` or ``externalpath``
+        constructor argument.
+
+        Parameters
+        ----------
+        arg : `str` or `None`
+            ``standardpath`` or ``externalpath`` constructor argument.
+            If None then use environment variable ``TS_STANDARDSCRIPTS_DIR``
+            if ``is_standard``, else ``TS_EXTERNALSCRIPTS_DIR``.
+        is_standard : `bool`
+            True if ``arg`` is the ``standardpath`` constructor argument,
+            False if ``arg`` is the ``externalpath`` constructor argument.
+
+        Returns
+        -------
+        dir_path : `pathlib.Path`
+            Path to the standard or external scripts directory.
+
+        Raises
+        ------
+        ValueError
+            If arg is not None and does not point to a directory
+            If arg is None and the appropriate environment variable
+            is missing or does not point to a directory.
+        """
+        prefix = "standard" if is_standard else "external"
+        if arg is None:
+            env_var_name = f"TS_{prefix.upper()}SCRIPTS_DIR"
+            if env_var_name not in os.environ:
+                raise ValueError(f"{prefix}path is None but {env_var_name} not defined")
+            dir_path = os.environ.get(env_var_name)
+        else:
+            dir_path = arg
+        if not os.path.isdir(dir_path):
+            if arg is None:
+                raise ValueError(f"${env_var_name}={dir_path} is not a directory")
+            else:
+                raise ValueError(f"{prefix}path {dir_path} is not a directory")
+        return dir_path
+
+    async def start(self, initial_simulation_mode):
+        await super().start(initial_simulation_mode=initial_simulation_mode)
+        self.evt_rootDirectories.set_put(standard=self.model.standardpath,
+                                         external=self.model.externalpath,
+                                         force_output=True)
         self.put_queue()
 
     def do_showAvailableScripts(self, id_data=None):

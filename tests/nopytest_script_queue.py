@@ -36,9 +36,110 @@ LONG_TIMEOUT = 60
 I0 = scriptqueue.script_queue.SCRIPT_INDEX_MULT  # initial Script SAL index
 
 
+def delete_script_pkg_env_vars():
+    """Delete ``TS_STANDARDSCRIPTS_DIR`` and ``TS_EXTERNALSCRIPTS_DIR``
+    environment variables.
+
+    Those environment variables are used as the default values for the
+    locations of standard and external scripts. Deleting the environment
+    variables makes the tests more predictable, in that existing values
+    cannot influence the tests; the test must explicitly set the environment
+    variable(s) in order to use them.
+    """
+    for name in ("STANDARD", "EXTERNAL"):
+        env_var_name = f"TS_{name}SCRIPTS_DIR"
+        if env_var_name in os.environ:
+            del os.environ[env_var_name]
+
+
+class ScriptQueueConstructorTestCase(unittest.TestCase):
+    def setUp(self):
+        salobj.set_random_lsst_dds_domain()
+        delete_script_pkg_env_vars()
+        self.datadir = os.path.abspath(os.path.join(os.path.dirname(__file__), "data"))
+        self.standardpath = os.path.join(self.datadir, "standard")
+        self.externalpath = os.path.join(self.datadir, "external")
+        self.badpath = os.path.join(self.datadir, "not_a_directory")
+
+    def test_default_paths(self):
+        async def doit():
+            os.environ["TS_STANDARDSCRIPTS_DIR"] = self.standardpath
+            os.environ["TS_EXTERNALSCRIPTS_DIR"] = self.externalpath
+            queue = scriptqueue.ScriptQueue(index=1)
+            self.assertTrue(os.path.samefile(queue.model.standardpath, self.standardpath))
+            self.assertTrue(os.path.samefile(queue.model.externalpath, self.externalpath))
+            remote = salobj.Remote(SALPY_ScriptQueue, index=1)
+            rootDir_data = await remote.evt_rootDirectories.next(flush=False, timeout=STD_TIMEOUT)
+            self.assertTrue(os.path.samefile(rootDir_data.standard, self.standardpath))
+            self.assertTrue(os.path.samefile(rootDir_data.external, self.externalpath))
+
+        asyncio.get_event_loop().run_until_complete(doit())
+
+    def test_explicit_paths(self):
+        async def doit():
+            # make sure the environment variables are ignored
+            os.environ["TS_STANDARDSCRIPTS_DIR"] = self.badpath
+            os.environ["TS_EXTERNALSCRIPTS_DIR"] = self.badpath
+            queue = scriptqueue.ScriptQueue(index=1, standardpath=self.standardpath,
+                                            externalpath=self.externalpath)
+            self.assertTrue(os.path.samefile(queue.model.standardpath, self.standardpath))
+            self.assertTrue(os.path.samefile(queue.model.externalpath, self.externalpath))
+            remote = salobj.Remote(SALPY_ScriptQueue, index=1)
+            rootDir_data = await remote.evt_rootDirectories.next(flush=False, timeout=STD_TIMEOUT)
+            self.assertTrue(os.path.samefile(rootDir_data.standard, self.standardpath))
+            self.assertTrue(os.path.samefile(rootDir_data.external, self.externalpath))
+
+        asyncio.get_event_loop().run_until_complete(doit())
+
+    def test_default_standard_path(self):
+        async def doit():
+            os.environ["TS_STANDARDSCRIPTS_DIR"] = self.standardpath
+            # make sure this environment variable is ignored
+            os.environ["TS_EXTERNALSCRIPTS_DIR"] = self.badpath
+            queue = scriptqueue.ScriptQueue(index=1, externalpath=self.externalpath)
+            self.assertTrue(os.path.samefile(queue.model.standardpath, self.standardpath))
+            self.assertTrue(os.path.samefile(queue.model.externalpath, self.externalpath))
+            remote = salobj.Remote(SALPY_ScriptQueue, index=1)
+            rootDir_data = await remote.evt_rootDirectories.next(flush=False, timeout=STD_TIMEOUT)
+            self.assertTrue(os.path.samefile(rootDir_data.standard, self.standardpath))
+            self.assertTrue(os.path.samefile(rootDir_data.external, self.externalpath))
+
+        asyncio.get_event_loop().run_until_complete(doit())
+
+    def test_default_external_path(self):
+        async def doit():
+            # make sure this environment variable is ignored
+            os.environ["TS_STANDARDSCRIPTS_DIR"] = self.badpath
+            os.environ["TS_EXTERNALSCRIPTS_DIR"] = self.externalpath
+            queue = scriptqueue.ScriptQueue(index=1, standardpath=self.standardpath)
+            self.assertTrue(os.path.samefile(queue.model.standardpath, self.standardpath))
+            self.assertTrue(os.path.samefile(queue.model.externalpath, self.externalpath))
+            remote = salobj.Remote(SALPY_ScriptQueue, index=1)
+            rootDir_data = await remote.evt_rootDirectories.next(flush=False, timeout=STD_TIMEOUT)
+            self.assertTrue(os.path.samefile(rootDir_data.standard, self.standardpath))
+            self.assertTrue(os.path.samefile(rootDir_data.external, self.externalpath))
+
+        asyncio.get_event_loop().run_until_complete(doit())
+
+    def test_invalid_paths(self):
+        with self.assertRaises(ValueError):
+            scriptqueue.ScriptQueue(index=1, standardpath=self.badpath, externalpath=self.externalpath)
+        with self.assertRaises(ValueError):
+            scriptqueue.ScriptQueue(index=1, standardpath=self.standardpath, externalpath=self.badpath)
+        os.environ["TS_STANDARDSCRIPTS_DIR"] = self.standardpath
+        os.environ["TS_EXTERNALSCRIPTS_DIR"] = self.badpath
+        with self.assertRaises(ValueError):
+            scriptqueue.ScriptQueue(index=1)
+        os.environ["TS_STANDARDSCRIPTS_DIR"] = self.badpath
+        os.environ["TS_EXTERNALSCRIPTS_DIR"] = self.externalpath
+        with self.assertRaises(ValueError):
+            scriptqueue.ScriptQueue(index=1)
+
+
 class ScriptQueueTestCase(unittest.TestCase):
     def setUp(self):
         salobj.set_random_lsst_dds_domain()
+        delete_script_pkg_env_vars()
         self.datadir = os.path.abspath(os.path.join(os.path.dirname(__file__), "data"))
         standardpath = os.path.join(self.datadir, "standard")
         externalpath = os.path.join(self.datadir, "external")
@@ -761,12 +862,14 @@ class ScriptQueueTestCase(unittest.TestCase):
 class CmdLineTestCase(unittest.TestCase):
     def setUp(self):
         salobj.set_random_lsst_dds_domain()
+        delete_script_pkg_env_vars()
         self.index = 1
         self.datadir = os.path.abspath(os.path.join(os.path.dirname(__file__), "data"))
         self.standardpath = os.path.join(self.datadir, "standard")
         self.externalpath = os.path.join(self.datadir, "external")
+        self.badpath = os.path.join(self.datadir, "not_a_directory")
 
-    def test_run(self):
+    def test_run_with_standard_and_external(self):
         exe_name = "run_script_queue.py"
         exe_path = shutil.which(exe_name)
         if exe_path is None:
@@ -774,12 +877,17 @@ class CmdLineTestCase(unittest.TestCase):
 
         async def doit():
             process = await asyncio.create_subprocess_exec(
-                exe_name, str(self.index), self.standardpath, self.externalpath, "--verbose")
+                exe_name, str(self.index), "--standard", self.standardpath,
+                "--external", self.externalpath, "--verbose")
             try:
                 remote = salobj.Remote(SALPY_ScriptQueue, index=self.index)
 
                 summaryState_data = await remote.evt_summaryState.next(flush=False, timeout=LONG_TIMEOUT)
                 self.assertEqual(summaryState_data.summaryState, salobj.State.STANDBY)
+
+                rootDir_data = await remote.evt_rootDirectories.next(flush=False, timeout=STD_TIMEOUT)
+                self.assertTrue(os.path.samefile(rootDir_data.standard, self.standardpath))
+                self.assertTrue(os.path.samefile(rootDir_data.external, self.externalpath))
 
                 id_ack = await remote.cmd_exitControl.start(timeout=STD_TIMEOUT)
                 self.assertEqual(id_ack.ack.ack, remote.salinfo.lib.SAL__CMD_COMPLETE)
@@ -787,6 +895,102 @@ class CmdLineTestCase(unittest.TestCase):
                 self.assertEqual(summaryState_data.summaryState, salobj.State.OFFLINE)
 
                 await asyncio.wait_for(process.wait(), timeout=5)
+            except Exception:
+                if process.returncode is None:
+                    process.terminate()
+                raise
+
+        asyncio.get_event_loop().run_until_complete(doit())
+
+    def test_run_default_standard_external(self):
+        exe_name = "run_script_queue.py"
+        exe_path = shutil.which(exe_name)
+        if exe_path is None:
+            self.fail(f"Could not find bin script {exe_name}; did you setup and scons this package?")
+
+        async def doit():
+            # without the env variables this should fail
+            os.environ["TS_STANDARDSCRIPTS_DIR"] = self.standardpath
+            os.environ["TS_EXTERNALSCRIPTS_DIR"] = self.externalpath
+            process = await asyncio.create_subprocess_exec(exe_name, str(self.index), "--verbose")
+            try:
+                remote = salobj.Remote(SALPY_ScriptQueue, index=self.index)
+
+                summaryState_data = await remote.evt_summaryState.next(flush=False, timeout=LONG_TIMEOUT)
+                self.assertEqual(summaryState_data.summaryState, salobj.State.STANDBY)
+
+                rootDir_data = await remote.evt_rootDirectories.next(flush=False, timeout=STD_TIMEOUT)
+                self.assertTrue(os.path.samefile(rootDir_data.standard, self.standardpath))
+                self.assertTrue(os.path.samefile(rootDir_data.external, self.externalpath))
+
+                id_ack = await remote.cmd_exitControl.start(timeout=STD_TIMEOUT)
+                self.assertEqual(id_ack.ack.ack, remote.salinfo.lib.SAL__CMD_COMPLETE)
+                summaryState_data = await remote.evt_summaryState.next(flush=False, timeout=LONG_TIMEOUT)
+                self.assertEqual(summaryState_data.summaryState, salobj.State.OFFLINE)
+
+                await asyncio.wait_for(process.wait(), timeout=5)
+            except Exception:
+                if process.returncode is None:
+                    process.terminate()
+                raise
+
+        asyncio.get_event_loop().run_until_complete(doit())
+
+    def test_run_invalid_default_standard_external(self):
+        exe_name = "run_script_queue.py"
+        exe_path = shutil.which(exe_name)
+        if exe_path is None:
+            self.fail(f"Could not find bin script {exe_name}; did you setup and scons this package?")
+
+        async def doit():
+            # without the env variables this should fail
+            os.environ["TS_STANDARDSCRIPTS_DIR"] = self.badpath
+            os.environ["TS_EXTERNALSCRIPTS_DIR"] = self.badpath
+            process = await asyncio.create_subprocess_exec(exe_name, str(self.index), "--verbose")
+            try:
+                await asyncio.wait_for(process.wait(), timeout=5)
+                self.assertNotEqual(process.returncode, 0)
+            except Exception:
+                if process.returncode is None:
+                    process.terminate()
+                raise
+
+        asyncio.get_event_loop().run_until_complete(doit())
+
+    def test_run_missing_default_standard_external(self):
+        exe_name = "run_script_queue.py"
+        exe_path = shutil.which(exe_name)
+        if exe_path is None:
+            self.fail(f"Could not find bin script {exe_name}; did you setup and scons this package?")
+
+        async def doit():
+            # without the env variables this should fail
+            process = await asyncio.create_subprocess_exec(exe_name, str(self.index), "--verbose")
+            try:
+                await asyncio.wait_for(process.wait(), timeout=5)
+                self.assertNotEqual(process.returncode, 0)
+            except Exception:
+                if process.returncode is None:
+                    process.terminate()
+                raise
+
+        asyncio.get_event_loop().run_until_complete(doit())
+
+    def test_help_missing_default_standard_external(self):
+        """Test that the command line help does something sensible
+        when TS_xSCRIPTS_DIR env variables are not defined.
+        """
+        exe_name = "run_script_queue.py"
+        exe_path = shutil.which(exe_name)
+        if exe_path is None:
+            self.fail(f"Could not find bin script {exe_name}; did you setup and scons this package?")
+
+        async def doit():
+            # without the env variables this should fail
+            process = await asyncio.create_subprocess_exec(exe_name, str(self.index), "--help")
+            try:
+                await asyncio.wait_for(process.wait(), timeout=5)
+                self.assertEqual(process.returncode, 0)
             except Exception:
                 if process.returncode is None:
                     process.terminate()

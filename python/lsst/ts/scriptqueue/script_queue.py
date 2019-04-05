@@ -140,19 +140,19 @@ class ScriptQueue(salobj.BaseCsc):
 
         super().__init__(SALPY_ScriptQueue, index)
 
-    def _get_scripts_path(self, arg, is_standard):
+    def _get_scripts_path(self, patharg, is_standard):
         """Get the scripts path from the ``standardpath`` or ``externalpath``
         constructor argument.
 
         Parameters
         ----------
-        arg : `str` or `None`
+        patharg : `str` or `None`
             ``standardpath`` or ``externalpath`` constructor argument.
             If None then use environment variable ``TS_STANDARDSCRIPTS_DIR``
             if ``is_standard``, else ``TS_EXTERNALSCRIPTS_DIR``.
         is_standard : `bool`
-            True if ``arg`` is the ``standardpath`` constructor argument,
-            False if ``arg`` is the ``externalpath`` constructor argument.
+            True if ``patharg`` is the ``standardpath`` constructor argument,
+            False if ``patharg`` is the ``externalpath`` constructor argument.
 
         Returns
         -------
@@ -162,20 +162,20 @@ class ScriptQueue(salobj.BaseCsc):
         Raises
         ------
         ValueError
-            If arg is not None and does not point to a directory
-            If arg is None and the appropriate environment variable
+            If ``patharg`` is not `None` and does not point to a directory.
+            If ``patharg`` is `None` and the appropriate environment variable
             is missing or does not point to a directory.
         """
         prefix = "standard" if is_standard else "external"
-        if arg is None:
+        if patharg is None:
             env_var_name = f"TS_{prefix.upper()}SCRIPTS_DIR"
             if env_var_name not in os.environ:
                 raise ValueError(f"{prefix}path is None but {env_var_name} not defined")
             dir_path = os.environ.get(env_var_name)
         else:
-            dir_path = arg
+            dir_path = patharg
         if not os.path.isdir(dir_path):
-            if arg is None:
+            if patharg is None:
                 raise ValueError(f"${env_var_name}={dir_path} is not a directory")
             else:
                 raise ValueError(f"{prefix}path {dir_path} is not a directory")

@@ -1,4 +1,6 @@
 setupRequired(ts_salobj)
+setupOptional(ts_standardscripts)
+setupOptional(ts_externalscripts)
 
 envPrepend(PATH, ${PRODUCT_DIR}/bin)
 

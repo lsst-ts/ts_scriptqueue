@@ -120,8 +120,8 @@ class QueueModel:
         if script_callback and not callable(script_callback):
             raise TypeError(f"script_callback={script_callback} is not callable")
 
-        self.standardpath = standardpath
-        self.externalpath = externalpath
+        self.standardpath = os.path.abspath(standardpath)
+        self.externalpath = os.path.abspath(externalpath)
         self.queue_callback = queue_callback
         self.verbose = verbose
         self.script_callback = script_callback

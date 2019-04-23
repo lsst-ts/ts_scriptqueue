@@ -38,12 +38,16 @@ class RequestCmd(Cmd):
         operate with the LSST script queue.
 
         Type help or ? to list commands."""
-        self.prompt = '(cmd): '
+        self.prompt = f'(cmd:None): '
 
         super().__init__()
 
         self.log = logging.getLogger("request")
         self.model = RequestModel(index)
+
+        self.username = None
+
+        self.max_items_past = 3
 
         # Defining an argparse to handle arguments for the do_run method
         self.__run_parser = argparse.ArgumentParser(prog="run")
@@ -62,6 +66,10 @@ class RequestCmd(Cmd):
                                        help="Monitor script execution all the way to the end.")
         self.__run_parser.add_argument("--timeout", dest="timeout", default=120., type=float,
                                        help="Timeout for monitoring scripts.")
+
+    def do_set_max_past(self, arg):
+        """Set the maximum number of scripts in the past queue to show."""
+        self.max_items_past = int(arg)
 
     def do_heartbeat(self, arg):
         """Listen for heartbeats from the queue."""
@@ -168,7 +176,8 @@ class RequestCmd(Cmd):
         print("#\n# Showing tasks in the queue.\n#")
         queue_state = self.model.get_queue_state()
 
-        print(f'\tQueue state: {queue_state["state"]}')
+        print(f'\tQueue summary state: {self.model.summary_state!s}')
+        print(f'\tQueue status: {queue_state["state"]}')
         print(f'\tCurrent running: {self.model.parse_info(queue_state["current"])}')
         print(f'\tCurrent queue size: {len(queue_state["queue_scripts"])}')
         print(f'\tPast queue size: {len(queue_state["past_scripts"])}')
@@ -182,8 +191,14 @@ class RequestCmd(Cmd):
 
         if len(queue_state["past_scripts"]) > 0:
             print(f'\nItems on past queue:')
-            for item in queue_state['past_scripts']:
+
+            for i, item in enumerate(queue_state['past_scripts']):
                 print(self.model.parse_info(queue_state['past_scripts'][item]))
+                if i >= self.max_items_past:
+                    break
+            if len(queue_state["past_scripts"]) > self.max_items_past:
+                print(f" ... (+{len(queue_state['past_scripts'])-self.max_items_past}) "
+                      f"items on past queue")
         else:
             print('\nNo items on past queue.')
 
@@ -314,6 +329,17 @@ class RequestCmd(Cmd):
         self.log.debug(f"Setting queue log level to {level}")
         self.model.set_queue_log_level(level)
 
+    def do_username(self, args):
+        """Register username for using the queue."""
+        print(f"Registering as {args} ...")
+        self.username = args
+        self.prompt = f'(cmd:{self.username}): '
+
+    def do_logout(self, args):
+        """Unregister username."""
+        self.username = None
+        self.prompt = f'(cmd:None): '
+
     def monitor_script(self, salindex):
         """Monitor the execution of a script. Will block until
         script is in a final state.
@@ -335,6 +361,9 @@ class RequestCmd(Cmd):
     def onecmd(self, *args):
         """Encapsulate all commands with a try/except clause.
         """
+        if self.username is None:
+            self.log.warning("Please, add slack username before using queue.")
+
         try:
             return super().onecmd(*args)
         except AckError as ack_err:

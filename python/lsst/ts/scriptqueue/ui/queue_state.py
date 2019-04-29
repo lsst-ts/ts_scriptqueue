@@ -12,12 +12,16 @@ class QueueState:
         """
         self.log = logging.getLogger(__name__)
 
+        self.enabled = False
         self.running = False
         self._queue_script_indices = []
         self._past_script_indices = []
         self._current_script_index = 0
 
         self.scripts = {}
+
+    def __call__(self, *args, **kwargs):
+        return self.state
 
     @property
     def state(self):
@@ -60,6 +64,7 @@ class QueueState:
         queue : `SALPY_ScriptQueue.ScriptQueue_logevent_queueC`
 
         """
+        self.enabled = queue.enabled
         self.running = queue.running
         self._current_script_index = queue.currentSalIndex
         self._queue_script_indices = [queue.salIndices[i] for i in range(queue.length)]
@@ -99,9 +104,11 @@ class QueueState:
 
             self.scripts[script.salIndex]['type'] = s_type
             self.scripts[script.salIndex]['path'] = script.path
-            self.scripts[script.salIndex]['timestamp_process_start'] = script.timestamp_process_start
-            self.scripts[script.salIndex]['timestamp_run_start'] = script.timestamp_run_start
-            self.scripts[script.salIndex]['timestamp_process_end'] = script.timestamp_process_end
+            self.scripts[script.salIndex]['timestamp_process_start'] = script.timestampProcessStart
+            self.scripts[script.salIndex]['timestamp_run_start'] = script.timestampRunStart
+            self.scripts[script.salIndex]['timestamp_configure_start'] = script.timestampConfigureStart
+            self.scripts[script.salIndex]['timestamp_configure_end'] = script.timestampConfigureEnd
+            self.scripts[script.salIndex]['timestamp_process_end'] = script.timestampProcessEnd
             self.scripts[script.salIndex]['script_state'] = ScriptState(script.scriptState)
             self.scripts[script.salIndex]['process_state'] = ScriptProcessState(script.processState)
             self.scripts[script.salIndex]['updated'] = True
@@ -109,9 +116,11 @@ class QueueState:
         else:
             self.scripts[script.salIndex]['type'] = s_type
             self.scripts[script.salIndex]['path'] = script.path
-            self.scripts[script.salIndex]['timestamp_process_start'] = script.timestamp_process_start
-            self.scripts[script.salIndex]['timestamp_run_start'] = script.timestamp_run_start
-            self.scripts[script.salIndex]['timestamp_process_end'] = script.timestamp_process_end
+            self.scripts[script.salIndex]['timestamp_process_start'] = script.timestampProcessStart
+            self.scripts[script.salIndex]['timestamp_configure_start'] = script.timestampConfigureStart
+            self.scripts[script.salIndex]['timestamp_configure_end'] = script.timestampConfigureEnd
+            self.scripts[script.salIndex]['timestamp_run_start'] = script.timestampRunStart
+            self.scripts[script.salIndex]['timestamp_process_end'] = script.timestampProcessEnd
             self.scripts[script.salIndex]['script_state'] = ScriptState(script.scriptState)
             self.scripts[script.salIndex]['process_state'] = ScriptProcessState(script.processState)
             self.scripts[script.salIndex]['updated'] = True
@@ -136,6 +145,8 @@ class QueueState:
             'path': "UNKNOWN",
             'timestamp_process_start': 0.,
             'timestamp_run_start': 0.,
+            'timestamp_configure_start': 0.,
+            'timestamp_configure_end': 0.,
             'timestamp_process_end': 0.,
             'script_state': ScriptState.UNKNOWN,
             'process_state': ScriptProcessState.UNKNOWN,

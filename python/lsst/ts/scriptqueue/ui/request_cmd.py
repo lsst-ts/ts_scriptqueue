@@ -69,7 +69,11 @@ class RequestCmd(Cmd):
 
     def do_set_max_past(self, arg):
         """Set the maximum number of scripts in the past queue to show."""
-        self.max_items_past = int(arg)
+        new_max = int(arg)
+        if new_max <= 0:
+            self.log.error("Maximum number must be greater than zero.")
+        else:
+            self.max_items_past = int(arg)
 
     def do_heartbeat(self, arg):
         """Listen for heartbeats from the queue."""
@@ -194,7 +198,7 @@ class RequestCmd(Cmd):
 
             for i, item in enumerate(queue_state['past_scripts']):
                 print(self.model.parse_info(queue_state['past_scripts'][item]))
-                if i >= self.max_items_past:
+                if i+1 >= self.max_items_past:
                     break
             if len(queue_state["past_scripts"]) > self.max_items_past:
                 print(f" ... (+{len(queue_state['past_scripts'])-self.max_items_past}) "
@@ -330,7 +334,16 @@ class RequestCmd(Cmd):
         self.model.set_queue_log_level(level)
 
     def do_username(self, args):
-        """Register username for using the queue."""
+        """Register username for using the queue.
+
+        Parameters
+        ----------
+        args : `str`
+            Name to register as current user. Preferably the project slack
+            user handle so it is easy to identify and communicate with
+            whoever is currently using the queue.
+
+        """
         print(f"Registering as {args} ...")
         self.username = args
         self.prompt = f'(cmd:{self.username}): '

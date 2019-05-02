@@ -2,7 +2,8 @@ __all__ = ["QueueState"]
 
 import logging
 
-from lsst.ts.scriptqueue import ScriptState, ScriptProcessState
+from lsst.ts.idl.enums.Script import ScriptState
+from lsst.ts.idl.enums.ScriptQueue import ScriptProcessState
 
 
 class QueueState:
@@ -61,8 +62,8 @@ class QueueState:
 
         Parameters
         ----------
-        queue : `SALPY_ScriptQueue.ScriptQueue_logevent_queueC`
-
+        queue : ``ScriptQueue.evt_queue.DataType``
+            Queue state.
         """
         self.enabled = queue.enabled
         self.running = queue.running
@@ -78,7 +79,6 @@ class QueueState:
         Script indices will be removed if not in `self._queue_script_indices`,
         `self._past_script_indices` or `self._current_script_index`.
         """
-
         current_indices = list(self.scripts.keys())
         for salindex in current_indices:
             if (salindex not in self._queue_script_indices and
@@ -93,10 +93,9 @@ class QueueState:
 
         Parameters
         ----------
-        script : `SALPY_ScriptQueue.ScriptQueue_logevent_scriptC`
-
+        script : ``ScriptQueue.evt_script.DataType``
+            Script state.
         """
-
         s_type = 'Standard' if script.isStandard else 'External'
 
         if script.salIndex not in self.scripts:
@@ -136,9 +135,8 @@ class QueueState:
 
         Returns
         -------
-        script : dict
+        script : `dict`
         """
-
         return {
             'index': salindex,
             'type': "UNKNOWN",
@@ -148,8 +146,8 @@ class QueueState:
             'timestamp_configure_start': 0.,
             'timestamp_configure_end': 0.,
             'timestamp_process_end': 0.,
-            'script_state': ScriptState.UNKNOWN,
-            'process_state': ScriptProcessState.UNKNOWN,
+            'script_state': 0,
+            'process_state': 0,
             'remote': None,
             'updated': False
         }
@@ -159,8 +157,8 @@ class QueueState:
 
         Parameters
         ----------
-        salindex : int
-
+        salindex : `int`
+            SAL index of added script
         """
         self.scripts[salindex] = self.new_script(salindex)
 

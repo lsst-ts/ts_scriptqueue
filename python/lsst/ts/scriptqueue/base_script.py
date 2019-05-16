@@ -6,6 +6,7 @@ import asyncio
 import re
 import sys
 import time
+import types
 
 import yaml
 
@@ -51,6 +52,11 @@ class BaseScript(salobj.Controller, abc.ABC):
     """
     def __init__(self, index, descr):
         super().__init__("Script", index, do_callbacks=True)
+        schema = self.schema
+        if schema is None:
+            self.config_validator = None
+        else:
+            self.config_validator = salobj.DefaultingValidator(schema=schema)
         self._run_task = None
         self._pause_future = None
         self.done_task = asyncio.Future()
@@ -230,27 +236,18 @@ class BaseScript(salobj.Controller, abc.ABC):
             self._run_task.cancel()
 
     @abc.abstractmethod
-    async def configure(self):
+    async def configure(self, config):
         """Configure the script.
 
-        Subclasses should use named keyword arguments for clarity
-        and so that parameter names are automatically checked.
-        In other words, do this::
-
-            async def configure(self, arg_a, arg_b=default_b)  # good
-
-        instead of this::
-
-            async def configure(self, **kwards)  # unsafe and unclear
+        Parameters
+        ----------
+        config : `types.SimpleNamespace`
+            Configuration.
 
         Notes
         -----
-        This method is only called when the script state is
-        `ScriptState.UNCONFIGURED`.
-
-        If this method and `set_metadata` both succeed (neither raises
-        an exception) then the state is automatically changed to
-        `ScriptState.CONFIGURED`.
+        This method is called by `do_configure``.
+        The script state will be `ScriptState.UNCONFIGURED`.
         """
         raise NotImplementedError()
 
@@ -259,14 +256,16 @@ class BaseScript(salobj.Controller, abc.ABC):
         """Set metadata fields in the provided struct, given the
         current configuration.
 
+        Parameters
+        ----------
+        metadata : ``self.evt_metadata.DataType()``
+            Metadata to update. Set those fields for which
+            you have useful information.
+
         Notes
         -----
-        If this method succeeds (does not raise an exception)
-        then the metadata is automatically broadcast as an event
-        and the script's state is set to `ScriptState.CONFIGURED`.
-
-        This method will only be called if the script state is
-        `ScriptState.UNCONFIGURED`. or `ScriptState.CONFIGURED`.
+        This method is called after `configure` by `do_configure`.
+        The script state will be `ScriptState.UNCONFIGURED`.
         """
         raise NotImplementedError()
 
@@ -285,6 +284,20 @@ class BaseScript(salobj.Controller, abc.ABC):
         This method is only called when the script state is
         `ScriptState.CONFIGURED`. The remaining state transitions
         are handled automatically.
+        """
+        raise NotImplementedError()
+
+    @property
+    @abc.abstractmethod
+    def schema(self):
+        """Return a jsonschema to validate configuration, as a `dict`.
+
+        Please provide default values for all fields for which defaults
+        make sense. This makes the script easier to use.
+
+        If your script has no configuration then return `None`,
+        in which case the ``config`` field of the ``configure`` command
+        must be an empty string.
         """
         raise NotImplementedError()
 
@@ -317,34 +330,46 @@ class BaseScript(salobj.Controller, abc.ABC):
     async def do_configure(self, data):
         """Configure the currently loaded script.
 
-        This method does the following:
-
-        * Receive the configuration as a ``yaml`` string.
-        * Parse the configuration as a `dict`.
-        * Call `configure`, using the dict as keyword arguments.
-        * Call `set_metadata`.
-        * Output the metadata event.
-        * Change the script state to `ScriptState.CONFIGURED`.
+        Parameters
+        ----------
+        data : ``cmd_configure.DataType``
+            Configuration.
 
         Raises
         ------
         salobj.ExpectedError
             If `state`.state is not `ScriptState.UNCONFIGURED`.
+
+        Notes
+        -----
+        This method does the following:
+
+        * Parse the ``config`` field as yaml-encoded `dict` and validate it
+          (including setting default values).
+        * Call `configure`.
+        * Call `set_metadata`.
+        * Output the metadata event.
+        * Change the script state to `ScriptState.CONFIGURED`.
         """
         self.assert_state("configure", [ScriptState.UNCONFIGURED])
         try:
-            config = yaml.safe_load(data.config)
-        except yaml.scanner.ScannerError as e:
-            raise salobj.ExpectedError(f"Could not parse config={data.config}: {e}") from e
-        if config and not isinstance(config, dict):
-            raise salobj.ExpectedError(f"Could not parse config={data.config} as a dict")
-        if not config:
-            config = {}
-        try:
-            await self.configure(**config)
+            if self.config_validator is None:
+                if data.config:
+                    raise RuntimeError("This script has no configuration; "
+                                       f"config={data.config} must be empty.")
+                config = types.SimpleNamespace()
+            else:
+                if data.config:
+                    user_config_dict = yaml.safe_load(data.config)
+                else:
+                    user_config_dict = {}
+                full_config_dict = self.config_validator.validate(user_config_dict)
+                config = types.SimpleNamespace(**full_config_dict)
+            await self.configure(config)
         except Exception as e:
-            self.log.exception(f"config({config}) failed")
-            raise salobj.ExpectedError(f"config({config}) failed: {e}") from e
+            errmsg = f"config({data.config}) failed"
+            self.log.exception(errmsg)
+            raise salobj.ExpectedError(f"{errmsg}: {e}") from e
 
         metadata = self.evt_metadata.DataType()
         # initialize to vaguely reasonable values
@@ -360,6 +385,11 @@ class BaseScript(salobj.Controller, abc.ABC):
 
     async def do_run(self, data):
         """Run the configured script and quit.
+
+        Parameters
+        ----------
+        data : ``cmd_run.DataType``
+            Ignored.
 
         Raises
         ------
@@ -384,6 +414,11 @@ class BaseScript(salobj.Controller, abc.ABC):
 
     def do_resume(self, data):
         """Resume the currently paused script.
+
+        Parameters
+        ----------
+        data : ``cmd_resume.DataType``
+            Ignored.
 
         Raises
         ------

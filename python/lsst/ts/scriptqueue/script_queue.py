@@ -315,7 +315,6 @@ class ScriptQueue(salobj.BaseCsc):
         If you stop queued scripts they are not not moved to the history.
         """
         self.assert_enabled("stopScripts")
-        data = data
         if data.length <= 0:
             raise salobj.ExpectedError(f"length={data.length} must be positive")
         timeout = 5 + 0.2*data.length

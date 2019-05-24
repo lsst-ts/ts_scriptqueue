@@ -131,15 +131,10 @@ class RequestCmd(Cmd):
         If it fails to quit the queue exit anyway.
         """
         try:
-            retval = self.model.quit_queue()
-            if retval:
-                print("Bye...")
-            else:
-                print("Could not quit queue.")
+            self.model.quit_queue()
+            print("Bye...")
         except Exception as e:
-            print("Could not quit queue.")
-            self.log.exception(e)
-
+            print(f"Could not quit queue: {e}")
         return True
 
     def do_stop(self, args):
@@ -380,8 +375,8 @@ class RequestCmd(Cmd):
         try:
             return super().onecmd(*args)
         except AckError as ack_err:
-            self.log.error(f"Failed with ack.result={ack_err.ack.result}")
+            self.log.error(f"onecmd(*{args}) failed with ack.result={ack_err.ack.result}")
         except CmdError as e:
             self.log.error(f"*** {e.args[0]}")
-        except Exception as e:
-            self.log.exception(e)
+        except Exception:
+            self.log.exception(f"onecmd(*{args}) failed")

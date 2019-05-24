@@ -19,246 +19,68 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-import asyncio
+import os
+import subprocess
 import time
 import unittest
 
 from lsst.ts import salobj
 from lsst.ts.scriptqueue.ui import RequestModel
-from lsst.ts.scriptqueue import ScriptState, ScriptProcessState
-
-import SALPY_ScriptQueue
-
-
-index_gen = salobj.index_generator()
-
-
-class Harness:
-
-    def __init__(self):
-        self.index = next(index_gen)
-        salobj.test_utils.set_random_lsst_dds_domain()
-
-        self.external_script = "unit:unit1:unit2"
-        self.standard_script = "test:test1:test2"
-        self.enabled = True
-        self.running = True
-
-        self.queue = salobj.Controller(SALPY_ScriptQueue, self.index)
-
-        self.queue.cmd_showQueue.callback = self.show_queue_callback
-        self.queue.cmd_showScript.callback = self.show_script_callback
-        self.queue.cmd_start.callback = self.start_callback
-        self.queue.cmd_enable.callback = self.enable_callback
-        self.queue.cmd_disable.callback = self.disable_callback
-        self.queue.cmd_standby.callback = self.standby_callback
-        self.queue.cmd_exitControl.callback = self.exit_control_callback
-        self.queue.cmd_showAvailableScripts.callback = self.show_available_scripts_callback
-        self.queue.cmd_pause.callback = self.pause_callback
-        self.queue.cmd_resume.callback = self.resume_callback
-        self.queue.cmd_add.callback = self.add_callback
-
-        self.queue.evt_summaryState.set_put(summaryState=salobj.State.ENABLED)
-
-        self.scripts = {}
-
-        self.setup_script_info()
-
-        self.ui_model = RequestModel(self.index)
-
-        self.add_index = [99, 100, 101]
-
-    def show_queue_callback(self, id_data):
-        """Callback for the queue command showQueue."""
-
-        queue = SALPY_ScriptQueue.ScriptQueue_logevent_queueC()
-
-        queue.enabled = self.enabled
-        queue.running = self.running
-
-        queue.currentSalIndex = 100
-
-        queue.length = 1
-        queue.pastLength = 1
-
-        queue.salIndices[0] = 101
-        queue.pastSalIndices[0] = 99
-
-        self.queue.evt_queue.put(queue)
-
-    def show_script_callback(self, id_data):
-        """Callback for the queue command showScript."""
-        self.queue.evt_script.put(self.scripts[id_data.data.salIndex])
-
-    def show_available_scripts_callback(self, id_data):
-        """Callback for the queue showAvailableScripts command."""
-        self.queue.evt_availableScripts.set(external=self.external_script,
-                                            standard=self.standard_script)
-        self.queue.evt_availableScripts.put()
-
-    def start_callback(self, id_data):
-        """Callback for the queue start command."""
-        self.queue.evt_summaryState.set_put(summaryState=salobj.State.DISABLED)
-        self.enabled = False
-        self.show_queue_callback(None)
-
-    def enable_callback(self, id_data):
-        """Callback for the queue enable command."""
-        self.queue.evt_summaryState.set_put(summaryState=salobj.State.ENABLED)
-        self.enabled = True
-        self.show_queue_callback(None)
-
-    def disable_callback(self, id_data):
-        """Callback for the queue disable command."""
-        self.queue.evt_summaryState.set_put(summaryState=salobj.State.DISABLED)
-        self.enabled = False
-        self.show_queue_callback(None)
-
-    def standby_callback(self, id_data):
-        """Callback for the queue standby command."""
-        self.queue.evt_summaryState.set_put(summaryState=salobj.State.STANDBY)
-        self.enabled = False
-        self.show_queue_callback(None)
-
-    def exit_control_callback(self, id_data):
-        """Callback for the queue exitControl command."""
-        self.queue.evt_summaryState.set_put(summaryState=salobj.State.OFFLINE)
-        self.enabled = False
-        self.show_queue_callback(None)
-
-    def pause_callback(self, id_data):
-        """Callback to queue pause command"""
-        self.running = False
-        self.show_queue_callback(None)
-
-    def resume_callback(self, id_data):
-        """Callback to queue resume command"""
-        self.running = True
-        self.show_queue_callback(None)
-
-    def add_callback(self, id_data):
-        """Callback to the queue add command."""
-
-        new_script = SALPY_ScriptQueue.ScriptQueue_logevent_scriptC()
-        new_script.path = id_data.data.path
-        new_script.timestampProcessStart = time.time()
-        new_script.timestampRunStart = 0.
-        new_script.timestampProcessEnd = 0.
-        new_script.timestampConfigureStart = 0.
-        new_script.timestampConfigureEnd = 0.
-        new_script.processState = ScriptProcessState.LOADING
-        new_script.scriptState = ScriptState.UNCONFIGURED
-
-        if id_data.data.isStandard and id_data.data.path in self.standard_script:
-            new_index = max(self.add_index) + 1
-            self.add_index.append(new_index)
-
-            new_script.salIndex = new_index
-            new_script.isStandard = True
-
-        elif not id_data.data.isStandard and id_data.data.path in self.external_script:
-
-            new_index = max(self.add_index) + 1
-            self.add_index.append(new_index)
-
-            new_script.salIndex = new_index
-            new_script.isStandard = True
-        else:
-            raise RuntimeError(f"Cannot add script {id_data.data.path}.")
-
-        self.scripts[new_index] = new_script
-
-        return self.queue.salinfo.makeAck(self.queue.salinfo.lib.SAL__CMD_COMPLETE, result=f"{new_index}")
-
-    def setup_script_info(self):
-        """Method to output script info."""
-
-        current_script = SALPY_ScriptQueue.ScriptQueue_logevent_scriptC()
-        current_script.salIndex = 100
-        current_script.isStandard = True
-        current_script.path = 'test'
-        current_script.timestampProcessStart = time.time()-20.
-        current_script.timestampRunStart = time.time()-5.
-        current_script.timestampProcessEnd = 0.
-        current_script.timestampConfigureStart = time.time()-15.
-        current_script.timestampConfigureEnd = time.time()-14.
-        current_script.processState = ScriptProcessState.RUNNING
-        current_script.scriptState = ScriptState.RUNNING
-
-        past_script = SALPY_ScriptQueue.ScriptQueue_logevent_scriptC()
-        past_script.salIndex = 99
-        past_script.isStandard = True
-        past_script.path = 'test'
-        past_script.timestampProcessStart = time.time()-40.
-        past_script.timestampRunStart = time.time()-25.
-        past_script.timestampProcessEnd = time.time()-6.
-        past_script.timestampConfigureStart = time.time()-35.
-        past_script.timestampConfigureEnd = time.time()-34.
-        past_script.processState = ScriptProcessState.DONE
-        past_script.scriptState = ScriptState.DONE
-
-        next_script = SALPY_ScriptQueue.ScriptQueue_logevent_scriptC()
-        next_script.salIndex = 101
-        next_script.isStandard = True
-        next_script.path = 'test'
-        next_script.timestampProcessStart = time.time()-19.
-        next_script.timestampRunStart = 0.
-        next_script.timestampProcessEnd = 0.
-        next_script.timestampConfigureStart = time.time()-13.
-        next_script.timestampConfigureEnd = time.time()-12.
-        next_script.processState = ScriptProcessState.CONFIGURED
-        next_script.scriptState = ScriptState.CONFIGURED
-
-        self.scripts = {99: past_script,
-                        100: current_script,
-                        101: next_script}
-
-    async def output_heartbeats(self):
-        """Emulate heartbeat from the queue."""
-        while True:
-            self.queue.evt_heartbeat.put()
-            await asyncio.sleep(1.)
 
 
 class TestRequestModel(unittest.TestCase):
 
     def test_request_model(self):
+        salobj.set_random_lsst_dds_domain()
+        index = 1
+        datadir = os.path.abspath(os.path.join(os.path.dirname(__file__), "data"))
+        standardpath = os.path.join(datadir, "standard")
+        externalpath = os.path.join(datadir, "external")
 
-        harness = Harness()
+        print("start subprocess")
+        with subprocess.Popen(["run_script_queue.py", str(index),
+                               "--standard", standardpath,
+                               "--external", externalpath]) as proc:
+            try:
+                ui_model = RequestModel(index)
 
-        harness.queue.evt_summaryState.set_put(summaryState=salobj.State.STANDBY)
+                print("enable queue")
+                ui_model.enable_queue()
 
-        self.assertTrue(harness.ui_model.summary_state,
-                        salobj.State.STANDBY)
+                self.assertEqual(ui_model.summary_state, salobj.State.ENABLED)
 
-        harness.ui_model.enable_queue()
+                print("get available scripts")
+                available_scripts = ui_model.get_scripts()
 
-        self.assertTrue(harness.ui_model.summary_state,
-                        salobj.State.ENABLED)
+                print("check available scripts")
+                expected_std_set = set(["script1", "script2", "unloadable",
+                                        "subdir/script3", "subdir/subsubdir/script4"])
+                expected_ext_set = set(["script1", "script5", "subdir/script3", "subdir/script6"])
+                self.assertEqual(set(available_scripts["standard"]), expected_std_set)
+                self.assertEqual(set(available_scripts["external"]), expected_ext_set)
 
-        available_scripts = harness.ui_model.get_scripts()
+                print("pause queue")
+                ui_model.pause_queue()
+                self.assertEqual(ui_model.state(), "Stopped")
 
-        for external in available_scripts['external']:
-            self.assertIn(external, harness.external_script)
-        for standard in available_scripts['standard']:
-            self.assertIn(standard, harness.standard_script)
+                print("resume queue")
+                ui_model.resume_queue()
+                self.assertEqual(ui_model.state(), "Running")
 
-        harness.ui_model.pause_queue()
+                print("start a script")
+                result = ui_model.add(path="script1", is_standard=True, config="")
+                self.assertEqual(result, 100000)
 
-        self.assertEqual(harness.ui_model.state(), "Stopped")
-
-        harness.ui_model.resume_queue()
-
-        self.assertEqual(harness.ui_model.state(), "Running")
-
-        result = harness.ui_model.add(path="test", is_standard=True, config="")
-
-        self.assertIn(result, harness.add_index)
-
-        harness.ui_model.quit_queue()
-
-        self.assertTrue(harness.ui_model.summary_state,
-                        salobj.State.OFFLINE)
+                print("quit queue")
+                ui_model.quit_queue()
+                t0 = time.time()
+                while ui_model.summary_state != salobj.State.OFFLINE:
+                    time.sleep(0.1)
+                    if time.time() - t0 > 2:
+                        self.fail("Timed out waiting for ui_model to go OFFLINE")
+            except Exception:
+                proc.terminate()
+                raise
 
 
 if __name__ == "__main__":

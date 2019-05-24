@@ -4,10 +4,8 @@ import asyncio
 import logging
 
 from lsst.ts import salobj
-from lsst.ts.scriptqueue import ScriptProcessState
+from lsst.ts.idl.enums.ScriptQueue import Location, ScriptProcessState
 from lsst.ts.scriptqueue.base_script import HEARTBEAT_INTERVAL
-import SALPY_ScriptQueue
-import SALPY_Script
 
 from .queue_state import QueueState
 
@@ -28,7 +26,8 @@ class RequestModel:
 
         self.log = logging.getLogger(__name__)
 
-        self.queue = salobj.Remote(SALPY_ScriptQueue, index)
+        self.domain = salobj.Domain()
+        self.queue = salobj.Remote(self.domain, "ScriptQueue", index)
         self.evt_loop = asyncio.get_event_loop()
 
         self.cmd_timeout = 120.
@@ -54,7 +53,11 @@ class RequestModel:
     @property
     def summary_state(self):
         """Return summary state"""
-        return salobj.State(self.queue.evt_summaryState.get().summaryState)
+        data = self.queue.evt_summaryState.get()
+        if data is None:
+            return 0
+        else:
+            return salobj.State(data.summaryState)
 
     def enable_queue(self):
         """Enable the script queue.
@@ -62,37 +65,9 @@ class RequestModel:
         It will try to identify the current state of the queue and if it fails,
         assumes the queue is in STANDBY.
         """
-        try:
-            self.run(salobj.set_summary_state(remote=self.queue,
-                                              state=salobj.State.ENABLED,
-                                              timeout=self.cmd_timeout))
-            return
-        except Exception as e:
-            self.log.error("Could not start queue using set_summary_state. Trying to force "
-                           "enable from standby.")
-            self.log.exception(e)
-            pass
-
-        try:
-            self.run(self.queue.cmd_start.start(timeout=self.cmd_timeout))
-        except Exception as e:
-            self.log.exception(e)
-            pass
-
-        try:
-            self.run(self.queue.cmd_enable.start(timeout=self.cmd_timeout))
-        except Exception as e:
-            self.log.exception(e)
-            pass
-
-        summary_state = self.queue.evt_summaryState.get()
-        if summary_state is None:
-            self.log.error("Can not determine state of the queue. Try listening for heartbeats "
-                           "to make sure queue is running.")
-        else:
-            self.log.info(f"Queue state: {salobj.State(summary_state.summaryState)}")
-
-        return False
+        self.run(salobj.set_summary_state(remote=self.queue,
+                                          state=salobj.State.ENABLED,
+                                          timeout=self.cmd_timeout))
 
     def get_scripts(self):
         """Return available scripts.
@@ -106,49 +81,35 @@ class RequestModel:
             The paths are as reported by the script queue
             and used when adding a script.
         """
-
-        available_scripts_coro = self.queue.evt_availableScripts.next(flush=True,
-                                                                      timeout=self.cmd_timeout)
+        self.queue.evt_availableScripts.flush()
 
         self.run(self.queue.cmd_showAvailableScripts.start(timeout=self.cmd_timeout))
 
-        script_list = self.run(available_scripts_coro)
+        script_list = self.run(self.queue.evt_availableScripts.next(flush=False,
+                                                                    timeout=self.cmd_timeout))
 
         return {'external': script_list.external.split(':'),
                 'standard': script_list.standard.split(':')}
 
     def pause_queue(self):
         """Pause the queue."""
+        self.queue.evt_queue.flush()
         self.run(self.queue.cmd_pause.start(timeout=self.cmd_timeout))
-        self.update_queue_state()
+        self.run(self.queue.evt_queue.next(flush=False, timeout=self.cmd_timeout))
+        self.state.update(self.queue.evt_queue.get())
 
     def resume_queue(self):
-        """Resume queue operation"""
+        """Resume queue operation."""
+        self.queue.evt_queue.flush()
         self.run(self.queue.cmd_resume.start(timeout=self.cmd_timeout))
-        self.update_queue_state()
+        self.run(self.queue.evt_queue.next(flush=False, timeout=self.cmd_timeout))
+        self.state.update(self.queue.evt_queue.get())
 
     def quit_queue(self):
-        """Quit queue by sending it to exit control.
-
-        Assume the queue is in enable state but if it is not,
-        ignore the rejected commands for disable and standby.
+        """Tell the script queue to quit.
         """
-        try:
-            self.run(self.queue.cmd_disable.start(timeout=self.cmd_timeout))
-        except Exception:
-            pass
-
-        try:
-            self.run(self.queue.cmd_standby.start(timeout=self.cmd_timeout))
-        except Exception:
-            pass
-
-        try:
-            self.run(self.queue.cmd_exitControl.start(timeout=self.cmd_timeout))
-        except Exception:
-            pass
-
-        return True
+        self.run(salobj.set_summary_state(remote=self.queue, state=salobj.State.OFFLINE,
+                                          timeout=self.cmd_timeout))
 
     def stop_scripts(self, sal_indices, terminate=False):
         """Stop list of scripts.
@@ -198,16 +159,15 @@ class RequestModel:
         salindex : int
             The salindex of the script added to the queue.
         """
-        self.queue.cmd_add.set(isStandard=is_standard,
-                               path=path,
-                               config=config,
-                               location=SALPY_ScriptQueue.add_Last)
+        ackcmd = self.run(self.queue.cmd_add.set_start(isStandard=is_standard,
+                                                       path=path,
+                                                       config=config,
+                                                       location=Location.LAST,
+                                                       timeout=self.cmd_timeout))
 
-        ack = self.run(self.queue.cmd_add.start(timeout=self.cmd_timeout))
+        self.state.add_script(int(ackcmd.result))
 
-        self.state.add_script(int(ack.ack.result))
-
-        return int(ack.ack.result)
+        return int(ackcmd.result)
 
     def set_queue_log_level(self, level):
         """Set queue log level.
@@ -217,8 +177,7 @@ class RequestModel:
         level : int
             Log level; error=40, warning=30, info=20, debug=10
         """
-        self.queue.cmd_setLogLevel.set(level=level)
-        self.run(self.queue.cmd_setLogLevel.start(timeout=self.cmd_timeout))
+        self.run(self.queue.cmd_setLogLevel.set_start(level=level, timeout=self.cmd_timeout))
 
     def set_script_log_level(self, index, level):
         """Set the log level for a script.
@@ -239,8 +198,7 @@ class RequestModel:
             self.get_script_remote(index)
 
         remote = self.state.scripts[index]['remote']
-        remote.cmd_setLogLevel.set(level=level)
-        self.run(remote.cmd_setLogLevel.start(timeout=self.cmd_timeout))
+        self.run(remote.cmd_setLogLevel.set_start(level=level, timeout=self.cmd_timeout))
 
     def listen_heartbeat(self):
         """Listen for queue heartbeats."""
@@ -255,9 +213,8 @@ class RequestModel:
         if (info["process_state"] < ScriptProcessState.DONE and
                 self.state.scripts[salindex]['remote'] is None):
             self.log.debug('Starting script remote')
-            remote = salobj.Remote(SALPY_Script, salindex)
+            remote = salobj.Remote(self.domain, "Script", salindex)
             self.state.scripts[salindex]['remote'] = remote
-            remote.cmd_setLogLevel.set(level=10)
         elif info["process_state"] >= ScriptProcessState.DONE:
             raise RuntimeError(f"Script {salindex} in a final state.")
 
@@ -303,26 +260,21 @@ class RequestModel:
 
     def query_queue_state(self):
         """Query state of the queue."""
-
         queue_state = self.queue.evt_summaryState.get()
         if queue_state is None:
-            self.log.warning('Could not get state of the queue.')
-            return -1
+            pass  # try next
         elif queue_state.summaryState != salobj.State.ENABLED:
             self.log.warning(f'Queue summary state is {salobj.State(queue_state.summaryState)!r}. '
                              f'Enable it first and try again.')
             return -1
 
-        queue_coro = self.queue.evt_queue.next(flush=True, timeout=self.cmd_timeout)
+        queue_coro = self.queue.evt_queue.next(flush=False, timeout=self.cmd_timeout)
 
         try:
-            self.run(self.queue.cmd_showQueue.start(timeout=self.cmd_timeout))
-        except Exception as e:
-            self.log.warning('Could not get state of the queue.')
-            self.log.exception(e)
+            queue = self.run(queue_coro)
+        except Exception:
+            self.log.exception('Could not get state of the queue.')
             return -1
-
-        queue = self.run(queue_coro)
 
         self.state.update(queue)
 
@@ -335,8 +287,8 @@ class RequestModel:
 
         Parameters
         ----------
-        info : SALPY_ScriptQueue.ScriptQueue_logevent_scriptC
-
+        info : ``ScriptQueue.evt_script.DataType``
+            Script data.
         """
         self.state.update_script_info(info)
 
@@ -361,9 +313,8 @@ class RequestModel:
         """Send a command to the queue to output information about all scripts.
         """
         for salindex in self.state.script_indices:
-            self.queue.cmd_showScript.set(salIndex=salindex)
             try:
-                self.run(self.queue.cmd_showScript.start(timeout=self.cmd_timeout))
+                self.run(self.queue.cmd_showScript.set_start(salIndex=salindex, timeout=self.cmd_timeout))
             except salobj.AckError as ack_err:
                 self.log.error(f"Could not get info on script {salindex}. "
                                f"Failed with ack.result={ack_err.ack.result}")

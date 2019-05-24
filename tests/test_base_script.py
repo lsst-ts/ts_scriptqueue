@@ -28,7 +28,7 @@ import warnings
 import yaml
 
 from lsst.ts import salobj
-from lsst.ts.scriptqueue import ScriptState
+from lsst.ts.scriptqueue import BaseScript, ScriptState
 from lsst.ts.scriptqueue.test_utils import TestScript
 
 STD_TIMEOUT = 2
@@ -36,6 +36,27 @@ START_TIMEOUT = 30
 END_TIMEOUT = 10
 
 index_gen = salobj.index_generator()
+
+
+class NonConfigurableScript(BaseScript):
+    def __init__(self, index):
+        super().__init__(index=index, descr="Non-configurable script")
+        self.config = None
+        self.run_called = False
+        self.set_metadata_called = False
+
+    @property
+    def schema(self):
+        return None
+
+    async def configure(self, config):
+        self.config = config
+
+    async def run(self):
+        self.run_called = True
+
+    def set_metadata(self, metadata):
+        self.set_metadata_called = True
 
 
 class BaseScriptTestCase(unittest.TestCase):
@@ -81,10 +102,32 @@ class BaseScriptTestCase(unittest.TestCase):
         configure_data = script.cmd_configure.DataType()
         configure_data.config = config
         await script.do_configure(configure_data)
-        self.assertEqual(script.wait_time, kwargs.get("wait_time", 0))
-        self.assertEqual(script.fail_run, kwargs.get("fail_run", False))
-        self.assertEqual(script.fail_cleanup, kwargs.get("fail_cleanup", False))
+        self.assertEqual(script.config.wait_time, kwargs.get("wait_time", 0))
+        self.assertEqual(script.config.fail_run, kwargs.get("fail_run", False))
+        self.assertEqual(script.config.fail_cleanup, kwargs.get("fail_cleanup", False))
         self.assertEqual(script.state.state, ScriptState.CONFIGURED)
+
+    def test_non_configurable_script_empty_config(self):
+        async def doit():
+            async with NonConfigurableScript(index=self.index) as script:
+                data = script.cmd_configure.DataType()
+                await script.do_configure(data)
+                self.assertEqual(len(script.config.__dict__), 0)
+                self.assertTrue(script.set_metadata_called)
+                self.assertFalse(script.run_called)
+
+        asyncio.get_event_loop().run_until_complete(doit())
+
+    def test_non_configurable_script_invalid_config(self):
+        async def doit():
+            async with NonConfigurableScript(index=self.index) as script:
+                data = script.cmd_configure.DataType()
+                data.config = "invalid: should be empty"
+                with self.assertRaises(salobj.ExpectedError):
+                    await script.do_configure(data)
+                self.assertIsNone(script.config)
+
+        asyncio.get_event_loop().run_until_complete(doit())
 
     def test_setCheckpoints(self):
 

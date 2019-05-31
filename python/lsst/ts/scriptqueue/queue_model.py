@@ -29,11 +29,11 @@ import pathlib
 import sys
 import traceback
 
-import SALPY_ScriptQueue
 from lsst.ts import salobj
+from lsst.ts.idl.enums.Script import ScriptState
+from lsst.ts.idl.enums.ScriptQueue import Location
 from . import utils
 from .script_info import ScriptInfo
-from .base_script import ScriptState
 
 _LOAD_TIMEOUT = 60  # seconds
 
@@ -86,6 +86,10 @@ class QueueModel:
 
     Parameters
     ----------
+    domain : `salobj.lsst.ts.salobj.Domain`
+        DDS domain; typically ``ScriptQueue.domain``
+    log : `logging.Logger`
+        Logger.
     standardpath : `str`, `bytes` or `os.PathLike`
         Path to standard SAL scripts.
     externalpath : `str`, `bytes` or `os.PathLike`
@@ -108,9 +112,8 @@ class QueueModel:
     ValueError
         If ``standardpath`` or ``externalpath`` does not exist.
     """
-    def __init__(self, standardpath, externalpath, queue_callback=None, script_callback=None,
-                 min_sal_index=MIN_SAL_INDEX, max_sal_index=salobj.MAX_SAL_INDEX,
-                 verbose=False):
+    def __init__(self, domain, log, standardpath, externalpath, queue_callback=None, script_callback=None,
+                 min_sal_index=MIN_SAL_INDEX, max_sal_index=salobj.MAX_SAL_INDEX, verbose=False):
         if not os.path.isdir(standardpath):
             raise ValueError(f"No such dir standardpath={standardpath}")
         if not os.path.isdir(externalpath):
@@ -120,6 +123,8 @@ class QueueModel:
         if script_callback and not callable(script_callback):
             raise TypeError(f"script_callback={script_callback} is not callable")
 
+        self.domain = domain
+        self.log = log
         self.standardpath = os.path.abspath(standardpath)
         self.externalpath = os.path.abspath(externalpath)
         self.queue_callback = queue_callback
@@ -133,6 +138,12 @@ class QueueModel:
         self._enabled = False
         self._index_generator = salobj.index_generator(imin=min_sal_index, imax=max_sal_index)
         self._scripts_being_stopped = set()
+        # use index=0 so we get messages for all scripts
+        self.remote = salobj.Remote(domain=domain, name="Script", index=0)
+        self.remote.evt_state.callback = self._script_state_callback
+        if self.verbose:
+            self.remote.evt_logMessage.callback = self._log_message_callback
+        self.start_task = self.remote.start_task
 
     async def add(self, script_info, location, location_sal_index):
         """Add a script to the queue.
@@ -147,8 +158,8 @@ class QueueModel:
         ----------
         script_info : `ScriptInfo`
             Script info.
-        location : `int`
-            One of SALPY_ScriptQueue.add_First, Last, Before or After.
+        location : `Location`
+            Location of script.
         location_sal_index : `int`
             SAL index of script that ``location`` is relative to.
 
@@ -176,6 +187,10 @@ class QueueModel:
     def current_index(self):
         """Return the SAL index of the current script, or 0 if none."""
         return 0 if self.current_script is None else self.current_script.index
+
+    async def close(self):
+        """Shut down the queue, terminate all scripts and free resources."""
+        await self.wait_terminate_all()
 
     def find_available_scripts(self):
         """Find available scripts.
@@ -280,8 +295,8 @@ class QueueModel:
         ----------
         sal_index : `int`
             SAL index of script to move.
-        location : `int`
-            One of SALPY_ScriptQueue.add_First, Last, Before or After.
+        location : `Location`
+            Location of script.
         location_sal_index : `int`
             SAL index of script that ``location`` is relative to.
 
@@ -295,7 +310,7 @@ class QueueModel:
             If location is relative and a script at ``location_sal_index``
             is not queued.
         """
-        if location in (SALPY_ScriptQueue.add_Before, SALPY_ScriptQueue.add_After) \
+        if location in (Location.BEFORE, Location.AFTER) \
                 and location_sal_index == sal_index:
             # this is a no-op, and is not properly handled by _insert_script,
             # but first make sure the script is on the queue
@@ -338,17 +353,19 @@ class QueueModel:
         del self.queue[queue_index]
         return script_info
 
-    async def requeue(self, sal_index, cmd_id, location, location_sal_index):
+    async def requeue(self, sal_index, seq_num, location, location_sal_index):
         """Requeue a script.
 
         Parameters
         ----------
+        domain : `lsst.ts.salobj.Domain`
+            DDS domain.
         sal_index : `int`
             SAL index of script to requeue.
-        cmd_id : `int`
-            Command ID; recorded in the script info.
-        location : `int`
-            One of SALPY_ScriptQueue.add_First, Last, Before or After.
+        seq_num : `int`
+            Command sequence number; recorded in the script info.
+        location : `Location`
+            Location of script.
         location_sal_index : `int`
             SAL index of script that ``location`` is relative to.
 
@@ -369,8 +386,10 @@ class QueueModel:
         """
         old_script_info = self.get_script_info(sal_index, search_history=True)
         script_info = ScriptInfo(
+            log=self.log,
+            remote=self.remote,
             index=self.next_sal_index,
-            cmd_id=cmd_id,
+            seq_num=seq_num,
             is_standard=old_script_info.is_standard,
             path=old_script_info.path,
             config=old_script_info.config,
@@ -393,8 +412,8 @@ class QueueModel:
             SAL indices of scripts to stop.
             Scripts whose indices are not found are ignored.
         terminate : `bool`
-            Give the current script (or any other running script)
-            a chance to clean up?
+            Terminate a running script instead of giving it time
+            to stop gently?
         """
         self._scripts_being_stopped = set()
         script_info_list = []
@@ -440,7 +459,7 @@ class QueueModel:
         if script_info.script_state == ScriptState.RUNNING:
             # process is running, so send the "stop" command
             try:
-                await script_info.remote.cmd_stop.start(timeout=2)
+                await script_info.remote.cmd_stop.set_start(ScriptID=script_info.index, timeout=2)
                 # give the process time to terminate
                 await asyncio.wait_for(script_info.process.wait(), timeout=5)
                 # let the script be removed or moved
@@ -543,8 +562,8 @@ class QueueModel:
         ----------
         script_info : `ScriptInfo`
             Script info.
-        location : `int`
-            One of SALPY_ScriptQueue.add_First, Last, Before or After.
+        location : `Location`
+            Location of script.
         location_sal_index : `int`
             SAL index of script that ``location`` is relative to.
 
@@ -556,13 +575,13 @@ class QueueModel:
             If location is relative and a script at ``location_sal_index``
             is not queued.
         """
-        if location == SALPY_ScriptQueue.add_First:
+        if location == Location.FIRST:
             self.queue.appendleft(script_info)
-        elif location == SALPY_ScriptQueue.add_Last:
+        elif location == Location.LAST:
             self.queue.append(script_info)
-        elif location in (SALPY_ScriptQueue.add_Before, SALPY_ScriptQueue.add_After):
+        elif location in (Location.BEFORE, Location.AFTER):
             location_queue_index = self.get_queue_index(location_sal_index)
-            if location == SALPY_ScriptQueue.add_After:
+            if location == Location.AFTER:
                 location_queue_index += 1
             if location_queue_index >= len(self.queue):
                 self.queue.append(script_info)
@@ -597,6 +616,30 @@ class QueueModel:
                     self._update_queue()
             else:
                 self._update_queue()
+
+    def _log_message_callback(self, data):
+        """Print Script logMessage data to stdout.
+
+        To use: if self.verbose is true then set this as a callback
+        for the logMessage event.
+
+        Parameters
+        ----------
+        data : `Script_logevent_logMessageC`
+            Log message data.
+        """
+        print(f"Script {data.ScriptID} log message={data.message!r}; "
+              f"level={data.level}; traceback={data.traceback!r}")
+
+    def _script_state_callback(self, data):
+        sal_index = data.ScriptID
+        try:
+            script_info = self.get_script_info(sal_index=sal_index, search_history=False)
+        except ValueError:
+            self.log.warn(f"QueueModel got a Script state event for script {sal_index}, "
+                          "which is neither running nor on the queue")
+            return
+        script_info._script_state_callback(data)
 
     def _script_callback(self, script_info):
         """ScriptInfo callback."""

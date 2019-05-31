@@ -26,7 +26,6 @@ import os
 
 import numpy as np
 
-import SALPY_ScriptQueue
 from lsst.ts import salobj
 from .queue_model import QueueModel, ScriptInfo
 
@@ -130,15 +129,18 @@ class ScriptQueue(salobj.BaseCsc):
         max_sal_index = min_sal_index + SCRIPT_INDEX_MULT - 1
         if max_sal_index > salobj.MAX_SAL_INDEX:
             raise ValueError(f"index {index} too large and a bug let this slip through")
-        self.model = QueueModel(standardpath=standardpath,
+
+        super().__init__("ScriptQueue", index)
+
+        self.model = QueueModel(domain=self.domain,
+                                log=self.log,
+                                standardpath=standardpath,
                                 externalpath=externalpath,
                                 queue_callback=self.put_queue,
                                 script_callback=self.put_script,
                                 min_sal_index=min_sal_index,
                                 max_sal_index=max_sal_index,
                                 verbose=verbose)
-
-        super().__init__(SALPY_ScriptQueue, index)
 
     def _get_scripts_path(self, patharg, is_standard):
         """Get the scripts path from the ``standardpath`` or ``externalpath``
@@ -181,20 +183,27 @@ class ScriptQueue(salobj.BaseCsc):
                 raise ValueError(f"{prefix}path {dir_path} is not a directory")
         return dir_path
 
-    async def start(self, initial_simulation_mode):
-        await super().start(initial_simulation_mode=initial_simulation_mode)
+    async def start(self):
+        """Finish creating the script queue."""
+        await super().start()
+        await self.model.start_task
         self.evt_rootDirectories.set_put(standard=self.model.standardpath,
                                          external=self.model.externalpath,
                                          force_output=True)
         self.put_queue()
 
-    def do_showAvailableScripts(self, id_data=None):
+    async def close_tasks(self):
+        """Shut down the queue, terminate all scripts and free resources."""
+        await self.model.close()
+        await super().close_tasks()
+
+    def do_showAvailableScripts(self, data=None):
         """Output a list of available scripts.
 
         Parameters
         ----------
-        id_data : `salobj.CommandIdData` (optional)
-            Command ID and data. Ignored.
+        data : ``cmd_showAvailableScripts.DataType``
+            Command data. Ignored.
         """
         self.assert_enabled("showAvailableScripts")
         scripts = self.model.find_available_scripts()
@@ -204,54 +213,54 @@ class ScriptQueue(salobj.BaseCsc):
             force_output=True,
         )
 
-    def do_showQueue(self, id_data):
+    def do_showQueue(self, data):
         """Output the queue event.
 
         Parameters
         ----------
-        id_data : `salobj.CommandIdData` (optional)
-            Command ID and data. Ignored.
+        data : ``cmd_showQueue.DataType`` (optional)
+            Command data. Ignored.
         """
         self.assert_enabled("showQueue")
         self.put_queue()
 
-    def do_showScript(self, id_data):
+    def do_showScript(self, data):
         """Output the script event for one script.
 
         Parameters
         ----------
-        id_data : `salobj.CommandIdData` (optional)
-            Command ID and data. Ignored.
+        data : ``cmd_showScript.DataType`` (optional)
+            Command data. Ignored.
         """
         self.assert_enabled("showScript")
-        script_info = self.model.get_script_info(id_data.data.salIndex,
+        script_info = self.model.get_script_info(data.salIndex,
                                                  search_history=True)
         self.put_script(script_info, force_output=True)
 
-    def do_pause(self, id_data):
+    def do_pause(self, data):
         """Pause the queue. A no-op if already paused.
 
         Unlike most commands, this can be issued in any state.
 
         Parameters
         ----------
-        id_data : `salobj.CommandIdData` (optional)
-            Command ID and data. Ignored.
+        data : ``cmd_pause.DataType`` (optional)
+            Command data. Ignored.
         """
         self.model.running = False
 
-    def do_resume(self, id_data):
+    def do_resume(self, data):
         """Run the queue. A no-op if already running.
 
         Parameters
         ----------
-        id_data : `salobj.CommandIdData` (optional)
-            Command ID and data. Ignored.
+        data : ``cmd_resume.DataType`` (optional)
+            Command data. Ignored.
         """
         self.assert_enabled("resume")
         self.model.running = True
 
-    async def do_add(self, id_data):
+    async def do_add(self, data):
         """Add a script to the queue.
 
         Start and configure a script SAL component, but don't run it.
@@ -262,48 +271,50 @@ class ScriptQueue(salobj.BaseCsc):
         """
         self.assert_enabled("add")
         script_info = ScriptInfo(
+            log=self.log,
+            remote=self.model.remote,
             index=self.model.next_sal_index,
-            cmd_id=id_data.cmd_id,
-            is_standard=id_data.data.isStandard,
-            path=id_data.data.path,
-            config=id_data.data.config,
-            descr=id_data.data.descr,
+            seq_num=data.private_seqNum,
+            is_standard=data.isStandard,
+            path=data.path,
+            config=data.config,
+            descr=data.descr,
             verbose=self.verbose,
         )
         await self.model.add(
             script_info=script_info,
-            location=id_data.data.location,
-            location_sal_index=id_data.data.locationSalIndex,
+            location=data.location,
+            location_sal_index=data.locationSalIndex,
         )
-        return self.salinfo.makeAck(ack=SALPY_ScriptQueue.SAL__CMD_COMPLETE, result=str(script_info.index))
+        return self.salinfo.makeAckCmd(private_seqNum=data.private_seqNum,
+                                       ack=salobj.SalRetCode.CMD_COMPLETE, result=str(script_info.index))
 
-    def do_move(self, id_data):
+    def do_move(self, data):
         """Move a script within the queue.
         """
         self.assert_enabled("move")
-        self.model.move(sal_index=id_data.data.salIndex,
-                        location=id_data.data.location,
-                        location_sal_index=id_data.data.locationSalIndex)
+        self.model.move(sal_index=data.salIndex,
+                        location=data.location,
+                        location_sal_index=data.locationSalIndex)
 
-    async def do_requeue(self, id_data):
+    async def do_requeue(self, data):
         """Put a script back on the queue with the same configuration.
         """
         self.assert_enabled("requeue")
         await self.model.requeue(
-            sal_index=id_data.data.salIndex,
-            cmd_id=id_data.cmd_id,
-            location=id_data.data.location,
-            location_sal_index=id_data.data.locationSalIndex,
+            sal_index=data.salIndex,
+            seq_num=data.private_seqNum,
+            location=data.location,
+            location_sal_index=data.locationSalIndex,
         )
 
-    async def do_stopScripts(self, id_data):
+    async def do_stopScripts(self, data):
         """Stop one or more queued scripts and/or the current script.
 
         If you stop the current script, it is moved to the history.
         If you stop queued scripts they are not not moved to the history.
         """
         self.assert_enabled("stopScripts")
-        data = id_data.data
         if data.length <= 0:
             raise salobj.ExpectedError(f"length={data.length} must be positive")
         timeout = 5 + 0.2*data.length
@@ -367,7 +378,7 @@ class ScriptQueue(salobj.BaseCsc):
                   f"process_state={script_info.process_state}, "
                   f"script_state={script_info.script_state}")
         self.evt_script.set_put(
-            cmdId=script_info.cmd_id,
+            cmdId=script_info.seq_num,
             salIndex=script_info.index,
             path=script_info.path,
             isStandard=script_info.is_standard,

@@ -1,4 +1,4 @@
-__all__ = ["ScriptState", "BaseScript"]
+__all__ = ["BaseScript"]
 
 import abc
 import argparse

@@ -28,7 +28,8 @@ import warnings
 import yaml
 
 from lsst.ts import salobj
-from lsst.ts.scriptqueue import BaseScript, ScriptState
+from lsst.ts.idl.enums.Script import ScriptState
+from lsst.ts.scriptqueue import BaseScript
 from lsst.ts.scriptqueue.test_utils import TestScript
 
 STD_TIMEOUT = 2

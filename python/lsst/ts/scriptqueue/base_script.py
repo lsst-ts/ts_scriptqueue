@@ -253,8 +253,15 @@ class BaseScript(salobj.Controller, abc.ABC):
             await asyncio.sleep(0.001)
 
     async def close_tasks(self):
-        if self._run_task is not None and not self._run_task.done():
+        self._is_exiting = True
+        await super().close_tasks()
+        self._heartbeat_task.cancel()
+        if self._run_task is not None:
             self._run_task.cancel()
+        if self._pause_future is not None:
+            self._pause_future.cancel()
+        # Do not cancel done_task because that messes up normal script exit,
+        # which has a significant delay before setting that task done.
 
     @abc.abstractmethod
     async def configure(self, config):

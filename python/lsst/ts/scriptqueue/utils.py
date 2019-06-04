@@ -19,7 +19,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-__all__ = ["find_public_scripts", "configure_logging", "generate_logfile"]
+__all__ = ["find_public_scripts", "configure_logging", "generate_logfile", "get_default_scripts_dir"]
 
 import os
 import logging
@@ -99,3 +99,31 @@ def generate_logfile(basename="scriptqueue"):
         os.makedirs(log_path)
     logfilename = os.path.join(log_path, "%s.%s.log" % (basename, timestr))
     return logfilename
+
+
+def get_default_scripts_dir(is_standard):
+    """Return the default directory for the specified kind of scripts.
+
+    Parameters
+    ----------
+    is_standard : `bool`
+        Standard (True) or external (False) scripts?
+
+    Returns
+    -------
+    scripts_dir : `pathlib.Path`
+        Absolute path to the specified scripts directory.
+
+    Raises
+    ------
+    ImportError
+        If the necessary python package cannot be imported
+        (``lsst.ts.standardscripts`` if ``is_standard`` true,
+        else ``lsst.ts.externalscripts``).
+    """
+    if is_standard:
+        import lsst.ts.standardscripts
+        return lsst.ts.standardscripts.get_scripts_dir()
+    else:
+        import lsst.ts.externalscripts
+        return lsst.ts.externalscripts.get_scripts_dir()

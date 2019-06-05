@@ -39,7 +39,7 @@ def find_public_scripts(root):
 
     Returns
     -------
-    scripts : `list` of `str`
+    scripts : `list` [`str`]
         Relative path of each public script found in ``root``.
     """
     paths = []

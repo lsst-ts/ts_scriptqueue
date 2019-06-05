@@ -97,6 +97,7 @@ class RequestModel:
         -------
         available_scripts : `dict` [`str`, `list` [`str`]]
             A dictionary containing two items:
+
             * "standard": a list of paths to standard scripts
             * "external": a list of paths to external scripts
             The paths are as reported by the script queue

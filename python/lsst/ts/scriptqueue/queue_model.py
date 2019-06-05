@@ -537,7 +537,7 @@ class QueueModel:
 
         Returns
         -------
-        info_list : `list` of `ScriptInfo`
+        info_list : `list` [`ScriptInfo`]
             List of all scripts that were terminated.
         """
         info_list = []

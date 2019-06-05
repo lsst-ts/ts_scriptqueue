@@ -9,5 +9,5 @@ import lsst.ts.scriptqueue
 
 _g = globals()
 _g.update(build_package_configs(
-    project_name='ts_scriptqueue',
+    project_name="ts_scriptqueue",
     version=lsst.ts.scriptqueue.version.__version__))

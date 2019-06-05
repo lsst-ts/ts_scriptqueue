@@ -130,6 +130,8 @@ class QueueModel:
         self.queue_callback = queue_callback
         self.verbose = verbose
         self.script_callback = script_callback
+        self.min_sal_index = min_sal_index
+        self.max_sal_index = max_sal_index
         # queue of ScriptInfo instances
         self.queue = collections.deque()
         self.history = collections.deque(maxlen=MAX_HISTORY)
@@ -535,7 +537,7 @@ class QueueModel:
 
         Returns
         -------
-        info_list : `list` of `ScriptInfo`
+        info_list : `list` [`ScriptInfo`]
             List of all scripts that were terminated.
         """
         info_list = []
@@ -633,6 +635,9 @@ class QueueModel:
 
     def _script_state_callback(self, data):
         sal_index = data.ScriptID
+        if sal_index < self.min_sal_index or sal_index > self.max_sal_index:
+            # not a script for this QueueModel
+            return
         try:
             script_info = self.get_script_info(sal_index=sal_index, search_history=False)
         except ValueError:

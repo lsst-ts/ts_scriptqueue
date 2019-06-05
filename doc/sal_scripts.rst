@@ -10,19 +10,19 @@ SAL scripts are programs that perform coordinated telescope and instrument contr
 Technically a SAL script is any SAL component that supports the ``Script`` API and follows these rules:
 
 * The script is a command-line executable that takes a single command line argument: the index of the SAL component.
-* The script must start in the `ScriptState.UNCONFIGURED` state and output the ``description`` event.
-* When the script is in the `ScriptState.UNCONFIGURED` state it can be configured with the ``configure`` command:
+* The script must start in the `lsst.ts.idl.enums.Script.ScriptState.UNCONFIGURED` state and output the ``description`` event.
+* When the script is in the `lsst.ts.idl.enums.Script.ScriptState.UNCONFIGURED` state it can be configured with the ``configure`` command:
 
-    * If the ``configure`` command succeeds, the script must report the ``metadata`` event and state `ScriptState.CONFIGURED`.
-    * If the ``configure`` command fails the script must report state `ScriptState.FAILED` and exit.
+    * If the ``configure`` command succeeds, the script must report the ``metadata`` event and state `lsst.ts.idl.enums.Script.ScriptState.CONFIGURED`.
+    * If the ``configure`` command fails the script must report state `lsst.ts.idl.enums.Script.ScriptState.FAILED` and exit.
     * The script must be configured before it can be run.
 
-* Once the script is in the `ScriptState.CONFIGURED` state it can be run with the ``run`` command.
+* Once the script is in the `lsst.ts.idl.enums.Script.ScriptState.CONFIGURED` state it can be run with the ``run`` command.
 * When the ``run`` command finishes the script must exit, after reporting one of three states:
 
-  * `ScriptState.DONE` on success
-  * `ScriptState.STOPPED` if stopped by request
-  * `ScriptState.FAILED` if an error occurred
+  * `lsst.ts.idl.enums.Script.ScriptState.DONE` on success
+  * `lsst.ts.idl.enums.Script.ScriptState.STOPPED` if stopped by request
+  * `lsst.ts.idl.enums.Script.ScriptState.FAILED` if an error occurred
 
 `BaseScript` provides a base class for Python scripts which implements the above rules.
 
@@ -141,9 +141,9 @@ The default implementation does nothing, but you are free to override it.::
 
 If your cleanup code cares about why the script is ending, examine ``self.state.state``; it will be one of:
 
-* `ScriptState.ENDING`: the ``run`` method ran normally.
-* `ScriptState.STOPPING`: the script was commanded to stop.
-* `ScriptState.FAILING`: the ``run`` method raised an exception.
+* `lsst.ts.idl.enums.Script.ScriptState.ENDING`: the ``run`` method ran normally.
+* `lsst.ts.idl.enums.Script.ScriptState.STOPPING`: the script was commanded to stop.
+* `lsst.ts.idl.enums.Script.ScriptState.FAILING`: the ``run`` method raised an exception.
 
 If your cleanup code needs additional knowledge about the script's state, you can add one or more instance variables to your script class and set them in the ``run`` method.
 
@@ -172,7 +172,7 @@ Testing the run method is more work. My suggestion:
   The class should execute a callback for each commands your script sends.
   Each callback should record any command data you want to check later, and output any events and telemetry that your script relies on.
 * Configure the script by sending it the ``do_configure`` command.
-  This is important because it puts the script into the `ScriptState.CONFIGURED` state.
+  This is important because it puts the script into the `lsst.ts.idl.enums.Script.ScriptState.CONFIGURED` state.
 * Run the script by sending it the ``do_run`` command.
-* Check that the final state is `ScriptState.DONE`.
+* Check that the final state is `lsst.ts.idl.enums.Script.ScriptState.DONE`.
 * Check recorded data to see that it matches your expectations.

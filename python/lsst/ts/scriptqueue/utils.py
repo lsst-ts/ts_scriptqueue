@@ -1,4 +1,25 @@
-__all__ = ["find_public_scripts", "configure_logging", "generate_logfile"]
+# This file is part of ts_scriptqueue.
+#
+# Developed for the LSST Telescope and Site Systems.
+# This product includes software developed by the LSST Project
+# (https://www.lsst.org).
+# See the COPYRIGHT file at the top-level directory of this distribution
+# for details of code ownership.
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+__all__ = ["find_public_scripts", "configure_logging", "generate_logfile", "get_default_scripts_dir"]
 
 import os
 import logging
@@ -18,7 +39,7 @@ def find_public_scripts(root):
 
     Returns
     -------
-    scripts : `list` of `str`
+    scripts : `list` [`str`]
         Relative path of each public script found in ``root``.
     """
     paths = []
@@ -78,3 +99,31 @@ def generate_logfile(basename="scriptqueue"):
         os.makedirs(log_path)
     logfilename = os.path.join(log_path, "%s.%s.log" % (basename, timestr))
     return logfilename
+
+
+def get_default_scripts_dir(is_standard):
+    """Return the default directory for the specified kind of scripts.
+
+    Parameters
+    ----------
+    is_standard : `bool`
+        Standard (True) or external (False) scripts?
+
+    Returns
+    -------
+    scripts_dir : `pathlib.Path`
+        Absolute path to the specified scripts directory.
+
+    Raises
+    ------
+    ImportError
+        If the necessary python package cannot be imported
+        (``lsst.ts.standardscripts`` if ``is_standard`` true,
+        else ``lsst.ts.externalscripts``).
+    """
+    if is_standard:
+        import lsst.ts.standardscripts
+        return lsst.ts.standardscripts.get_scripts_dir()
+    else:
+        import lsst.ts.externalscripts
+        return lsst.ts.externalscripts.get_scripts_dir()

@@ -27,6 +27,7 @@ import os
 import numpy as np
 
 from lsst.ts import salobj
+from . import utils
 from .queue_model import QueueModel, ScriptInfo
 
 SCRIPT_INDEX_MULT = 100000
@@ -49,10 +50,10 @@ class ScriptQueue(salobj.BaseCsc):
         * Any allowed value (see ``Raises``) for unit tests.
     standardpath : `str`, `bytes` or `os.PathLike` (optional)
         Path to standard SAL scripts. If None then use
-        environment variable ``TS_STANDARDSCRIPTS_DIR``.
+        ``lsst.ts.standardscripts.get_scripts_dir()``.
     externalpath : `str`, `bytes` or `os.PathLike` (optional)
         Path to external SAL scripts. If None then use
-        environment variable ``TS_EXTERNALSCRIPTS_DIR``.
+        ``lsst.ts.externalscripts.get_scripts_dir()``.
     verbose : `bool`
         If True then print diagnostic messages to stdout.
 
@@ -60,9 +61,7 @@ class ScriptQueue(salobj.BaseCsc):
     ------
     ValueError
         If ``index`` < 0 or > MAX_SAL_INDEX//100,000 - 1.
-        If ``standardpath`` or ``externalpath`` is not an existing directory,
-        or is None and the associated environment variable is missing
-        or does not point to a directory.
+        If ``standardpath`` or ``externalpath`` is not an existing directory.
 
     Notes
     -----
@@ -150,8 +149,8 @@ class ScriptQueue(salobj.BaseCsc):
         ----------
         patharg : `str` or `None`
             ``standardpath`` or ``externalpath`` constructor argument.
-            If None then use environment variable ``TS_STANDARDSCRIPTS_DIR``
-            if ``is_standard``, else ``TS_EXTERNALSCRIPTS_DIR``.
+        If None then use ``lsst.ts.standardscripts.get_scripts_dir()`` if
+            ``is_standard``, else ``lsst.ts.externalscripts.get_scripts_dir()``
         is_standard : `bool`
             True if ``patharg`` is the ``standardpath`` constructor argument,
             False if ``patharg`` is the ``externalpath`` constructor argument.
@@ -165,22 +164,14 @@ class ScriptQueue(salobj.BaseCsc):
         ------
         ValueError
             If ``patharg`` is not `None` and does not point to a directory.
-            If ``patharg`` is `None` and the appropriate environment variable
-            is missing or does not point to a directory.
         """
-        prefix = "standard" if is_standard else "external"
         if patharg is None:
-            env_var_name = f"TS_{prefix.upper()}SCRIPTS_DIR"
-            if env_var_name not in os.environ:
-                raise ValueError(f"{prefix}path is None but {env_var_name} not defined")
-            dir_path = os.environ.get(env_var_name)
+            dir_path = utils.get_default_scripts_dir(is_standard)
         else:
             dir_path = patharg
         if not os.path.isdir(dir_path):
-            if patharg is None:
-                raise ValueError(f"${env_var_name}={dir_path} is not a directory")
-            else:
-                raise ValueError(f"{prefix}path {dir_path} is not a directory")
+            category = "standard" if is_standard else "external"
+            raise ValueError(f"{category} scripts path {dir_path} is not a directory")
         return dir_path
 
     async def start(self):

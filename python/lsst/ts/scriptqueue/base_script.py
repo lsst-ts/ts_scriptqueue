@@ -130,10 +130,13 @@ class BaseScript(salobj.Controller, abc.ABC):
             e.g. running ``TestScript``.
 
 
+        Notes
+        -----
         The final return code will be:
 
-        * 0 if final state is `ScriptState.DONE` or `ScriptState.STOPPED`
-        * 1 if final state is `ScriptState.FAILED`
+        * 0 if final state is `lsst.ts.idl.enums.Script.ScriptState.DONE`
+          or `lsst.ts.idl.enums.Script.ScriptState.STOPPED`
+        * 1 if final state is `lsst.ts.idl.enums.Script.ScriptState.FAILED`
         * 2 otherwise (which should never happen)
         """
         parser = argparse.ArgumentParser(f"Run {cls.__name__} from the command line")
@@ -167,10 +170,12 @@ class BaseScript(salobj.Controller, abc.ABC):
 
         Returns ``self.evt_state.data``, which has these fields:
 
-        * ``state``: the current state; a `ScriptState`
-        * ``last_checkpoint``: name of most recently seen checkpoint;
-          a `str`
-        * ``reason``: reason for this state, if any; a `str`
+        * ``state``: `lsst.ts.idl.enums.Script.ScriptState`
+            The current state.
+        * ``last_checkpoint``: `str`
+            Name of most recently seen checkpoint.
+        * ``reason``: `str`
+            Reason for this state, if any.
         """
         return self.evt_state.data
 
@@ -224,10 +229,10 @@ class BaseScript(salobj.Controller, abc.ABC):
 
         Raises
         ------
-        RuntimeError:
+        RuntimeError
             If the state is not `ScriptState.RUNNING`. This likely means
             you called checkpoint from somewhere other than `run`.
-        RuntimeError:
+        RuntimeError
             If `_run_task` is `None` or done. This probably means your code
             incorrectly set the state.
         """
@@ -253,8 +258,15 @@ class BaseScript(salobj.Controller, abc.ABC):
             await asyncio.sleep(0.001)
 
     async def close_tasks(self):
-        if self._run_task is not None and not self._run_task.done():
+        self._is_exiting = True
+        await super().close_tasks()
+        self._heartbeat_task.cancel()
+        if self._run_task is not None:
             self._run_task.cancel()
+        if self._pause_future is not None:
+            self._pause_future.cancel()
+        # Do not cancel done_task because that messes up normal script exit,
+        # which has a significant delay before setting that task done.
 
     @abc.abstractmethod
     async def configure(self, config):
@@ -338,8 +350,8 @@ class BaseScript(salobj.Controller, abc.ABC):
         ----------
         action : `string`
             Description of what you want to do.
-        states : `list` of `salobj.ScriptState`
-            The required state.
+        states : `list` [`lsst.ts.idl.enums.Script.ScriptState`]
+            Allowed states.
         """
         if self._is_exiting:
             raise salobj.ExpectedError(f"Cannot {action}: script is exiting")
@@ -359,7 +371,8 @@ class BaseScript(salobj.Controller, abc.ABC):
         Raises
         ------
         salobj.ExpectedError
-            If `state`.state is not `ScriptState.UNCONFIGURED`.
+            If `state`.state is not
+            `lsst.ts.idl.enums.Script.ScriptState.UNCONFIGURED`.
 
         Notes
         -----
@@ -370,7 +383,8 @@ class BaseScript(salobj.Controller, abc.ABC):
         * Call `configure`.
         * Call `set_metadata`.
         * Output the metadata event.
-        * Change the script state to `ScriptState.CONFIGURED`.
+        * Change the script state to
+          `lsst.ts.idl.enums.Script.ScriptState.CONFIGURED`.
         """
         self.assert_state("configure", [ScriptState.UNCONFIGURED])
         try:
@@ -415,7 +429,8 @@ class BaseScript(salobj.Controller, abc.ABC):
         Raises
         ------
         salobj.ExpectedError
-            If `state`.state is not `ScriptState.CONFIGURED`.
+            If `state`.state is not
+            `lsst.ts.idl.enums.Script.ScriptState.CONFIGURED`.
         """
         self.assert_state("run", [ScriptState.CONFIGURED])
         try:
@@ -444,7 +459,8 @@ class BaseScript(salobj.Controller, abc.ABC):
         Raises
         ------
         salobj.ExpectedError
-            If `state`.state is not `ScriptState.PAUSED`.
+            If `state`.state is not
+            `lsst.ts.idl.enums.Script.ScriptState.PAUSED`.
         """
         self.assert_state("resume", [ScriptState.PAUSED])
         self._pause_future.set_result(None)
@@ -461,9 +477,12 @@ class BaseScript(salobj.Controller, abc.ABC):
         Raises
         ------
         salobj.ExpectedError
-            If `state`.state is not `ScriptState.UNCONFIGURED`,
-            `ScriptState.CONFIGURED`, `ScriptState.RUNNING`
-            or `ScriptState.PAUSED`.
+            If `state`.state is not one of:
+
+            * `lsst.ts.idl.enums.Script.ScriptState.UNCONFIGURED`
+            * `lsst.ts.idl.enums.Script.ScriptState.CONFIGURED`
+            * `lsst.ts.idl.enums.Script.ScriptState.RUNNING`
+            * `lsst.ts.idl.enums.Script.ScriptState.PAUSED`
         """
         self.assert_state("setCheckpoints", [ScriptState.UNCONFIGURED, ScriptState.CONFIGURED,
                           ScriptState.RUNNING, ScriptState.PAUSED])

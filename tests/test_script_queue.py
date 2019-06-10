@@ -50,58 +50,66 @@ class ScriptQueueConstructorTestCase(unittest.TestCase):
 
     def test_default_paths(self):
         async def doit():
-            async with scriptqueue.ScriptQueue(index=1) as queue:
-                self.assertTrue(os.path.samefile(queue.model.standardpath, self.default_standardpath))
-                self.assertTrue(os.path.samefile(queue.model.externalpath, self.default_externalpath))
-                remote = salobj.Remote(queue.domain, "ScriptQueue", index=1)
-                await asyncio.wait_for(remote.start_task, timeout=START_TIMEOUT)
-                rootDir_data = await remote.evt_rootDirectories.next(flush=False, timeout=STD_TIMEOUT)
-                self.assertTrue(os.path.samefile(rootDir_data.standard, self.default_standardpath))
-                self.assertTrue(os.path.samefile(rootDir_data.external, self.default_externalpath))
+            async with salobj.Domain() as domain:
+                remote = salobj.Remote(domain, "ScriptQueue", index=1,
+                                       evt_max_history=0, tel_max_history=0)
+                await asyncio.wait_for(remote.start_task, timeout=STD_TIMEOUT)
+                async with scriptqueue.ScriptQueue(index=1) as queue:
+                    self.assertTrue(os.path.samefile(queue.model.standardpath, self.default_standardpath))
+                    self.assertTrue(os.path.samefile(queue.model.externalpath, self.default_externalpath))
+                    rootDir_data = await remote.evt_rootDirectories.next(flush=False, timeout=STD_TIMEOUT)
+                    self.assertTrue(os.path.samefile(rootDir_data.standard, self.default_standardpath))
+                    self.assertTrue(os.path.samefile(rootDir_data.external, self.default_externalpath))
 
-                # some tests rely on these being different, so verify that
-                self.assertNotEqual(self.testdata_standardpath, self.default_standardpath)
-                self.assertNotEqual(self.testdata_externalpath, self.default_externalpath)
+                    # some tests rely on these being different, so verify that
+                    self.assertNotEqual(self.testdata_standardpath, self.default_standardpath)
+                    self.assertNotEqual(self.testdata_externalpath, self.default_externalpath)
 
         asyncio.get_event_loop().run_until_complete(doit())
 
     def test_explicit_paths(self):
         async def doit():
-            async with scriptqueue.ScriptQueue(index=1, standardpath=self.testdata_standardpath,
-                                               externalpath=self.testdata_externalpath) as queue:
-                self.assertTrue(os.path.samefile(queue.model.standardpath, self.testdata_standardpath))
-                self.assertTrue(os.path.samefile(queue.model.externalpath, self.testdata_externalpath))
-                remote = salobj.Remote(queue.domain, "ScriptQueue", index=1)
-                await asyncio.wait_for(remote.start_task, timeout=START_TIMEOUT)
-                rootDir_data = await remote.evt_rootDirectories.next(flush=False, timeout=STD_TIMEOUT)
-                self.assertTrue(os.path.samefile(rootDir_data.standard, self.testdata_standardpath))
-                self.assertTrue(os.path.samefile(rootDir_data.external, self.testdata_externalpath))
+            async with salobj.Domain() as domain:
+                remote = salobj.Remote(domain, "ScriptQueue", index=1,
+                                       evt_max_history=0, tel_max_history=0)
+                await asyncio.wait_for(remote.start_task, timeout=STD_TIMEOUT)
+                async with scriptqueue.ScriptQueue(index=1, standardpath=self.testdata_standardpath,
+                                                   externalpath=self.testdata_externalpath) as queue:
+                    self.assertTrue(os.path.samefile(queue.model.standardpath, self.testdata_standardpath))
+                    self.assertTrue(os.path.samefile(queue.model.externalpath, self.testdata_externalpath))
+                    rootDir_data = await remote.evt_rootDirectories.next(flush=False, timeout=STD_TIMEOUT)
+                    self.assertTrue(os.path.samefile(rootDir_data.standard, self.testdata_standardpath))
+                    self.assertTrue(os.path.samefile(rootDir_data.external, self.testdata_externalpath))
 
         asyncio.get_event_loop().run_until_complete(doit())
 
     def test_default_standard_path(self):
         async def doit():
-            async with scriptqueue.ScriptQueue(index=1, externalpath=self.testdata_externalpath) as queue:
-                self.assertTrue(os.path.samefile(queue.model.standardpath, self.default_standardpath))
-                self.assertTrue(os.path.samefile(queue.model.externalpath, self.testdata_externalpath))
-                remote = salobj.Remote(queue.domain, "ScriptQueue", index=1)
-                await asyncio.wait_for(remote.start_task, timeout=START_TIMEOUT)
-                rootDir_data = await remote.evt_rootDirectories.next(flush=False, timeout=STD_TIMEOUT)
-                self.assertTrue(os.path.samefile(rootDir_data.standard, self.default_standardpath))
-                self.assertTrue(os.path.samefile(rootDir_data.external, self.testdata_externalpath))
+            async with salobj.Domain() as domain:
+                remote = salobj.Remote(domain, "ScriptQueue", index=1,
+                                       evt_max_history=0, tel_max_history=0)
+                await asyncio.wait_for(remote.start_task, timeout=STD_TIMEOUT)
+                async with scriptqueue.ScriptQueue(index=1, externalpath=self.testdata_externalpath) as queue:
+                    self.assertTrue(os.path.samefile(queue.model.standardpath, self.default_standardpath))
+                    self.assertTrue(os.path.samefile(queue.model.externalpath, self.testdata_externalpath))
+                    rootDir_data = await remote.evt_rootDirectories.next(flush=False, timeout=STD_TIMEOUT)
+                    self.assertTrue(os.path.samefile(rootDir_data.standard, self.default_standardpath))
+                    self.assertTrue(os.path.samefile(rootDir_data.external, self.testdata_externalpath))
 
         asyncio.get_event_loop().run_until_complete(doit())
 
     def test_default_external_path(self):
         async def doit():
-            async with scriptqueue.ScriptQueue(index=1, standardpath=self.testdata_standardpath) as queue:
-                self.assertTrue(os.path.samefile(queue.model.standardpath, self.testdata_standardpath))
-                self.assertTrue(os.path.samefile(queue.model.externalpath, self.default_externalpath))
-                remote = salobj.Remote(queue.domain, "ScriptQueue", index=1)
-                await asyncio.wait_for(remote.start_task, timeout=START_TIMEOUT)
-                rootDir_data = await remote.evt_rootDirectories.next(flush=False, timeout=STD_TIMEOUT)
-                self.assertTrue(os.path.samefile(rootDir_data.standard, self.testdata_standardpath))
-                self.assertTrue(os.path.samefile(rootDir_data.external, self.default_externalpath))
+            async with salobj.Domain() as domain:
+                remote = salobj.Remote(domain, "ScriptQueue", index=1,
+                                       evt_max_history=0, tel_max_history=0)
+                await asyncio.wait_for(remote.start_task, timeout=STD_TIMEOUT)
+                async with scriptqueue.ScriptQueue(index=1, standardpath=self.testdata_standardpath) as queue:
+                    self.assertTrue(os.path.samefile(queue.model.standardpath, self.testdata_standardpath))
+                    self.assertTrue(os.path.samefile(queue.model.externalpath, self.default_externalpath))
+                    rootDir_data = await remote.evt_rootDirectories.next(flush=False, timeout=STD_TIMEOUT)
+                    self.assertTrue(os.path.samefile(rootDir_data.standard, self.testdata_standardpath))
+                    self.assertTrue(os.path.samefile(rootDir_data.external, self.default_externalpath))
 
         asyncio.get_event_loop().run_until_complete(doit())
 
@@ -123,18 +131,26 @@ class ScriptQueueTestCase(unittest.TestCase):
         self.datadir = os.path.abspath(os.path.join(os.path.dirname(__file__), "data"))
         standardpath = os.path.join(self.datadir, "standard")
         externalpath = os.path.join(self.datadir, "external")
+        # make a separate domain so we can create a remote that does not
+        # read historical data (for startup speed)
+        self.domain = salobj.Domain()
+        self.remote = salobj.Remote(self.domain, "ScriptQueue", index=1,
+                                    evt_max_history=0, tel_max_history=0)
         self.queue = scriptqueue.ScriptQueue(index=1,
                                              standardpath=standardpath,
                                              externalpath=externalpath,
                                              verbose=True)
         self.queue.summary_state = salobj.State.DISABLED
-        self.remote = salobj.Remote(self.queue.domain, "ScriptQueue", index=1)
 
-    def tearDown(self):
+    async def close(self):
         nkilled = len(self.queue.model.terminate_all())
         if nkilled > 0:
             warnings.warn(f"Killed {nkilled} subprocesses")
-        asyncio.get_event_loop().run_until_complete(self.queue.close())
+        await self.domain.close()
+        await self.queue.close()
+
+    def tearDown(self):
+        asyncio.get_event_loop().run_until_complete(self.close())
 
     def make_stop_data(self, stop_indices, terminate):
         """Make data for the stopScripts command.
@@ -879,13 +895,15 @@ class CmdLineTestCase(unittest.TestCase):
             self.fail(f"Could not find bin script {exe_name}; did you setup and scons this package?")
 
         async def doit():
-            process = await asyncio.create_subprocess_exec(
-                exe_name, str(self.index), "--standard", self.testdata_standardpath,
-                "--external", self.testdata_externalpath, "--verbose")
             async with salobj.Domain() as domain:
+                remote = salobj.Remote(domain, "ScriptQueue", index=self.index,
+                                       evt_max_history=0, tel_max_history=0)
+                await asyncio.wait_for(remote.start_task, timeout=START_TIMEOUT)
+
+                process = await asyncio.create_subprocess_exec(
+                    exe_name, str(self.index), "--standard", self.testdata_standardpath,
+                    "--external", self.testdata_externalpath, "--verbose")
                 try:
-                    remote = salobj.Remote(domain, "ScriptQueue", index=self.index)
-                    await asyncio.wait_for(remote.start_task, timeout=START_TIMEOUT)
 
                     summaryState_data = await remote.evt_summaryState.next(flush=False, timeout=START_TIMEOUT)
                     self.assertEqual(summaryState_data.summaryState, salobj.State.STANDBY)
@@ -914,11 +932,13 @@ class CmdLineTestCase(unittest.TestCase):
             self.fail(f"Could not find bin script {exe_name}; did you setup and scons this package?")
 
         async def doit():
-            process = await asyncio.create_subprocess_exec(exe_name, str(self.index), "--verbose")
             async with salobj.Domain() as domain:
+                remote = salobj.Remote(domain, "ScriptQueue", index=self.index,
+                                       evt_max_history=0, tel_max_history=0)
+                await asyncio.wait_for(remote.start_task, timeout=START_TIMEOUT)
+
+                process = await asyncio.create_subprocess_exec(exe_name, str(self.index), "--verbose")
                 try:
-                    remote = salobj.Remote(domain, "ScriptQueue", index=self.index)
-                    await asyncio.wait_for(remote.start_task, timeout=START_TIMEOUT)
 
                     summaryState_data = await remote.evt_summaryState.next(flush=False, timeout=START_TIMEOUT)
                     self.assertEqual(summaryState_data.summaryState, salobj.State.STANDBY)

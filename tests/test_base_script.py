@@ -427,6 +427,9 @@ class BaseScriptTestCase(unittest.TestCase):
             def __init__(self, index, remote_indices):
                 super().__init__(index, descr="Script with remotes")
                 remotes = []
+                # use remotes that read history here, despite the startup
+                # overhead, to check that script.start_task
+                # waits for the start_task in each remote.
                 for rind in remote_indices:
                     remotes.append(salobj.Remote(domain=self.domain, name="Test", index=rind))
                 self.remotes = remotes
@@ -452,7 +455,8 @@ class BaseScriptTestCase(unittest.TestCase):
                 with self.subTest(fail=fail):
                     async with salobj.Domain() as domain:
                         index = next(index_gen)
-                        remote = salobj.Remote(domain=domain, name="Script", index=index)
+                        remote = salobj.Remote(domain=domain, name="Script", index=index,
+                                               evt_max_history=0, tel_max_history=0)
                         await asyncio.wait_for(remote.start_task, timeout=STD_TIMEOUT)
 
                         def logcallback(data):

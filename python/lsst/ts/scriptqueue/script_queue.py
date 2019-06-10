@@ -234,7 +234,7 @@ class ScriptQueue(salobj.BaseCsc):
         except Exception:
             if process.returncode is None:
                 process.terminate()
-                self.log.warn("showSchema killed a process that was not properly terminated")
+                self.log.warning("showSchema killed a process that was not properly terminated")
             raise
         finally:
             os.environ["PATH"] = initialpath

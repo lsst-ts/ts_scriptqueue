@@ -142,11 +142,20 @@ class BaseScript(salobj.Controller, abc.ABC):
         parser = argparse.ArgumentParser(f"Run {cls.__name__} from the command line")
         parser.add_argument("index", type=int,
                             help="Script SAL Component index; must be unique among running Scripts")
+        parser.add_argument("--schema", action="store_true",
+                            help="Print the configuration schema to stdout and quit "
+                            "without running the script. "
+                            "The index argument is ignored, though it is still required.")
         args = parser.parse_args()
         kwargs = dict(index=args.index)
         if descr is not None:
             kwargs["descr"] = descr
         script = cls(**kwargs)
+        if args.schema:
+            schema = cls.get_schema()
+            if schema is not None:
+                print(yaml.safe_dump(schema))
+            return
         asyncio.get_event_loop().run_until_complete(script.done_task)
         return_code = {ScriptState.DONE: 0,
                        ScriptState.STOPPED: 0,

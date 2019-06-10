@@ -22,6 +22,7 @@
 import asyncio
 import logging
 import os
+import subprocess
 import unittest
 import warnings
 
@@ -107,6 +108,17 @@ class BaseScriptTestCase(unittest.TestCase):
         self.assertEqual(script.config.fail_run, kwargs.get("fail_run", False))
         self.assertEqual(script.config.fail_cleanup, kwargs.get("fail_cleanup", False))
         self.assertEqual(script.state.state, ScriptState.CONFIGURED)
+
+    def test_get_schema(self):
+        schema = TestScript.get_schema()
+        self.assertTrue(isinstance(schema, dict))
+        for name in ("$schema", "$id", "title", "description", "type", "properties"):
+            self.assertIn(name, schema)
+        self.assertFalse(schema["additionalProperties"])
+
+    def test_non_configurable_script_get_schema(self):
+        schema = NonConfigurableScript.get_schema()
+        self.assertIsNone(schema)
 
     def test_non_configurable_script_empty_config(self):
         async def doit():
@@ -483,6 +495,30 @@ class BaseScriptTestCase(unittest.TestCase):
                             if process.returncode is None:
                                 process.terminate()
                                 warnings.warn("Killed a process that was not properly terminated")
+
+        asyncio.get_event_loop().run_until_complete(doit())
+
+    def test_script_schema_process(self):
+        """Test running a script with --schema as a subprocess.
+        """
+        script_path = os.path.join(self.datadir, "standard", "script1")
+
+        async def doit():
+            index = 1  # index is ignored
+            process = await asyncio.create_subprocess_exec(script_path, str(index), "--schema",
+                                                           stdout=subprocess.PIPE,
+                                                           stderr=subprocess.PIPE)
+            try:
+                stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=10)
+                schema = yaml.safe_load(stdout)
+                self.assertEqual(schema, TestScript.get_schema())
+                self.assertEqual(stderr, b"")
+                await asyncio.wait_for(process.wait(), timeout=END_TIMEOUT)
+                self.assertEqual(process.returncode, 0)
+            finally:
+                if process.returncode is None:
+                    process.terminate()
+                    warnings.warn("Killed a process that was not properly terminated")
 
         asyncio.get_event_loop().run_until_complete(doit())
 

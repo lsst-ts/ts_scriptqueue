@@ -24,6 +24,7 @@ import os
 import shutil
 import unittest
 import warnings
+import yaml
 
 from lsst.ts import salobj
 from lsst.ts.idl.enums.ScriptQueue import Location, ScriptProcessState
@@ -791,6 +792,28 @@ class ScriptQueueTestCase(unittest.TestCase):
                 await self.remote.cmd_showAvailableScripts.start(timeout=STD_TIMEOUT)
 
         asyncio.get_event_loop().run_until_complete(doit())
+
+    def test_showSchema(self):
+        async def doit():
+            is_standard = False
+            path = "script1"
+            await asyncio.wait_for(self.remote.start_task, timeout=START_TIMEOUT)
+            await self.assert_next_queue(enabled=False, running=True)
+            self.remote.cmd_showConfig.set(is_standard=is_standard, path=path)
+
+            # make sure showConfig fails when not enabled
+            with self.assertRaises(salobj.AckError):
+                await self.remote.cmd_showConfig.start(timeout=STD_TIMEOUT)
+
+            await self.remote.cmd_enable.start(timeout=STD_TIMEOUT)
+            await self.assert_next_queue(enabled=True, running=True)
+
+            await self.remote.cmd_showConfig.start(timeout=START_TIMEOUT)
+            data = await self.remote.evt_configSchema.next(flush=False, timeout=STD_TIMEOUT)
+            self.assertEqual(data.is_standard, is_standard)
+            self.assertEqual(data.path, path)
+            schema = yaml.safe_load(data.configSchema)
+            self.assertEqual(schema, scriptqueue.TestScript.get_schema())
 
     def test_showQueue(self):
         async def doit():

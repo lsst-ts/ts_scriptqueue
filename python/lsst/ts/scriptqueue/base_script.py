@@ -73,7 +73,7 @@ class BaseScript(salobj.Controller, abc.ABC):
     """
     def __init__(self, index, descr):
         super().__init__("Script", index, do_callbacks=True)
-        schema = self.schema
+        schema = self.get_schema()
         if schema is None:
             self.config_validator = None
         else:
@@ -320,9 +320,9 @@ class BaseScript(salobj.Controller, abc.ABC):
         """
         raise NotImplementedError()
 
-    @property
+    @classmethod
     @abc.abstractmethod
-    def schema(self):
+    def get_schema(cls):
         """Return a jsonschema to validate configuration, as a `dict`.
 
         Please provide default values for all fields for which defaults

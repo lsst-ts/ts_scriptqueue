@@ -46,8 +46,8 @@ class NonConfigurableScript(BaseScript):
         self.run_called = False
         self.set_metadata_called = False
 
-    @property
-    def schema(self):
+    @classmethod
+    def get_schema(cls):
         return None
 
     async def configure(self, config):

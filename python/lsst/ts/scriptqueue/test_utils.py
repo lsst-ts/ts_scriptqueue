@@ -44,8 +44,8 @@ class TestScript(BaseScript):
     def __init__(self, index, descr=""):
         super().__init__(index=index, descr=descr)
 
-    @property
-    def schema(self):
+    @classmethod
+    def get_schema(cls):
         schema_yaml = """
             $schema: http://json-schema.org/draft-07/schema#
             $id: https://github.com/lsst-ts/ts_scriptqueue/TestScript.yaml

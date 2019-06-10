@@ -53,6 +53,7 @@ class ScriptQueueConstructorTestCase(unittest.TestCase):
                 self.assertTrue(os.path.samefile(queue.model.standardpath, self.default_standardpath))
                 self.assertTrue(os.path.samefile(queue.model.externalpath, self.default_externalpath))
                 remote = salobj.Remote(queue.domain, "ScriptQueue", index=1)
+                await asyncio.wait_for(remote.start_task, timeout=START_TIMEOUT)
                 rootDir_data = await remote.evt_rootDirectories.next(flush=False, timeout=STD_TIMEOUT)
                 self.assertTrue(os.path.samefile(rootDir_data.standard, self.default_standardpath))
                 self.assertTrue(os.path.samefile(rootDir_data.external, self.default_externalpath))
@@ -70,6 +71,7 @@ class ScriptQueueConstructorTestCase(unittest.TestCase):
                 self.assertTrue(os.path.samefile(queue.model.standardpath, self.testdata_standardpath))
                 self.assertTrue(os.path.samefile(queue.model.externalpath, self.testdata_externalpath))
                 remote = salobj.Remote(queue.domain, "ScriptQueue", index=1)
+                await asyncio.wait_for(remote.start_task, timeout=START_TIMEOUT)
                 rootDir_data = await remote.evt_rootDirectories.next(flush=False, timeout=STD_TIMEOUT)
                 self.assertTrue(os.path.samefile(rootDir_data.standard, self.testdata_standardpath))
                 self.assertTrue(os.path.samefile(rootDir_data.external, self.testdata_externalpath))
@@ -82,6 +84,7 @@ class ScriptQueueConstructorTestCase(unittest.TestCase):
                 self.assertTrue(os.path.samefile(queue.model.standardpath, self.default_standardpath))
                 self.assertTrue(os.path.samefile(queue.model.externalpath, self.testdata_externalpath))
                 remote = salobj.Remote(queue.domain, "ScriptQueue", index=1)
+                await asyncio.wait_for(remote.start_task, timeout=START_TIMEOUT)
                 rootDir_data = await remote.evt_rootDirectories.next(flush=False, timeout=STD_TIMEOUT)
                 self.assertTrue(os.path.samefile(rootDir_data.standard, self.default_standardpath))
                 self.assertTrue(os.path.samefile(rootDir_data.external, self.testdata_externalpath))
@@ -94,6 +97,7 @@ class ScriptQueueConstructorTestCase(unittest.TestCase):
                 self.assertTrue(os.path.samefile(queue.model.standardpath, self.testdata_standardpath))
                 self.assertTrue(os.path.samefile(queue.model.externalpath, self.default_externalpath))
                 remote = salobj.Remote(queue.domain, "ScriptQueue", index=1)
+                await asyncio.wait_for(remote.start_task, timeout=START_TIMEOUT)
                 rootDir_data = await remote.evt_rootDirectories.next(flush=False, timeout=STD_TIMEOUT)
                 self.assertTrue(os.path.samefile(rootDir_data.standard, self.testdata_standardpath))
                 self.assertTrue(os.path.samefile(rootDir_data.external, self.default_externalpath))
@@ -195,6 +199,7 @@ class ScriptQueueTestCase(unittest.TestCase):
         config = "wait_time: 1"  # give showScript time to run
 
         async def doit():
+            await asyncio.wait_for(self.remote.start_task, timeout=START_TIMEOUT)
             await self.assert_next_queue(enabled=False, running=True)
 
             def make_add_data(location, locationSalIndex=0):
@@ -366,6 +371,7 @@ class ScriptQueueTestCase(unittest.TestCase):
         path = "script1"
 
         async def doit():
+            await asyncio.wait_for(self.remote.start_task, timeout=START_TIMEOUT)
             await self.assert_next_queue(enabled=False, running=True)
 
             await self.remote.cmd_enable.start(timeout=STD_TIMEOUT)
@@ -451,6 +457,7 @@ class ScriptQueueTestCase(unittest.TestCase):
         """Test adding a script that fails while loading.
         """
         async def doit():
+            await asyncio.wait_for(self.remote.start_task, timeout=START_TIMEOUT)
             await self.assert_next_queue(enabled=False, running=True)
 
             await self.remote.cmd_enable.start(timeout=STD_TIMEOUT)
@@ -479,6 +486,7 @@ class ScriptQueueTestCase(unittest.TestCase):
         """Test move, pause and showQueue
         """
         async def doit():
+            await asyncio.wait_for(self.remote.start_task, timeout=START_TIMEOUT)
             await self.assert_next_queue(enabled=False, running=True)
 
             # pause the queue so we know what to expect of queue state
@@ -621,6 +629,7 @@ class ScriptQueueTestCase(unittest.TestCase):
         """Test requeue, move and terminate
         """
         async def doit():
+            await asyncio.wait_for(self.remote.start_task, timeout=START_TIMEOUT)
             await self.assert_next_queue(enabled=False, running=True)
 
             await self.remote.cmd_enable.start(timeout=STD_TIMEOUT)
@@ -747,6 +756,8 @@ class ScriptQueueTestCase(unittest.TestCase):
 
     def test_showAvailableScripts(self):
         async def doit():
+            await asyncio.wait_for(self.remote.start_task, timeout=START_TIMEOUT)
+
             # make sure showAvailableScripts fails when not enabled
             with self.assertRaises(salobj.AckError):
                 await self.remote.cmd_showAvailableScripts.start(timeout=START_TIMEOUT)
@@ -783,6 +794,7 @@ class ScriptQueueTestCase(unittest.TestCase):
 
     def test_showQueue(self):
         async def doit():
+            await asyncio.wait_for(self.remote.start_task, timeout=START_TIMEOUT)
             await self.assert_next_queue(enabled=False, running=True)
 
             # make sure showQueue fails when not enabled
@@ -850,6 +862,7 @@ class CmdLineTestCase(unittest.TestCase):
             async with salobj.Domain() as domain:
                 try:
                     remote = salobj.Remote(domain, "ScriptQueue", index=self.index)
+                    await asyncio.wait_for(remote.start_task, timeout=START_TIMEOUT)
 
                     summaryState_data = await remote.evt_summaryState.next(flush=False, timeout=START_TIMEOUT)
                     self.assertEqual(summaryState_data.summaryState, salobj.State.STANDBY)
@@ -882,6 +895,7 @@ class CmdLineTestCase(unittest.TestCase):
             async with salobj.Domain() as domain:
                 try:
                     remote = salobj.Remote(domain, "ScriptQueue", index=self.index)
+                    await asyncio.wait_for(remote.start_task, timeout=START_TIMEOUT)
 
                     summaryState_data = await remote.evt_summaryState.next(flush=False, timeout=START_TIMEOUT)
                     self.assertEqual(summaryState_data.summaryState, salobj.State.STANDBY)

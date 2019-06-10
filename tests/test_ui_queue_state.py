@@ -35,6 +35,7 @@ class TestQueueState(unittest.TestCase):
         async def doit():
             async with salobj.Domain() as domain:
                 remote = salobj.Remote(domain=domain, name="ScriptQueue")
+                await asyncio.wait_for(remote.start_task, timeout=20)
 
                 queue = remote.evt_queue.DataType()
 

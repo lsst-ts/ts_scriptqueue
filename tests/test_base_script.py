@@ -441,6 +441,7 @@ class BaseScriptTestCase(unittest.TestCase):
                     async with salobj.Domain() as domain:
                         index = next(index_gen)
                         remote = salobj.Remote(domain=domain, name="Script", index=index)
+                        await asyncio.wait_for(remote.start_task, timeout=STD_TIMEOUT)
 
                         def logcallback(data):
                             print(f"message={data.message}")

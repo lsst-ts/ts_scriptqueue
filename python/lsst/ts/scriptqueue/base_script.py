@@ -274,8 +274,7 @@ class BaseScript(salobj.Controller, abc.ABC):
             self._run_task.cancel()
         if self._pause_future is not None:
             self._pause_future.cancel()
-        # Do not cancel done_task because that messes up normal script exit,
-        # which has a significant delay before setting that task done.
+        # self.done_task is handled by Controller.close
 
     @abc.abstractmethod
     async def configure(self, config):

@@ -23,6 +23,7 @@ __all__ = ["ScriptQueue"]
 
 import asyncio
 import os
+import subprocess
 
 import numpy as np
 
@@ -203,6 +204,40 @@ class ScriptQueue(salobj.BaseCsc):
             external=":".join(scripts.external),
             force_output=True,
         )
+
+    async def do_showSchema(self, data):
+        """Output the config schema for a script.
+
+        Parameters
+        ----------
+        data : ``cmd_showSchema.DataType``
+            Command data specifying the script.
+        """
+        self.assert_enabled("showSchema")
+        fullpath = self.make_full_path(data.is_standard, data.path)
+        initialpath = os.environ["PATH"]
+        scriptdir, scriptname = os.path.split(fullpath)
+        os.environ["PATH"] = scriptdir + ":" + initialpath
+        # save task so process creation can be cancelled if it hangs
+        process = await asyncio.create_subprocess_exec(scriptname, "0", "--schema",
+                                                       stdout=subprocess.PIPE,
+                                                       stderr=subprocess.PIPE)
+        try:
+            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=20)
+            self.evt_configSchema.set_put(is_standard=data.is_standard,
+                                          path=data.path,
+                                          configSchema=stdout,
+                                          force_output=True)
+
+            self.process = await self.create_process_task
+            await asyncio.wait_for(self.process.wait(), timeout=20)
+        except Exception:
+            if process.returncode is None:
+                process.terminate()
+                self.log.warning("showSchema killed a process that was not properly terminated")
+            raise
+        finally:
+            os.environ["PATH"] = initialpath
 
     def do_showQueue(self, data):
         """Output the queue event.

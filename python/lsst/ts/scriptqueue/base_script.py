@@ -73,7 +73,7 @@ class BaseScript(salobj.Controller, abc.ABC):
     """
     def __init__(self, index, descr):
         super().__init__("Script", index, do_callbacks=True)
-        schema = self.schema
+        schema = self.get_schema()
         if schema is None:
             self.config_validator = None
         else:
@@ -142,11 +142,20 @@ class BaseScript(salobj.Controller, abc.ABC):
         parser = argparse.ArgumentParser(f"Run {cls.__name__} from the command line")
         parser.add_argument("index", type=int,
                             help="Script SAL Component index; must be unique among running Scripts")
+        parser.add_argument("--schema", action="store_true",
+                            help="Print the configuration schema to stdout and quit "
+                            "without running the script. "
+                            "The index argument is ignored, though it is still required.")
         args = parser.parse_args()
         kwargs = dict(index=args.index)
         if descr is not None:
             kwargs["descr"] = descr
         script = cls(**kwargs)
+        if args.schema:
+            schema = cls.get_schema()
+            if schema is not None:
+                print(yaml.safe_dump(schema))
+            return
         asyncio.get_event_loop().run_until_complete(script.done_task)
         return_code = {ScriptState.DONE: 0,
                        ScriptState.STOPPED: 0,
@@ -265,8 +274,7 @@ class BaseScript(salobj.Controller, abc.ABC):
             self._run_task.cancel()
         if self._pause_future is not None:
             self._pause_future.cancel()
-        # Do not cancel done_task because that messes up normal script exit,
-        # which has a significant delay before setting that task done.
+        # self.done_task is handled by Controller.close
 
     @abc.abstractmethod
     async def configure(self, config):
@@ -320,9 +328,9 @@ class BaseScript(salobj.Controller, abc.ABC):
         """
         raise NotImplementedError()
 
-    @property
+    @classmethod
     @abc.abstractmethod
-    def schema(self):
+    def get_schema(cls):
         """Return a jsonschema to validate configuration, as a `dict`.
 
         Please provide default values for all fields for which defaults

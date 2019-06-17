@@ -22,6 +22,7 @@
 import asyncio
 import logging
 import os
+import subprocess
 import unittest
 import warnings
 
@@ -46,8 +47,8 @@ class NonConfigurableScript(BaseScript):
         self.run_called = False
         self.set_metadata_called = False
 
-    @property
-    def schema(self):
+    @classmethod
+    def get_schema(cls):
         return None
 
     async def configure(self, config):
@@ -107,6 +108,17 @@ class BaseScriptTestCase(unittest.TestCase):
         self.assertEqual(script.config.fail_run, kwargs.get("fail_run", False))
         self.assertEqual(script.config.fail_cleanup, kwargs.get("fail_cleanup", False))
         self.assertEqual(script.state.state, ScriptState.CONFIGURED)
+
+    def test_get_schema(self):
+        schema = TestScript.get_schema()
+        self.assertTrue(isinstance(schema, dict))
+        for name in ("$schema", "$id", "title", "description", "type", "properties"):
+            self.assertIn(name, schema)
+        self.assertFalse(schema["additionalProperties"])
+
+    def test_non_configurable_script_get_schema(self):
+        schema = NonConfigurableScript.get_schema()
+        self.assertIsNone(schema)
 
     def test_non_configurable_script_empty_config(self):
         async def doit():
@@ -415,6 +427,9 @@ class BaseScriptTestCase(unittest.TestCase):
             def __init__(self, index, remote_indices):
                 super().__init__(index, descr="Script with remotes")
                 remotes = []
+                # use remotes that read history here, despite the startup
+                # overhead, to check that script.start_task
+                # waits for the start_task in each remote.
                 for rind in remote_indices:
                     remotes.append(salobj.Remote(domain=self.domain, name="Test", index=rind))
                 self.remotes = remotes
@@ -440,7 +455,9 @@ class BaseScriptTestCase(unittest.TestCase):
                 with self.subTest(fail=fail):
                     async with salobj.Domain() as domain:
                         index = next(index_gen)
-                        remote = salobj.Remote(domain=domain, name="Script", index=index)
+                        remote = salobj.Remote(domain=domain, name="Script", index=index,
+                                               evt_max_history=0, tel_max_history=0)
+                        await asyncio.wait_for(remote.start_task, timeout=STD_TIMEOUT)
 
                         def logcallback(data):
                             print(f"message={data.message}")
@@ -482,6 +499,30 @@ class BaseScriptTestCase(unittest.TestCase):
                             if process.returncode is None:
                                 process.terminate()
                                 warnings.warn("Killed a process that was not properly terminated")
+
+        asyncio.get_event_loop().run_until_complete(doit())
+
+    def test_script_schema_process(self):
+        """Test running a script with --schema as a subprocess.
+        """
+        script_path = os.path.join(self.datadir, "standard", "script1")
+
+        async def doit():
+            index = 1  # index is ignored
+            process = await asyncio.create_subprocess_exec(script_path, str(index), "--schema",
+                                                           stdout=subprocess.PIPE,
+                                                           stderr=subprocess.PIPE)
+            try:
+                stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=10)
+                schema = yaml.safe_load(stdout)
+                self.assertEqual(schema, TestScript.get_schema())
+                self.assertEqual(stderr, b"")
+                await asyncio.wait_for(process.wait(), timeout=END_TIMEOUT)
+                self.assertEqual(process.returncode, 0)
+            finally:
+                if process.returncode is None:
+                    process.terminate()
+                    warnings.warn("Killed a process that was not properly terminated")
 
         asyncio.get_event_loop().run_until_complete(doit())
 

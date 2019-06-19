@@ -26,7 +26,6 @@ import logging
 
 from lsst.ts import salobj
 from lsst.ts.idl.enums.ScriptQueue import Location, ScriptProcessState
-from lsst.ts.scriptqueue.base_script import HEARTBEAT_INTERVAL
 
 from .queue_state import QueueState
 
@@ -471,8 +470,9 @@ class RequestModel:
                 return
 
             try:
-                await self.state.scripts[salindex]['remote'].evt_heartbeat.next(flush=False,
-                                                                                timeout=HEARTBEAT_INTERVAL*3)
+                await self.state.scripts[salindex]['remote'].evt_heartbeat.next(
+                    flush=False,
+                    timeout=salobj.BaseScript.HEARTBEAT_INTERVAL*3)
                 nbeats += 1
                 nlost_subsequent = 0
                 self.log.debug(f"[{salindex}]:[heartbeat:{nbeats}] - ["

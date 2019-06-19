@@ -141,7 +141,8 @@ class QueueModel:
         self._index_generator = salobj.index_generator(imin=min_sal_index, imax=max_sal_index)
         self._scripts_being_stopped = set()
         # use index=0 so we get messages for all scripts
-        self.remote = salobj.Remote(domain=domain, name="Script", index=0)
+        self.remote = salobj.Remote(domain=domain, name="Script", index=0,
+                                    evt_max_history=0, tel_max_history=0)
         self.remote.evt_state.callback = self._script_state_callback
         if self.verbose:
             self.remote.evt_logMessage.callback = self._log_message_callback
@@ -641,8 +642,8 @@ class QueueModel:
         try:
             script_info = self.get_script_info(sal_index=sal_index, search_history=False)
         except ValueError:
-            self.log.warn(f"QueueModel got a Script state event for script {sal_index}, "
-                          "which is neither running nor on the queue")
+            self.log.warning(f"QueueModel got a Script state event for script {sal_index}, "
+                             "which is neither running nor on the queue")
             return
         script_info._script_state_callback(data)
 

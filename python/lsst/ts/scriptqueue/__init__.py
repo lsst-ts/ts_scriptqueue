@@ -19,10 +19,8 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-from .base_script import *
 from .queue_model import *
 from .script_info import *
 from .script_queue import *
 from .utils import *
-from . import test_utils
 from .version import *

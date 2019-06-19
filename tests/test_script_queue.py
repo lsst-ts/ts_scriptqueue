@@ -829,7 +829,7 @@ class ScriptQueueTestCase(unittest.TestCase):
             self.assertEqual(data.is_standard, is_standard)
             self.assertEqual(data.path, path)
             schema = yaml.safe_load(data.configSchema)
-            self.assertEqual(schema, scriptqueue.TestScript.get_schema())
+            self.assertEqual(schema, salobj.TestScript.get_schema())
 
     def test_showQueue(self):
         async def doit():

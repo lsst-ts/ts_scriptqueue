@@ -121,6 +121,9 @@ class ParseRunOneScriptTestCase(unittest.TestCase):
 
 
 class RunOneScriptTestCase(unittest.TestCase):
+    def setUp(self):
+        salobj.set_random_lsst_dds_domain()
+
     def test_run_one_script(self):
         async def doit():
             script = DATA_DIR / "standard" / "subdir" / "script3"

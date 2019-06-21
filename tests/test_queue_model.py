@@ -32,7 +32,7 @@ from lsst.ts.idl.enums.Script import ScriptState
 from lsst.ts import scriptqueue
 
 STD_TIMEOUT = 10
-START_TIMEOUT = 20
+START_TIMEOUT = 60
 END_TIMEOUT = 10
 
 
@@ -204,7 +204,7 @@ class QueueModelTestCase(unittest.TestCase):
     def test_add_scripts(self):
         """Test add."""
         async def doit():
-            await self.model.start_task
+            await asyncio.wait_for(self.model.start_task, timeout=START_TIMEOUT)
             await self.assert_next_queue(enabled=False, running=True)
 
             self.model.enable = True
@@ -313,7 +313,7 @@ class QueueModelTestCase(unittest.TestCase):
         """Test adding a script with invalid configuration.
         """
         async def doit():
-            await self.model.start_task
+            await asyncio.wait_for(self.model.start_task, timeout=START_TIMEOUT)
             await self.assert_next_queue(enabled=False, running=True)
 
             self.model.enable = True
@@ -344,7 +344,7 @@ class QueueModelTestCase(unittest.TestCase):
         """Test adding a script immediately followed by stoppping it.
         """
         async def doit():
-            await self.model.start_task
+            await asyncio.wait_for(self.model.start_task, timeout=START_TIMEOUT)
             await self.assert_next_queue(enabled=False, running=True)
 
             self.model.enable = True
@@ -392,7 +392,7 @@ class QueueModelTestCase(unittest.TestCase):
 
     def test_get_script_info(self):
         async def doit():
-            await self.model.start_task
+            await asyncio.wait_for(self.model.start_task, timeout=START_TIMEOUT)
             await self.assert_next_queue(enabled=False, running=True)
 
             self.model.enabled = True
@@ -469,7 +469,7 @@ class QueueModelTestCase(unittest.TestCase):
         """Test move, pause and showQueue
         """
         async def doit():
-            await self.model.start_task
+            await asyncio.wait_for(self.model.start_task, timeout=START_TIMEOUT)
             await self.assert_next_queue(enabled=False, running=True)
 
             self.model.enabled = True
@@ -594,7 +594,7 @@ class QueueModelTestCase(unittest.TestCase):
         """Test that a failed script pauses the queue.
         """
         async def doit():
-            await self.model.start_task
+            await asyncio.wait_for(self.model.start_task, timeout=START_TIMEOUT)
             await self.assert_next_queue(enabled=False, running=True)
 
             self.model.enable = True
@@ -662,7 +662,7 @@ class QueueModelTestCase(unittest.TestCase):
         """Test requeue
         """
         async def doit():
-            await self.model.start_task
+            await asyncio.wait_for(self.model.start_task, timeout=START_TIMEOUT)
             await self.assert_next_queue(enabled=False, running=True)
 
             self.model.enabled = True
@@ -744,7 +744,7 @@ class QueueModelTestCase(unittest.TestCase):
 
     def test_resume_before_first_script_runnable(self):
         async def doit():
-            await self.model.start_task
+            await asyncio.wait_for(self.model.start_task, timeout=START_TIMEOUT)
             await self.assert_next_queue(enabled=False, running=True)
 
             self.model.enabled = True
@@ -777,7 +777,7 @@ class QueueModelTestCase(unittest.TestCase):
 
     def test_run_immediately(self):
         async def doit():
-            await self.model.start_task
+            await asyncio.wait_for(self.model.start_task, timeout=START_TIMEOUT)
             await self.assert_next_queue(enabled=False, running=True)
 
             self.model.enabled = True
@@ -803,7 +803,7 @@ class QueueModelTestCase(unittest.TestCase):
         asyncio.get_event_loop().run_until_complete(doit())
 
     async def check_stop_scripts(self, terminate):
-        await self.model.start_task
+        await asyncio.wait_for(self.model.start_task, timeout=START_TIMEOUT)
         await self.assert_next_queue(enabled=False, running=True)
 
         self.model.enabled = True

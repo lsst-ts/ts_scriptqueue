@@ -32,7 +32,7 @@ from lsst.ts import salobj
 from lsst.ts.scriptqueue import ui
 
 STD_TIMEOUT = 10
-START_TIMEOUT = 20
+START_TIMEOUT = 60
 END_TIMEOUT = 10
 
 DATA_DIR = pathlib.Path(__file__).resolve().parent / "data"
@@ -148,13 +148,14 @@ class RunOneScriptTestCase(unittest.TestCase):
                 remote = salobj.Remote(domain=domain, name="Script", index=index,
                                        evt_max_history=0, tel_max_history=0)
                 await remote.start_task
+                await asyncio.wait_for(remote.start_task, timeout=START_TIMEOUT)
                 process = await asyncio.create_subprocess_exec(exe_name, str(script),
                                                                "--config", str(config_path),
                                                                "--index", str(index),
                                                                "--loglevel", "10")
                 try:
                     t0 = time.time()
-                    await asyncio.wait_for(process.wait(), timeout=20)
+                    await asyncio.wait_for(process.wait(), timeout=START_TIMEOUT)
                     dt = time.time() - t0
                     print(f"It took {dt:0.2f} seconds to run the script")
                 except Exception:

@@ -147,7 +147,6 @@ class RunOneScriptTestCase(unittest.TestCase):
             async with salobj.Domain() as domain:
                 remote = salobj.Remote(domain=domain, name="Script", index=index,
                                        evt_max_history=0, tel_max_history=0)
-                await remote.start_task
                 await asyncio.wait_for(remote.start_task, timeout=START_TIMEOUT)
                 process = await asyncio.create_subprocess_exec(exe_name, str(script),
                                                                "--config", str(config_path),

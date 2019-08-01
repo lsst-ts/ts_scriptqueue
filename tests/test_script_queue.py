@@ -815,21 +815,23 @@ class ScriptQueueTestCase(unittest.TestCase):
             path = "script1"
             await asyncio.wait_for(self.remote.start_task, timeout=START_TIMEOUT)
             await self.assert_next_queue(enabled=False, running=True)
-            self.remote.cmd_showConfig.set(is_standard=is_standard, path=path)
+            self.remote.cmd_showSchema.set(isStandard=is_standard, path=path)
 
-            # make sure showConfig fails when not enabled
+            # make sure showSchema fails when not enabled
             with self.assertRaises(salobj.AckError):
-                await self.remote.cmd_showConfig.start(timeout=STD_TIMEOUT)
+                await self.remote.cmd_showSchema.start(timeout=STD_TIMEOUT)
 
             await self.remote.cmd_enable.start(timeout=STD_TIMEOUT)
             await self.assert_next_queue(enabled=True, running=True)
 
-            await self.remote.cmd_showConfig.start(timeout=START_TIMEOUT)
+            await self.remote.cmd_showSchema.start(timeout=START_TIMEOUT)
             data = await self.remote.evt_configSchema.next(flush=False, timeout=STD_TIMEOUT)
-            self.assertEqual(data.is_standard, is_standard)
+            self.assertEqual(data.isStandard, is_standard)
             self.assertEqual(data.path, path)
             schema = yaml.safe_load(data.configSchema)
             self.assertEqual(schema, salobj.TestScript.get_schema())
+
+        asyncio.get_event_loop().run_until_complete(doit())
 
     def test_showQueue(self):
         async def doit():

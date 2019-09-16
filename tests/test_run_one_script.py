@@ -25,6 +25,7 @@ import shutil
 import time
 import unittest
 
+import asynctest
 import yaml
 
 from lsst.ts.idl.enums.Script import ScriptState
@@ -120,51 +121,43 @@ class ParseRunOneScriptTestCase(unittest.TestCase):
                                               "--parameters", "wait_time=0.1"])
 
 
-class RunOneScriptTestCase(unittest.TestCase):
+class RunOneScriptTestCase(asynctest.TestCase):
     def setUp(self):
         salobj.set_random_lsst_dds_domain()
 
-    def test_run_one_script(self):
-        async def doit():
-            script = DATA_DIR / "standard" / "subdir" / "script3"
-            config_path = DATA_DIR / "config1.yaml"
-            with open(config_path, "r") as f:
-                config = f.read()
-            await ui.run_one_script(index=1, script=script, config=config, loglevel=10)
+    async def test_run_one_script(self):
+        script = DATA_DIR / "standard" / "subdir" / "script3"
+        config_path = DATA_DIR / "config1.yaml"
+        with open(config_path, "r") as f:
+            config = f.read()
+        await ui.run_one_script(index=1, script=script, config=config, loglevel=10)
 
-        asyncio.get_event_loop().run_until_complete(doit())
-
-    def test_run_command_line(self):
+    async def test_run_command_line(self):
         exe_name = "run_one_script.py"
         exe_path = shutil.which(exe_name)
         if exe_path is None:
             self.fail(f"Could not find bin script {exe_name}; did you setup and scons this package?")
 
-        async def doit():
-            index = 135
-            script = DATA_DIR / "standard" / "subdir" / "script3"
-            config_path = DATA_DIR / "config1.yaml"
-            async with salobj.Domain() as domain:
-                remote = salobj.Remote(domain=domain, name="Script", index=index,
-                                       evt_max_history=0, tel_max_history=0)
-                await asyncio.wait_for(remote.start_task, timeout=START_TIMEOUT)
-                process = await asyncio.create_subprocess_exec(exe_name, str(script),
-                                                               "--config", str(config_path),
-                                                               "--index", str(index),
-                                                               "--loglevel", "10")
-                try:
-                    t0 = time.time()
-                    await asyncio.wait_for(process.wait(), timeout=START_TIMEOUT)
-                    dt = time.time() - t0
-                    print(f"It took {dt:0.2f} seconds to run the script")
-                except Exception:
-                    if process.returncode is None:
-                        process.terminate()
-                    raise
-                final_state = remote.evt_state.get()
-                self.assertEqual(final_state.state, ScriptState.DONE)
-
-        asyncio.get_event_loop().run_until_complete(doit())
+        index = 135
+        script = DATA_DIR / "standard" / "subdir" / "script3"
+        config_path = DATA_DIR / "config1.yaml"
+        async with salobj.Domain() as domain, \
+                salobj.Remote(domain=domain, name="Script", index=index) as remote:
+            process = await asyncio.create_subprocess_exec(exe_name, str(script),
+                                                           "--config", str(config_path),
+                                                           "--index", str(index),
+                                                           "--loglevel", "10")
+            try:
+                t0 = time.time()
+                await asyncio.wait_for(process.wait(), timeout=START_TIMEOUT)
+                dt = time.time() - t0
+                print(f"It took {dt:0.2f} seconds to run the script")
+            except Exception:
+                if process.returncode is None:
+                    process.terminate()
+                raise
+            final_state = remote.evt_state.get()
+            self.assertEqual(final_state.state, ScriptState.DONE)
 
 
 if __name__ == "__main__":

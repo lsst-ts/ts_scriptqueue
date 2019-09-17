@@ -235,7 +235,7 @@ class ScriptInfo:
         """
         if not self.runnable:
             raise RuntimeError("Script is not runnable")
-        asyncio.ensure_future(self.remote.cmd_run.set_start(ScriptID=self.index))
+        asyncio.create_task(self.remote.cmd_run.set_start(ScriptID=self.index))
         self.timestamp_run_start = time.time()
 
     @property
@@ -266,10 +266,10 @@ class ScriptInfo:
             scriptdir, scriptname = os.path.split(fullpath)
             os.environ["PATH"] = scriptdir + ":" + initialpath
             # save task so process creation can be cancelled if it hangs
-            self.create_process_task = asyncio.ensure_future(
+            self.create_process_task = asyncio.create_task(
                 asyncio.create_subprocess_exec(scriptname, str(self.index)))
             self.process = await self.create_process_task
-            self.process_task = asyncio.ensure_future(self.process.wait())
+            self.process_task = asyncio.create_task(self.process.wait())
             self.timestamp_process_start = time.time()
             self._run_callback()
             # note: process_task may already be done if the script cannot
@@ -364,7 +364,7 @@ class ScriptInfo:
         except Exception:
             # terminate the script but first let the configure_task fail
             self.log.exception(f"Configure failed for script {self.index}")
-            asyncio.ensure_future(self._start_terminate())
+            asyncio.create_task(self._start_terminate())
             raise
         finally:
             self.timestamp_configure_end = time.time()
@@ -386,7 +386,7 @@ class ScriptInfo:
         self.state_delay = time.time() - state.private_sndStamp
         if self.script_state == ScriptState.UNCONFIGURED and self.config_task is None:
             self.timestamp_configure_start = time.time()
-            self.config_task = asyncio.ensure_future(self._configure())
+            self.config_task = asyncio.create_task(self._configure())
             self.config_task.add_done_callback(self._run_callback)
             self.start_task.set_result(None)
         self._run_callback()

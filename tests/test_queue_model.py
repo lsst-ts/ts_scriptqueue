@@ -347,8 +347,8 @@ class QueueModelTestCase(asynctest.TestCase):
         add_kwargs = self.make_add_kwargs()
         script0 = add_kwargs["script_info"]
         i0 = script0.index
-        add_task = asyncio.ensure_future(asyncio.wait_for(self.model.add(**add_kwargs),
-                                                          timeout=START_TIMEOUT))
+        add_task = asyncio.create_task(asyncio.wait_for(self.model.add(**add_kwargs),
+                                                        timeout=START_TIMEOUT))
         await self.assert_next_queue(sal_indices=[i0], running=True, wait=True)
         await self.model.stop_scripts(sal_indices=[i0], terminate=terminate)
         await self.assert_next_queue(sal_indices=[], running=True, wait=True)

@@ -864,11 +864,11 @@ class QueueModelTestCase(asynctest.TestCase):
         await asyncio.wait_for(self.model.stop_scripts(sal_indices=[333], terminate=terminate),
                                timeout=2)
 
-    def test_stop_scripts_noterminate(self):
-        asyncio.get_event_loop().run_until_complete(self.check_stop_scripts(terminate=False))
+    async def test_stop_scripts_noterminate(self):
+        await self.check_stop_scripts(terminate=False)
 
-    def test_stop_scripts_terminate(self):
-        asyncio.get_event_loop().run_until_complete(self.check_stop_scripts(terminate=True))
+    async def test_stop_scripts_terminate(self):
+        await self.check_stop_scripts(terminate=True)
 
     async def wait_done(self, *indices):
         """Wait for the specified scripts finish running (succeed or fail).

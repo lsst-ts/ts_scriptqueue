@@ -21,21 +21,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import asyncio
-import argparse
 
 from lsst.ts import scriptqueue
 
-
-parser = argparse.ArgumentParser(f"Start the ScriptQueue")
-parser.add_argument("index", help="ScriptQueue CSC index: 1 for Main, 2 for AuxTel", type=int)
-parser.add_argument("--standard",
-                    help="Directory containing standard scripts; defaults to ts_standardscripts/scripts")
-parser.add_argument("--external",
-                    help="Directory containing external scripts; defaults to ts_externalscripts/scripts")
-parser.add_argument("--verbose", action="store_true", help="Print diagnostic information to stdout")
-args = parser.parse_args()
-csc = scriptqueue.ScriptQueue(index=args.index,
-                              standardpath=args.standard,
-                              externalpath=args.external,
-                              verbose=args.verbose)
-asyncio.get_event_loop().run_until_complete(csc.done_task)
+asyncio.run(scriptqueue.ScriptQueue.amain(index=True))

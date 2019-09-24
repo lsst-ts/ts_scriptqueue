@@ -300,6 +300,9 @@ class ScriptQueue(salobj.BaseCsc):
             is_standard=data.isStandard,
             path=data.path,
             config=data.config,
+            log_level=data.logLevel,
+            pause_checkpoint=data.pauseCheckpoint,
+            stop_checkpoint=data.stopCheckpoint,
             descr=data.descr,
             verbose=self.verbose,
         )

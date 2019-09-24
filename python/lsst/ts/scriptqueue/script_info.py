@@ -55,10 +55,20 @@ class ScriptInfo:
         Configuration data as a YAML encoded string.
     descr : `str`
         A short explanation of why this script is being run.
+    log_level : `int` (optional)
+        Log level for the script, as a Python logging level.
+        0, the default, leaves the level unchanged.
+    pause_checkpoint : `str` (optional)
+        Checkpoint(s) at which to pause, as a regular expression.
+        No checkpoints if blank; all checkpoints if ".*".
+    stop_checkpoint : `str` (optional)
+        Checkpoint(s) at which to stop, as a regular expression.
+        No checkpoints if blank; all checkpoints if ".*".
     verbose : `bool` (optional)
         If True then print log messages from the script to stdout.
     """
-    def __init__(self, log, remote, index, seq_num, is_standard, path, config, descr, verbose=False):
+    def __init__(self, log, remote, index, seq_num, is_standard, path, config, descr,
+                 log_level=0, pause_checkpoint="", stop_checkpoint="", verbose=False):
         self.log = log
         self.remote = remote
         self.index = int(index)
@@ -66,55 +76,53 @@ class ScriptInfo:
         self.is_standard = bool(is_standard)
         self.path = str(path)
         self.config = config
+        self.log_level = log_level
+        self.pause_checkpoint = pause_checkpoint
+        self.stop_checkpoint = stop_checkpoint
         self.descr = descr
         self.verbose = verbose
+        # the most recent state reported by the Script
+        # or 0 if the script is not yet loaded
         self.script_state = 0
-        """Most recent state reported by the Script, or 0 if the script
-        is not yet loaded."""
+        # Delay between when the script sent state and it was received (sec)
         self.state_delay = 0
-        """Delay between time script sent state and it was received."""
+        # Time at which the script process was started. 0 before that.
         self.timestamp_process_start = 0
-        """Time at which the script process was started. 0 before that."""
+        # Time at which the _configure method was started. 0 before that.
+        # Note: under unusual circumstances the _configure method may fail
+        # before the configure command is sent to the task.
         self.timestamp_configure_start = 0
-        """Time at which the _configure method was started. 0 before that.
-
-        Note: under unusual circumstances the _configure method may fail
-        before the configure command is sent to the task.
-        """
+        # Time at which the configure command finished (succeeded or failed).
+        # 0 before that.
         self.timestamp_configure_end = 0
-        """Time at which the configure command finished (succeeded or failed).
-        0 before that."""
+        # Time at which the script started running. 0 before that.
         self.timestamp_run_start = 0
-        """Time at which the script started running. 0 before that."""
+        # Time at which the script process finished. 0 before that.
         self.timestamp_process_end = 0
-        """Time at which the script process finished. 0 before that."""
+        # Task for creating self.process, or None if just beginning to load.
         self.create_process_task = None
-        """Task for creating self.process, or None if just beginning to load.
-        """
+        # Task that finishes when configuration starts.
+        # By the time start_task is done config_task and process_task
+        # will exist (instead of being None). Thus:
+        # * To wait for configuration to be done: first await start_task
+        #   then await config_task.
+        # * To wait for a script to finish: first await start_task
+        #   then await process_task:
         self.start_task = asyncio.Future()
-        """Task that finishes when configuration starts.
-
-        By the time start_task is done config_task and process_task
-        will exist (instead of being None). Thus:
-
-        * To wait for configuration to be done: first await start_task
-          then await config_task.
-        * To wait for a script to finish: first await start_task
-          then await process_task:
-        """
+        # Process in which the ``Script`` SAL component is loaded.
         self.process = None
-        """Process in which the ``Script`` SAL component is loaded."""
+        # Task awaiting ``process.wait()``, or None if
+        # the process has not yet started.
         self.process_task = None
-        """Task awaiting ``process.wait()``, or None if not yet started."""
+        # Task awaiting configuration to complete, or None if
+        # configuration has not yet started.
         self.config_task = None
-        """Task awaiting configuration to complete,
-        or None if not yet started."""
         self._callback = None
 
         # The following guarantees that if we terminate a process
         # and it sucessfully stops, then we can report it as terminated;
-        # I had hoped to use process.returncode < 0 but was getting
-        # a returncode of 0 instead.
+        # (If terminating a process resulted in process.returncode < 0
+        # we would not need this attribute, but the returncode is 0).
         self._terminated = False
 
     @property
@@ -349,6 +357,9 @@ class ScriptInfo:
                                    f"instead of {ScriptState.UNCONFIGURED}")
 
             await self.remote.cmd_configure.set_start(ScriptID=self.index, config=self.config,
+                                                      logLevel=self.log_level,
+                                                      pauseCheckpoint=self.pause_checkpoint,
+                                                      stopCheckpoint=self.stop_checkpoint,
                                                       timeout=_CONFIGURE_TIMEOUT)
         except Exception:
             # terminate the script but first let the configure_task fail

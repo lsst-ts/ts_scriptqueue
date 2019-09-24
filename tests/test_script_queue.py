@@ -20,6 +20,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import asyncio
+import logging
 import os
 import shutil
 import unittest
@@ -347,6 +348,135 @@ class ScriptQueueTestCase(asynctest.TestCase):
         # get script state for non-existent script
         with self.assertRaises(salobj.AckError):
             await self.remote.cmd_showScript.set_start(salIndex=3579, timeout=STD_TIMEOUT)
+
+    async def check_add_log_level(self, log_level):
+        """Test script log level when adding a script to the script queue."""
+        await self.assert_next_queue(enabled=False, running=True)
+
+        await self.remote.cmd_enable.start(timeout=STD_TIMEOUT)
+        await self.assert_next_queue(enabled=True, running=True)
+
+        # pause the queue so we know what to expect of queue state
+        await self.remote.cmd_pause.start(timeout=START_TIMEOUT)
+        await self.assert_next_queue(running=False)
+
+        async with salobj.Remote(domain=self.queue.domain, name="Script", index=I0) as script_remote:
+            await self.remote.cmd_add.set_start(
+                logLevel=log_level,
+                isStandard=False,
+                path="script1",
+                config="",
+                location=Location.LAST,
+                descr="test_add_log_level",
+                timeout=START_TIMEOUT)
+            await self.assert_next_queue(running=False, salIndices=[I0])
+
+            # wait for the script queue to launch and configure the script
+            script_state = await script_remote.evt_state.next(flush=False, timeout=START_TIMEOUT)
+            self.assertEqual(script_state.state, ScriptState.UNCONFIGURED)
+            script_state = await script_remote.evt_state.next(flush=False, timeout=STD_TIMEOUT)
+            self.assertEqual(script_state.state, ScriptState.CONFIGURED)
+
+            # check initial log level
+            data = await script_remote.evt_logLevel.next(flush=False, timeout=STD_TIMEOUT)
+            self.assertEqual(data.level, logging.INFO)
+
+            # if log_level != 0 check final log level
+            # else check that no second log level was output
+            if log_level != 0:
+                data = await script_remote.evt_logLevel.next(flush=False, timeout=STD_TIMEOUT)
+                self.assertEqual(data.level, log_level)
+            else:
+                with self.assertRaises(asyncio.TimeoutError):
+                    await script_remote.evt_logLevel.next(flush=False, timeout=0.01)
+
+            # make sure the script queue knows that the script is ready to run
+            await self.wait_runnable(I0)
+
+            # enable the queue and let it run
+            await self.remote.cmd_resume.start(timeout=STD_TIMEOUT)
+            await self.assert_next_queue(enabled=True, running=True, currentSalIndex=I0)
+            await self.assert_next_queue(enabled=True, running=True, pastSalIndices=[I0])
+
+    async def test_add_nonzero_log_level(self):
+        """Test addding a script with a non-zero log level."""
+        # pick a level that does not match the default
+        # to make it easier to see that the level has changed
+        log_level = logging.INFO - 1
+        await self.check_add_log_level(log_level=log_level)
+
+    async def test_add_zero_log_level(self):
+        """Test addding a script with log level 0, meaning don't change it."""
+        await self.check_add_log_level(log_level=0)
+
+    async def test_add_and_pause(self):
+        """Test adding a script with a pause checkpoint.
+        """
+        await self.assert_next_queue(enabled=False, running=True)
+        await self.remote.cmd_enable.start(timeout=STD_TIMEOUT)
+        await self.assert_next_queue(enabled=True, running=True)
+
+        async with salobj.Remote(domain=self.queue.domain, name="Script", index=I0) as script_remote:
+            # Queue and run a script that pauses at the "start" checkpoint.
+            await self.remote.cmd_add.set_start(
+                pauseCheckpoint="start",
+                isStandard=False,
+                path="script1",
+                config="",
+                location=Location.LAST,
+                descr="test_add",
+                timeout=START_TIMEOUT)
+            await self.assert_next_queue(running=True, salIndices=[I0])
+            await self.assert_next_queue(running=True, currentSalIndex=I0)
+            timeout = START_TIMEOUT
+
+            # Validate the expected script states through PAUSED.
+            # The first timeout is longer becauase scripts are slow to load.
+            for expected_script_state in (ScriptState.UNCONFIGURED,
+                                          ScriptState.CONFIGURED,
+                                          ScriptState.RUNNING,
+                                          ScriptState.PAUSED):
+                script_state = await script_remote.evt_state.next(flush=False, timeout=timeout)
+                self.assertEqual(script_state.state, expected_script_state)
+                timeout = STD_TIMEOUT
+
+            # Resume the script and wait for the queue to report it done.
+            await script_remote.cmd_resume.start(timeout=STD_TIMEOUT)
+            await self.assert_next_queue(running=True, pastSalIndices=[I0])
+
+    async def test_add_and_stop(self):
+        """Test adding a script with a stop checkpoint.
+        """
+        await self.assert_next_queue(enabled=False, running=True)
+        await self.remote.cmd_enable.start(timeout=STD_TIMEOUT)
+        await self.assert_next_queue(enabled=True, running=True)
+
+        async with salobj.Remote(domain=self.queue.domain, name="Script", index=I0) as script_remote:
+            # Queue and run a script that stops at the "start" checkpoint.
+            await self.remote.cmd_add.set_start(
+                stopCheckpoint="start",
+                isStandard=False,
+                path="script1",
+                config="",
+                location=Location.LAST,
+                descr="test_add",
+                timeout=START_TIMEOUT)
+            await self.assert_next_queue(running=True, salIndices=[I0])
+            await self.assert_next_queue(running=True, currentSalIndex=I0)
+
+            # Validate the expected script states through STOPPED.
+            # The first timeout is longer becauase scripts are slow to load.
+            timeout = START_TIMEOUT
+            for expected_script_state in (ScriptState.UNCONFIGURED,
+                                          ScriptState.CONFIGURED,
+                                          ScriptState.RUNNING,
+                                          ScriptState.STOPPING,
+                                          ScriptState.STOPPED):
+                script_state = await script_remote.evt_state.next(flush=False, timeout=timeout)
+                self.assertEqual(script_state.state, expected_script_state)
+                timeout = STD_TIMEOUT
+
+            await self.assert_next_queue(running=True, pastSalIndices=[I0])
 
     async def test_processState(self):
         """Test the processState value of the queue event.

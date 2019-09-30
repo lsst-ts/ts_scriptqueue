@@ -656,7 +656,7 @@ class QueueModel:
                 traceback.print_exc(file=sys.stderr)
 
         if script_info.process_done or script_info.terminated:
-            asyncio.ensure_future(self._remove_script(script_info.index))
+            asyncio.create_task(self._remove_script(script_info.index))
         elif self.enabled and self.running \
                 and self.current_script is None and script_info.runnable \
                 and self.queue and self.queue[0].index == script_info.index:

@@ -34,8 +34,8 @@ In fact it is likely to take several days or weeks before a given SAL index is u
 For information about writing SAL scripts, see the documentation for ts_salobj.
 For more information about the script queue, see `ScriptQueue`, especially :ref:`Basic Usage<script_queue_basic_usage>`.
 
-Classes
-=======
+Important Classes
+-----------------
 
 The primary classes in ts_scriptqueue are:
 
@@ -49,3 +49,10 @@ Python API reference
     :no-main-docstr:
     :no-inheritance-diagram:
 .. _Commandable SAL Component: https://docushare.lsst.org/docushare/dsweb/View/LSE-209
+
+Revision History
+================
+
+.. toctree::
+    revision_history
+    :maxdepth: 1

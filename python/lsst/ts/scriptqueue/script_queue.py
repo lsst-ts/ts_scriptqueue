@@ -300,6 +300,9 @@ class ScriptQueue(salobj.BaseCsc):
             is_standard=data.isStandard,
             path=data.path,
             config=data.config,
+            log_level=data.logLevel,
+            pause_checkpoint=data.pauseCheckpoint,
+            stop_checkpoint=data.stopCheckpoint,
             descr=data.descr,
             verbose=self.verbose,
         )
@@ -413,3 +416,19 @@ class ScriptQueue(salobj.BaseCsc):
             scriptState=script_info.script_state,
             force_output=force_output,
         )
+
+    @classmethod
+    def add_arguments(cls, parser):
+        parser.add_argument("--standard",
+                            help="Directory containing standard scripts; "
+                                 "defaults to ts_standardscripts/scripts")
+        parser.add_argument("--external",
+                            help="Directory containing external scripts; "
+                                 "defaults to ts_externalscripts/scripts")
+        parser.add_argument("--verbose", action="store_true", help="Print diagnostic information to stdout")
+
+    @classmethod
+    def add_kwargs_from_args(cls, args, kwargs):
+        kwargs["standardpath"] = args.standard
+        kwargs["externalpath"] = args.external
+        kwargs["verbose"] = args.verbose

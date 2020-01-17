@@ -48,9 +48,19 @@ def _min_sal_index_generator():
 make_min_sal_index = _min_sal_index_generator()
 
 
+class QueueInfo:
+    """Information about the queue. Used by assert_next_queue."""
+    def __init__(self, model):
+        self.enabled = model.enabled
+        self.running = model.running
+        self.current_index = model.current_index
+        self.queue = copy.copy(model.queue)
+        self.history = copy.copy(model.history)
+
+
 class QueueModelTestCase(asynctest.TestCase):
     async def setUp(self):
-        self.t0 = time.time()
+        self.t0 = time.monotonic()
         self.min_sal_index = next(make_min_sal_index)
         salobj.set_random_lsst_dds_domain()
         self.datadir = os.path.abspath(os.path.join(os.path.dirname(__file__), "data"))
@@ -195,7 +205,7 @@ class QueueModelTestCase(asynctest.TestCase):
             self.queue_task.set_result(None)
 
     def script_callback(self, script_info):
-        curr_time = time.time()
+        curr_time = time.monotonic()
         dt = curr_time - self.t0
         print(f"script_callback for {script_info.index} at {curr_time:0.1f}: "
               f"started={script_info.start_task.done()}; "
@@ -820,12 +830,12 @@ class QueueModelTestCase(asynctest.TestCase):
         script_info3 = info_dict[i0+3]
 
         print(f"wait for {i0+1}, {i0+2} and {i0+3} to finish")
-        t0 = time.time()
+        t0 = time.monotonic()
         await asyncio.wait_for(asyncio.gather(script_info1.process_task,
                                               script_info2.process_task,
                                               script_info3.process_task,
                                               return_exceptions=False), timeout=60)
-        dt = time.time() - t0
+        dt = time.monotonic() - t0
         print(f"waited {dt:0.2f} seconds")
         # i0 and i0+2 both ran; i0+1 was stopped while it was running
         # and i0+3 was stopped while on the queue
@@ -896,8 +906,8 @@ class QueueModelTestCase(asynctest.TestCase):
         no script running.
         """
         for sal_index in indices:
-            t0 = time.time()
             print(f"waiting for script {sal_index} to be runnable")
+            t0 = time.monotonic()
             did_start = False
             did_config = False
             try:
@@ -909,7 +919,7 @@ class QueueModelTestCase(asynctest.TestCase):
                 # this will fail if the script was already run
                 self.assertTrue(script_info.runnable)
             except Exception as e:
-                dt = time.time() - t0
+                dt = time.monotonic() - t0
                 raise RuntimeError(f"Script {sal_index} did not become runnable in time; "
                                    f"did_start={did_start}; did_config={did_config}; "
                                    f"elapsed time={dt:0.1f}") from e

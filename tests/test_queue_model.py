@@ -58,6 +58,8 @@ class QueueModelTestCase(asynctest.TestCase):
         self.externalpath = os.path.join(self.datadir, "external")
         self.domain = salobj.Domain()
         self.log = logging.getLogger()
+        self.log.addHandler(logging.StreamHandler())
+        self.log.setLevel(logging.DEBUG)
         self.model = scriptqueue.QueueModel(domain=self.domain,
                                             log=self.log,
                                             standardpath=self.standardpath,

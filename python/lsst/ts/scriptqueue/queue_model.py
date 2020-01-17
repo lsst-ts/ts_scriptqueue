@@ -26,8 +26,6 @@ import collections
 import copy
 import os
 import pathlib
-import sys
-import traceback
 
 from lsst.ts import salobj
 from lsst.ts.idl.enums.Script import ScriptState
@@ -653,7 +651,7 @@ class QueueModel:
             try:
                 self.script_callback(script_info)
             except Exception:
-                traceback.print_exc(file=sys.stderr)
+                self.log.exception("script_callback failed; continuing")
 
         if script_info.process_done or script_info.terminated:
             asyncio.create_task(self._remove_script(script_info.index))
@@ -713,4 +711,4 @@ class QueueModel:
             try:
                 self.queue_callback()
             except Exception:
-                traceback.print_exc(file=sys.stderr)
+                self.log.exception("queue_callback failed; continuing")

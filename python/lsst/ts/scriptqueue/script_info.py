@@ -69,7 +69,7 @@ class ScriptInfo:
     """
     def __init__(self, log, remote, index, seq_num, is_standard, path, config, descr,
                  log_level=0, pause_checkpoint="", stop_checkpoint="", verbose=False):
-        self.log = log
+        self.log = log.getChild(f"ScriptInfo(index={index})")
         self.remote = remote
         self.index = int(index)
         self.seq_num = int(seq_num)

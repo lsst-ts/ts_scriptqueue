@@ -89,7 +89,7 @@ class QueueModel:
     domain : `salobj.lsst.ts.salobj.Domain`
         DDS domain; typically ``ScriptQueue.domain``
     log : `logging.Logger`
-        Logger.
+        Parent logger.
     standardpath : `str`, `bytes` or `os.PathLike`
         Path to standard SAL scripts.
     externalpath : `str`, `bytes` or `os.PathLike`
@@ -124,14 +124,14 @@ class QueueModel:
             raise TypeError(f"script_callback={script_callback} is not callable")
 
         self.domain = domain
-        self.log = log
+        self.log = log.getChild("QueueModel")
         self.standardpath = os.path.abspath(standardpath)
         self.externalpath = os.path.abspath(externalpath)
         self.queue_callback = queue_callback
-        self.verbose = verbose
         self.script_callback = script_callback
         self.min_sal_index = min_sal_index
         self.max_sal_index = max_sal_index
+        self.verbose = verbose
         # queue of ScriptInfo instances
         self.queue = collections.deque()
         self.history = collections.deque(maxlen=MAX_HISTORY)

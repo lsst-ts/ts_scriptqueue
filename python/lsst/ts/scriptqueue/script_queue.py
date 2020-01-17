@@ -136,6 +136,8 @@ class ScriptQueue(salobj.BaseCsc):
                                 log=self.log,
                                 standardpath=standardpath,
                                 externalpath=externalpath,
+                                next_visit_callback=self.put_next_visit,
+                                next_visit_canceled_callback=self.put_next_visit_canceled,
                                 queue_callback=self.put_queue,
                                 script_callback=self.put_script,
                                 min_sal_index=min_sal_index,
@@ -352,6 +354,38 @@ class ScriptQueue(salobj.BaseCsc):
         self.model.enabled = enabled
         if enabled:
             self.do_showAvailableScripts()
+
+    def put_next_visit(self, script_info):
+        """Output the ``nextVisit`` event.
+        """
+        if self.verbose:
+            print(f"put_next_visit: index={script_info.index}, "
+                  f"group_id={script_info.group_id}")
+        if script_info.metadata is None:
+            raise RuntimeError("script_info has no metadata")
+        if not script_info.group_id:
+            raise RuntimeError("script_info has no group_id")
+        metadata_dict = {key: value for key, value in script_info.metadata.get_vars().items()
+                         if not key.startswith("private_")}
+        del metadata_dict["ScriptID"]
+        self.evt_nextVisit.set_put(
+            salIndex=script_info.index,
+            groupId=script_info.group_id,
+            **metadata_dict,
+            force_output=True)
+
+    def put_next_visit_canceled(self, script_info):
+        """Output the ``nextVisitCanceled`` event.
+        """
+        if self.verbose:
+            print(f"put_next_visit_canceled: index={script_info.index}, "
+                  f"group_id={script_info.group_id}")
+        if not script_info.group_id:
+            raise RuntimeError("script_info has no group_id")
+        self.evt_nextVisitCanceled.set_put(
+            salIndex=script_info.index,
+            groupId=script_info.group_id,
+            force_output=True)
 
     def put_queue(self):
         """Output the queued scripts as a ``queue`` event.

@@ -116,8 +116,8 @@ class ScriptQueueTestCase(asynctest.TestCase):
                                              externalpath=externalpath,
                                              verbose=True)
         self.remote = salobj.Remote(domain=self.queue.domain, name="ScriptQueue", index=1)
-        self.queue.summary_state = salobj.State.DISABLED
         await asyncio.gather(self.queue.start_task, self.remote.start_task)
+        await self.remote.cmd_start.start(timeout=STD_TIMEOUT)
 
     async def tearDown(self):
         nkilled = len(self.queue.model.terminate_all())

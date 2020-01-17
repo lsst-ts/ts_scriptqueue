@@ -144,13 +144,13 @@ class ScriptQueueTestCase(asynctest.TestCase):
         return stop_data
 
     async def assert_next_queue(self, enabled=True, running=False,
-                                currentSalIndex=0, salIndices=(), pastSalIndices=()):
+                                current_sal_index=0, sal_indices=(), past_sal_indices=()):
         """Get the next queue event and check values.
-
-        If wait is True then wait for the next update before checking.
 
         The defaults are appropriate to an enabled, paused queue
         with no scripts.
+
+        Skips one queue event if necessary; see Notes.
 
         Parameters
         ----------
@@ -218,7 +218,7 @@ class ScriptQueueTestCase(asynctest.TestCase):
         ackcmd = await self.remote.cmd_add.start(add_data, timeout=START_TIMEOUT)
         seq_num_0 = ackcmd.private_seqNum
         self.assertEqual(int(ackcmd.result), I0)
-        await self.assert_next_queue(salIndices=[I0])
+        await self.assert_next_queue(sal_indices=[I0])
 
         # run showScript for a script that has not been configured
         self.remote.evt_script.flush()
@@ -237,13 +237,13 @@ class ScriptQueueTestCase(asynctest.TestCase):
         ackcmd = await self.remote.cmd_add.start(add_data, timeout=START_TIMEOUT)
         seq_num1 = ackcmd.private_seqNum
         self.assertEqual(int(ackcmd.result), I0+1)
-        await self.assert_next_queue(salIndices=[I0, I0+1])
+        await self.assert_next_queue(sal_indices=[I0, I0+1])
 
         # add script I0+2 first: test add first
         add_data = make_add_data(location=Location.FIRST)
         ackcmd = await self.remote.cmd_add.start(add_data, timeout=START_TIMEOUT)
         self.assertEqual(int(ackcmd.result), I0+2)
-        await self.assert_next_queue(salIndices=[I0+2, I0, I0+1])
+        await self.assert_next_queue(sal_indices=[I0+2, I0, I0+1])
 
         # add script I0+3 after I0+1: test add after last
         add_data = make_add_data(location=Location.AFTER,

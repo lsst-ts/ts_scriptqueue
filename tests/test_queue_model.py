@@ -71,6 +71,12 @@ class QueueModelTestCase(asynctest.TestCase):
         self.log = logging.getLogger()
         self.log.addHandler(logging.StreamHandler())
         self.log.setLevel(logging.DEBUG)
+        # Queue of (sal_index, group_id) set by next_visit_callback
+        # and used by assert_next_next_visit
+        self.next_visit_queue = asyncio.Queue()
+        # Queue of (sal_index, group_id) set by next_visit_canceled_callback
+        # and used by assert_next_next_visit_canceled
+        self.next_visit_canceled_queue = asyncio.Queue()
         # Queue of script queue information;
         # used by assert_next_queue
         self.queue_info_queue = asyncio.Queue()
@@ -78,6 +84,8 @@ class QueueModelTestCase(asynctest.TestCase):
                                             log=self.log,
                                             standardpath=self.standardpath,
                                             externalpath=self.externalpath,
+                                            next_visit_callback=self.next_visit_callback,
+                                            next_visit_canceled_callback=self.next_visit_canceled_callback,
                                             queue_callback=self.queue_callback,
                                             script_callback=self.script_callback,
                                             min_sal_index=self.min_sal_index,
@@ -91,6 +99,33 @@ class QueueModelTestCase(asynctest.TestCase):
             warnings.warn(f"Killed {nkilled} subprocesses")
 
         await self.domain.close()
+
+    async def assert_next_next_visit(self, sal_index):
+        """Assert that the next next_visit callback is for the specified index.
+
+        Parameters
+        ----------
+        index : `int`
+            SAL index of script.
+        """
+        next_sal_index, next_group_id = await asyncio.wait_for(self.next_visit_queue.get(),
+                                                               timeout=STD_TIMEOUT)
+        self.assertEqual(next_sal_index, sal_index)
+        self.assertNotEqual(next_group_id, "")
+
+    async def assert_next_next_visit_canceled(self, sal_index):
+        """Assert that the next next_visit_canceled callback
+        is for the specified index.
+
+        Parameters
+        ----------
+        index : `int`
+            SAL index of script.
+        """
+        next_sal_index, next_group_id = await asyncio.wait_for(self.next_visit_canceled_queue.get(),
+                                                               timeout=STD_TIMEOUT)
+        self.assertEqual(next_sal_index, sal_index)
+        self.assertNotEqual(next_group_id, "")
 
     async def assert_next_queue(self, enabled=True, running=False, current_sal_index=0,
                                 sal_indices=(), past_sal_indices=(), wait=True):
@@ -120,7 +155,9 @@ class QueueModelTestCase(asynctest.TestCase):
 
         Notes
         -----
-        To simplify testing, this test will skip one queue event
+        There is a race condition whereby the top script may need its group ID
+        set before it can be run, or its group ID may have been set in time.
+        In order to handle this, this test will skip one queue event
         before testing, if all of the following are true:
 
         * The queue is enabled and running
@@ -135,7 +172,7 @@ class QueueModelTestCase(asynctest.TestCase):
         self.assertEqual(self.model.running, running)
         if enabled and running and current_sal_index != 0 and \
                 queue_info.current_index == 0 and queue_info.queue:
-            # Top script not running yet.
+            # Top script not running yet; its group ID is probably being set.
             # Skip this queue info and check the next.
             queue_info = await asyncio.wait_for(self.queue_info_queue.get(), STD_TIMEOUT)
         self.assertEqual(queue_info.current_index, current_sal_index)
@@ -211,6 +248,20 @@ class QueueModelTestCase(asynctest.TestCase):
             descr=f"{sal_index}",
             verbose=True,
         )
+
+    def next_visit_callback(self, script_info):
+        dt = time.monotonic() - self.t0
+        print(f"next_visit_callback() for {script_info.index}: "
+              f"group_id={script_info.group_id}; "
+              f"elapsed time={dt:0.1f}; ")
+        asyncio.create_task(self.next_visit_queue.put((script_info.index, script_info.group_id)))
+
+    def next_visit_canceled_callback(self, script_info):
+        dt = time.monotonic() - self.t0
+        print(f"next_visit_canceled_callback() for {script_info.index}: "
+              f"group_id={script_info.group_id}; "
+              f"elapsed time={dt:0.1f}; ")
+        asyncio.create_task(self.next_visit_canceled_queue.put((script_info.index, script_info.group_id)))
 
     def queue_callback(self):
         dt = time.monotonic() - self.t0
@@ -323,14 +374,20 @@ class QueueModelTestCase(asynctest.TestCase):
         await self.assert_next_queue(enabled=False, running=True, sal_indices=[i0+2, i0+1, i0+3])
 
         self.model.enabled = True
+        await self.assert_next_next_visit(sal_index=i0+2)
         await self.assert_next_queue(running=True, current_sal_index=i0+2,
                                      sal_indices=[i0+1, i0+3], past_sal_indices=[])
+        await self.assert_next_next_visit(sal_index=i0+1)
         await self.assert_next_queue(running=True, current_sal_index=i0+1,
                                      sal_indices=[i0+3], past_sal_indices=[i0+2])
+        await self.assert_next_next_visit(sal_index=i0+3)
         await self.assert_next_queue(running=True, current_sal_index=i0+3,
                                      sal_indices=[], past_sal_indices=[i0+1, i0+2])
         await self.assert_next_queue(running=True, current_sal_index=0,
                                      sal_indices=[], past_sal_indices=[i0+3, i0+1, i0+2])
+
+        # Make sure that next_visit_canceled_callback was not called
+        self.assertTrue(self.next_visit_canceled_queue.empty())
 
     async def test_add_bad_config(self):
         """Test adding a script with invalid configuration.
@@ -580,6 +637,55 @@ class QueueModelTestCase(asynctest.TestCase):
         await self.assert_next_queue(sal_indices=[i0+2, i0+1, i0], wait=False)
 
         await self.model.wait_terminate_all(timeout=STD_TIMEOUT)
+
+    async def test_clear_group_id(self):
+        """Test that a script at the top of the queue has its group ID cleared
+        if it is moved elsewhere.
+        """
+        await self.assert_next_queue(enabled=True, running=True)
+
+        # Pause the queue so we know what to expect of queue state.
+        self.model.running = False
+        await self.assert_next_queue(running=False)
+
+        # Queue scripts i0, i0+1 and i0+2.
+        sal_indices = []
+        for i in range(3):
+            script_info = self.make_script_info(is_standard=True,
+                                                path=os.path.join("subdir", "script3"),
+                                                config="wait_time: 2")
+            sal_indices.append(script_info.index)
+            await asyncio.wait_for(self.model.add(script_info=script_info,
+                                                  location=Location.LAST,
+                                                  location_sal_index=0), timeout=START_TIMEOUT)
+            await self.assert_next_queue(sal_indices=sal_indices)
+        i0 = sal_indices[0]
+
+        await self.wait_configured(i0, i0+1, i0+2)
+
+        # Start the queue and wait for i0+1's group ID to be set
+        # then move i0+1 last and check that its group ID is cleared
+        # and that i0+2's group ID is set.
+        self.model.running = True
+        print(f"*** wait for i0={i0} group ID")
+        await self.assert_next_next_visit(sal_index=i0)
+        print(f"*** wait for i0={i0} to be running")
+        await self.assert_next_queue(running=True, current_sal_index=i0, sal_indices=[i0+1, i0+2])
+        print(f"*** wait for i0+1={i0+1} group ID")
+        await self.assert_next_next_visit(sal_index=i0+1)
+        print(f"*** move i0+1={i0+1}")
+        self.model.move(sal_index=i0+1,
+                        location=Location.LAST,
+                        location_sal_index=0)
+        await self.assert_next_queue(running=True, current_sal_index=i0, sal_indices=[i0+2, i0+1])
+        await self.assert_next_next_visit_canceled(sal_index=i0+1)
+        await self.assert_next_next_visit(sal_index=i0+2)
+        await self.assert_next_queue(running=True, current_sal_index=i0+2,
+                                     sal_indices=[i0+1], past_sal_indices=[i0])
+        await self.assert_next_queue(running=True, current_sal_index=i0+1,
+                                     sal_indices=[], past_sal_indices=[i0+2, i0])
+        await self.assert_next_queue(running=True, current_sal_index=0,
+                                     sal_indices=[], past_sal_indices=[i0+1, i0+2, i0])
 
     async def test_pause_on_failure(self):
         """Test that a failed script pauses the queue.

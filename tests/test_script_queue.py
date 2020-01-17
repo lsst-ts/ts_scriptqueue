@@ -272,7 +272,7 @@ class ScriptQueueTestCase(asynctest.TestCase):
         self.assertEqual(data.salIndex, sal_index)
         self.assertNotEqual(data.groupId, "")
 
-    async def test_add(self):
+    async def test_add_remove(self):
         """Test add, remove and showScript."""
         is_standard = False
         path = "script1"

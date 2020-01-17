@@ -360,27 +360,29 @@ class ScriptQueue(salobj.BaseCsc):
         which alter the queue can rely on the event being published,
         even if the command has no effect (e.g. moving a script before itself).
         """
-        sal_indices = np.zeros_like(self.evt_queue.data.salIndices)
-        indlen = min(len(self.model.queue), len(sal_indices))
-        sal_indices[0:indlen] = [info.index for info in self.model.queue][0:indlen]
+        raw_sal_indices = self.model.queue_indices
+        output_sal_indices = np.zeros_like(self.evt_queue.data.salIndices)
+        indlen = min(len(raw_sal_indices), len(output_sal_indices))
+        output_sal_indices[0:indlen] = raw_sal_indices[0:indlen]
 
-        past_sal_indices = np.zeros_like(self.evt_queue.data.pastSalIndices)
-        pastlen = min(len(self.model.history), len(past_sal_indices))
-        past_sal_indices[0:pastlen] = [info.index for info in self.model.history][0:pastlen]
+        output_past_sal_indices = np.zeros_like(self.evt_queue.data.pastSalIndices)
+        raw_past_sal_indices = self.model.history_indices
+        pastlen = min(len(raw_past_sal_indices), len(output_past_sal_indices))
+        output_past_sal_indices[0:pastlen] = raw_past_sal_indices[0:pastlen]
 
         if self.verbose:
             print(f"put_queue: enabled={self.model.enabled}, running={self.model.running}, "
                   f"currentSalIndex={self.model.current_index}, "
-                  f"salIndices={sal_indices[0:indlen]}, "
-                  f"pastSalIndices={past_sal_indices[0:pastlen]}")
+                  f"salIndices={output_sal_indices[0:indlen]}, "
+                  f"pastSalIndices={output_past_sal_indices[0:pastlen]}")
         self.evt_queue.set_put(
             enabled=self.model.enabled,
             running=self.model.running,
             currentSalIndex=self.model.current_index,
             length=indlen,
-            salIndices=sal_indices,
+            salIndices=output_sal_indices,
             pastLength=pastlen,
-            pastSalIndices=past_sal_indices,
+            pastSalIndices=output_past_sal_indices,
             force_output=True)
 
     def put_script(self, script_info, force_output=False):

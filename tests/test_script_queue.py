@@ -36,6 +36,7 @@ from lsst.ts import scriptqueue
 
 STD_TIMEOUT = 10
 START_TIMEOUT = 20
+LOAD_TIMEOUT = 60
 END_TIMEOUT = 10
 
 I0 = scriptqueue.script_queue.SCRIPT_INDEX_MULT  # initial Script SAL index
@@ -296,10 +297,9 @@ class ScriptQueueTestCase(asynctest.TestCase):
         await self.remote.cmd_stopScripts.start(stop_data, timeout=START_TIMEOUT)
         await self.assert_next_queue(salIndices=[I0+2, I0+1, I0+3])
 
-        # make sure all scripts are runnable before starting the queue
-        # so the queue data is more predictable (otherwise the queue
-        # may start up with no script running)
-        await self.wait_runnable(I0+1, I0+2, I0+3)
+        # Make sure all scripts are configured, then start the queue
+        # and let it run.
+        await self.wait_configured(I0+1, I0+2, I0+3)
 
         # get script state for a script that has been configured
         # but is not running
@@ -390,10 +390,8 @@ class ScriptQueueTestCase(asynctest.TestCase):
                 with self.assertRaises(asyncio.TimeoutError):
                     await script_remote.evt_logLevel.next(flush=False, timeout=0.01)
 
-            # make sure the script queue knows that the script is ready to run
-            await self.wait_runnable(I0)
-
-            # enable the queue and let it run
+            # Wait for the scrip to be enabled, then run the queue.
+            await self.wait_configured(I0)
             await self.remote.cmd_resume.start(timeout=STD_TIMEOUT)
             await self.assert_next_queue(enabled=True, running=True, currentSalIndex=I0)
             await self.assert_next_queue(enabled=True, running=True, pastSalIndices=[I0])
@@ -521,9 +519,9 @@ class ScriptQueueTestCase(asynctest.TestCase):
         seq_num2 = ackcmd.private_seqNum
         await self.assert_next_queue(salIndices=[I0, I0+1, I0+2])
 
-        # wait for all scripts to be runnable so future script output
-        # is due to the scripts being run or terminated
-        await self.wait_runnable(I0, I0+1, I0+2)
+        # Wait for all scripts to be configured, so future script output
+        # is due to the scripts being run or terminated.
+        await self.wait_configured(I0, I0+1, I0+2)
 
         # run the queue and let it pause on failure
         await self.remote.cmd_resume.start(timeout=START_TIMEOUT)
@@ -817,7 +815,7 @@ class ScriptQueueTestCase(asynctest.TestCase):
         await self.remote.cmd_stopScripts.start(stop_data, timeout=START_TIMEOUT)
         await self.assert_next_queue(salIndices=[I0+1, I0+2])
 
-        await self.wait_runnable(I0+1, I0+2)
+        await self.wait_configured(I0+1, I0+2)
 
         # run the queue and let it finish
         await self.remote.cmd_resume.start(timeout=START_TIMEOUT)
@@ -845,7 +843,9 @@ class ScriptQueueTestCase(asynctest.TestCase):
         # may start up with no script running)
         await self.wait_runnable(I0+9)
 
-        # run the queue and let it finish
+        # Wait for script I0+9 to be configured, then
+        # run the queue and let the script finish.
+        await self.wait_configured(I0+9)
         await self.remote.cmd_resume.start(timeout=START_TIMEOUT)
         await self.assert_next_queue(running=True, currentSalIndex=I0+9,
                                      salIndices=[], pastSalIndices=[I0+2, I0+1])
@@ -931,20 +931,20 @@ class ScriptQueueTestCase(asynctest.TestCase):
         with self.assertRaises(salobj.AckError):
             await self.remote.cmd_showQueue.start(timeout=STD_TIMEOUT)
 
-    async def wait_runnable(self, *sal_indices):
-        """Wait for the specified scripts to be runnable.
+    async def wait_configured(self, *sal_indices):
+        """Wait for the specified scripts to be configured.
 
         Call this before running the queue if you want the queue data
         to be predictable; otherwise the queue may start up with
         no script running.
         """
+        print(f"wait_configured({sal_indices}")
         for sal_index in sal_indices:
-            print(f"waiting for script {sal_index} to be runnable")
+            print(f"waiting for script {sal_index} to be loaded")
             script_info = self.queue.model.get_script_info(sal_index, search_history=False)
-            await asyncio.wait_for(script_info.start_task, 60)
-            await asyncio.wait_for(script_info.config_task, 60)
-            # this will fail if the script was already run
-            self.assertTrue(script_info.runnable)
+            await asyncio.wait_for(script_info.start_task, timeout=LOAD_TIMEOUT)
+            print(f"waiting for script {sal_index} to be configured")
+            await asyncio.wait_for(script_info.config_task, STD_TIMEOUT)
 
 
 class CmdLineTestCase(asynctest.TestCase):

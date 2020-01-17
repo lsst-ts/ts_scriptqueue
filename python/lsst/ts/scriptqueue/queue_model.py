@@ -186,8 +186,18 @@ class QueueModel:
 
     @property
     def current_index(self):
-        """Return the SAL index of the current script, or 0 if none."""
+        """SAL index of the current script, or 0 if none."""
         return 0 if self.current_script is None else self.current_script.index
+
+    @property
+    def history_indices(self):
+        """SAL indices of scripts on the history queue."""
+        return [script_info.index for script_info in self.history]
+
+    @property
+    def queue_indices(self):
+        """SAL indices of scripts on the queue."""
+        return [script_info.index for script_info in self.queue]
 
     async def close(self):
         """Shut down the queue, terminate all scripts and free resources."""
@@ -681,6 +691,9 @@ class QueueModel:
               script to history. This is intended for use by ``running``
               to allow the queue to resume after pausing on failure.
         """
+        initial_current_index = self.current_index
+        initial_queue_indices = self.queue_indices
+        initial_history_indices = self.history_indices
         if self.current_script:
             if self.current_script.process_done:
                 if self.current_script.failed and (pause_on_failure or not self.running):
@@ -690,24 +703,27 @@ class QueueModel:
                 else:
                     self.history.appendleft(self.current_script)
                     self.current_script = None
-            elif not force_callback:
-                return
 
-        if self.enabled and self.running and not self.current_script:
-            # it is unlikely done scripts are on the queue,
-            # but it can happen
+        if self.enabled and self.running:
+            # Clear done scripts from the top of the queue.
+            # Done scripts on the queue is rare, but can happen.
             while self.queue:
                 script_info = self.queue[0]
                 if script_info.process_done or script_info.terminated:
                     self.queue.popleft()
                     continue
-                if script_info.runnable and script_info.index not in self._scripts_being_stopped:
+                if not self.current_script and script_info.runnable and \
+                        script_info.index not in self._scripts_being_stopped:
                     self.current_script = script_info
                     self.queue.popleft()
                     script_info.run()
                 break
 
         if self.queue_callback:
+        if self.queue_callback and force_callback or \
+                self.current_index != initial_current_index or \
+                self.queue_indices != initial_queue_indices or \
+                self.history_indices != initial_history_indices:
             try:
                 self.queue_callback()
             except Exception:

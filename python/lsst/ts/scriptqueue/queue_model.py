@@ -26,8 +26,8 @@ import collections
 import copy
 import os
 import pathlib
-import sys
-import traceback
+
+import astropy.time
 
 from lsst.ts import salobj
 from lsst.ts.idl.enums.Script import ScriptState
@@ -89,17 +89,27 @@ class QueueModel:
     domain : `salobj.lsst.ts.salobj.Domain`
         DDS domain; typically ``ScriptQueue.domain``
     log : `logging.Logger`
-        Logger.
+        Parent logger.
     standardpath : `str`, `bytes` or `os.PathLike`
         Path to standard SAL scripts.
     externalpath : `str`, `bytes` or `os.PathLike`
         Path to external SAL scripts.
+    next_visit_callback : ``callable`` (optional)
+        Function to call when a script gets a new group ID.
+        It receives one argument: a `ScriptInfo`.
+        This is separate from script_callback to make it easier
+        to output the ``nextVisit`` event.
+    next_visit_canceled_callback : ``callable`` (optional)
+        Function to call when a script loses its group ID.
+        It receives one argument: a `ScriptInfo` with group_id not yet cleared.
     queue_callback : ``callable`` (optional)
         Function to call when the queue state changes.
         It receives no arguments.
     script_callback : ``callable`` (optional)
         Function to call when information about a script changes.
         It receives one argument: a `ScriptInfo`.
+        This is not called if the only change is to the group ID; see
+        ``next_visit_callback`` and ``next_visit_canceled_callback`` for that.
     min_sal_index : `int` (optional)
         Minimum SAL index for Script SAL components
     max_sal_index : `int` (optional)
@@ -112,26 +122,42 @@ class QueueModel:
     ValueError
         If ``standardpath`` or ``externalpath`` does not exist.
     """
-    def __init__(self, domain, log, standardpath, externalpath, queue_callback=None, script_callback=None,
-                 min_sal_index=MIN_SAL_INDEX, max_sal_index=salobj.MAX_SAL_INDEX, verbose=False):
+    def __init__(self,
+                 domain,
+                 log,
+                 standardpath,
+                 externalpath,
+                 next_visit_callback=None,
+                 next_visit_canceled_callback=None,
+                 queue_callback=None,
+                 script_callback=None,
+                 min_sal_index=MIN_SAL_INDEX,
+                 max_sal_index=salobj.MAX_SAL_INDEX,
+                 verbose=False):
         if not os.path.isdir(standardpath):
             raise ValueError(f"No such dir standardpath={standardpath}")
         if not os.path.isdir(externalpath):
             raise ValueError(f"No such dir externalpath={externalpath}")
+        if next_visit_callback and not callable(next_visit_callback):
+            raise TypeError(f"next_visit_callback={next_visit_callback} is not callable")
+        if next_visit_canceled_callback and not callable(next_visit_canceled_callback):
+            raise TypeError(f"next_visit_canceled_callback={next_visit_canceled_callback} is not callable")
         if queue_callback and not callable(queue_callback):
             raise TypeError(f"queue_callback={queue_callback} is not callable")
         if script_callback and not callable(script_callback):
             raise TypeError(f"script_callback={script_callback} is not callable")
 
         self.domain = domain
-        self.log = log
+        self.log = log.getChild("QueueModel")
         self.standardpath = os.path.abspath(standardpath)
         self.externalpath = os.path.abspath(externalpath)
+        self.next_visit_callback = next_visit_callback
+        self.next_visit_canceled_callback = next_visit_canceled_callback
         self.queue_callback = queue_callback
-        self.verbose = verbose
         self.script_callback = script_callback
         self.min_sal_index = min_sal_index
         self.max_sal_index = max_sal_index
+        self.verbose = verbose
         # queue of ScriptInfo instances
         self.queue = collections.deque()
         self.history = collections.deque(maxlen=MAX_HISTORY)
@@ -143,6 +169,7 @@ class QueueModel:
         # use index=0 so we get messages for all scripts
         self.remote = salobj.Remote(domain=domain, name="Script", index=0,
                                     evt_max_history=0, tel_max_history=0)
+        self.remote.evt_metadata.callback = self._script_metadata_callback
         self.remote.evt_state.callback = self._script_state_callback
         if self.verbose:
             self.remote.evt_logMessage.callback = self._log_message_callback
@@ -188,8 +215,18 @@ class QueueModel:
 
     @property
     def current_index(self):
-        """Return the SAL index of the current script, or 0 if none."""
+        """SAL index of the current script, or 0 if none."""
         return 0 if self.current_script is None else self.current_script.index
+
+    @property
+    def history_indices(self):
+        """SAL indices of scripts on the history queue."""
+        return [script_info.index for script_info in self.history]
+
+    @property
+    def queue_indices(self):
+        """SAL indices of scripts on the queue."""
+        return [script_info.index for script_info in self.queue]
 
     async def close(self):
         """Shut down the queue, terminate all scripts and free resources."""
@@ -323,7 +360,6 @@ class QueueModel:
 
         old_queue = copy.copy(self.queue)
         script_info = self.pop_script_info(sal_index)
-
         try:
             self._insert_script(script_info=script_info,
                                 location=location,
@@ -388,6 +424,7 @@ class QueueModel:
             Info for the requeued script.
         """
         old_script_info = self.get_script_info(sal_index, search_history=True)
+
         script_info = ScriptInfo(
             log=self.log,
             remote=self.remote,
@@ -494,6 +531,13 @@ class QueueModel:
         """
         if script_info.process_done:
             return
+        # Clear the group ID, if appropriate. Do not command the script,
+        # since we are about to kill it anyway.
+        if self.queue and self.queue[0].index == script_info.index and \
+                script_info.group_id or script_info.setting_group_id:
+            self.clear_group_id(script_info=script_info, command_script=False)
+
+        # Kill the script
         did_terminate = script_info.terminate()
         if did_terminate:
             if script_info.process is not None:
@@ -530,6 +574,16 @@ class QueueModel:
         self._running = bool(run)
         if self._running != was_running:
             self._update_queue(pause_on_failure=False)
+
+    def next_group_id(self):
+        """Get the next group ID.
+
+        The group ID is the current TAI date and time as a string in ISO
+        format. It has T separating date and time and no time zone suffix.
+        Here is an example:
+        "2020-01-17T22:59:05.721"
+        """
+        return astropy.time.Time.now().tai.isot
 
     def terminate_all(self):
         """Terminate all scripts and return info for the ones terminated.
@@ -593,7 +647,7 @@ class QueueModel:
         else:
             raise ValueError(f"Unknown location {location}")
 
-        script_info.callback = self._script_callback
+        script_info.callback = self._script_info_callback
         self._update_queue()
 
     async def _remove_script(self, sal_index):
@@ -634,33 +688,105 @@ class QueueModel:
         print(f"Script {data.ScriptID} log message={data.message!r}; "
               f"level={data.level}; traceback={data.traceback!r}")
 
-    def _script_state_callback(self, data):
+    def clear_group_id(self, script_info, command_script):
+        """Clear the group ID of the specified script, if appropriate.
+
+        Clear the group ID of the specified script if the group ID
+        is set or is being set.
+
+        Parameters
+        ----------
+        script_info : `ScriptInfo`
+            Script info.
+        command_script : `bool`
+            If True then issue the setGroupId command to the script
+            (in the background).
+            The only time you would set this False is if you are about
+            to terminate the script.
+        """
+        self.log.debug(f"Clear group info for {script_info.index}; command_script={command_script}")
+        if self.next_visit_canceled_callback:
+            try:
+                self.next_visit_canceled_callback(script_info)
+            except Exception:
+                self.log.exception("next_visit_canceled_callback failed; continuing")
+        script_info.clear_group_id(command_script=command_script)
+
+    async def set_group_id(self, script_info):
+        """Set or clear the group ID for a script.
+
+        Parameters
+        ----------
+        script_info : `ScriptInfo`
+            Script info.
+
+        Raise
+        -----
+        RuntimeError
+            If the group ID cannot be set.
+        """
+        group_id = self.next_group_id()
+        self.log.debug(f"set_group_id of {script_info.index} to {group_id}")
+        await script_info.set_group_id(group_id)
+        if self.next_visit_callback:
+            try:
+                self.next_visit_callback(script_info)
+            except Exception:
+                self.log.exception("next_visit_callback failed; continuing")
+
+    def _script_info_from_data(self, event_name, data):
+        """Get script info for the script specified in Script event data
+
+        Parameters
+        ----------
+        event_name : `str`
+            Name of event, for logging a warning.
+        data : ``Script event data``
+            Data from a script event. The ScriptID field is read.
+
+        Returns
+        -------
+        script_info_or_None : `ScriptInfo` or `None`
+            The script info, if found, else None.
+        """
         sal_index = data.ScriptID
         if sal_index < self.min_sal_index or sal_index > self.max_sal_index:
             # not a script for this QueueModel
-            return
+            return None
         try:
             script_info = self.get_script_info(sal_index=sal_index, search_history=False)
         except ValueError:
-            self.log.warning(f"QueueModel got a Script state event for script {sal_index}, "
+            self.log.warning(f"QueueModel got a Script {event_name} event for script {sal_index}, "
                              "which is neither running nor on the queue")
-            return
-        script_info._script_state_callback(data)
+            return None
+        return script_info
 
-    def _script_callback(self, script_info):
+    def _script_metadata_callback(self, data):
+        script_info = self._script_info_from_data(event_name="metadata", data=data)
+        if script_info:
+            script_info.metadata = data
+
+    def _script_state_callback(self, data):
+        script_info = self._script_info_from_data(event_name="state", data=data)
+        if script_info:
+            script_info._script_state_callback(data)
+
+    def _script_info_callback(self, script_info):
         """ScriptInfo callback."""
         if self.script_callback:
             try:
                 self.script_callback(script_info)
             except Exception:
-                traceback.print_exc(file=sys.stderr)
+                self.log.exception("script_callback failed; continuing")
 
         if script_info.process_done or script_info.terminated:
             asyncio.create_task(self._remove_script(script_info.index))
-        elif self.enabled and self.running \
-                and self.current_script is None and script_info.runnable \
-                and self.queue and self.queue[0].index == script_info.index:
-            # this script is next in line and ready to run
+            return
+
+        if self.queue and self.queue[0].index == script_info.index and \
+                script_info.configured:
+            # This script is next in line and may need its group ID set
+            # or be ready to be run.
             self._update_queue(force_callback=False)
 
     def _update_queue(self, force_callback=True, pause_on_failure=True):
@@ -683,6 +809,9 @@ class QueueModel:
               script to history. This is intended for use by ``running``
               to allow the queue to resume after pausing on failure.
         """
+        initial_current_index = self.current_index
+        initial_queue_indices = self.queue_indices
+        initial_history_indices = self.history_indices
         if self.current_script:
             if self.current_script.process_done:
                 if self.current_script.failed and (pause_on_failure or not self.running):
@@ -692,25 +821,39 @@ class QueueModel:
                 else:
                     self.history.appendleft(self.current_script)
                     self.current_script = None
-            elif not force_callback:
-                return
 
-        if self.enabled and self.running and not self.current_script:
-            # it is unlikely done scripts are on the queue,
-            # but it can happen
+        if self.enabled and self.running:
+            # Clear done scripts from the top of the queue.
+            # Done scripts on the queue is rare, but can happen.
             while self.queue:
                 script_info = self.queue[0]
                 if script_info.process_done or script_info.terminated:
                     self.queue.popleft()
                     continue
-                if script_info.runnable and script_info.index not in self._scripts_being_stopped:
+                if not self.current_script and script_info.runnable and \
+                        script_info.index not in self._scripts_being_stopped:
                     self.current_script = script_info
                     self.queue.popleft()
                     script_info.run()
                 break
 
-        if self.queue_callback:
+            # Set the group ID of the top script, if needed
+            # and clear the group ID of any other scripts, if needed
+            is_top = True
+            for script_info in self.queue:
+                if is_top:
+                    if script_info.needs_group_id:
+                        asyncio.create_task(self.set_group_id(script_info))
+                    is_top = False
+                else:
+                    if script_info.group_id or script_info.setting_group_id:
+                        self.clear_group_id(script_info, command_script=True)
+
+        if self.queue_callback and force_callback or \
+                self.current_index != initial_current_index or \
+                self.queue_indices != initial_queue_indices or \
+                self.history_indices != initial_history_indices:
             try:
                 self.queue_callback()
             except Exception:
-                traceback.print_exc(file=sys.stderr)
+                self.log.exception("queue_callback failed; continuing")

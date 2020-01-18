@@ -27,8 +27,12 @@ import logging
 import pathlib
 import random
 
+import astropy
+
 from lsst.ts import salobj
 from lsst.ts import scriptqueue
+
+STD_TIMEOUT = 5  # timeout for fast commands
 
 
 class ConfigAction(argparse.Action):
@@ -152,11 +156,14 @@ async def run_one_script(index, script, config, loglevel=None):
             await script_info.start_loading(script)
             print("waiting for the script to load")
             await script_info.start_task
-            print("configuring the script")
+            print("waiting for the script to be configured")
             await script_info.config_task
             if loglevel is not None:
                 print(f"setting script log level to {loglevel}")
-                await remote.cmd_setLogLevel.set_start(level=loglevel, timeout=5)
+                await remote.cmd_setLogLevel.set_start(level=loglevel, timeout=STD_TIMEOUT)
+            group_id = astropy.time.Time.now().tai.isot
+            print(f"setting group ID={group_id}")
+            await script_info.set_group_id(group_id=group_id)
             print("running the script")
             script_info.run()
             await script_info.process_task

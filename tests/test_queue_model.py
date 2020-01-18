@@ -35,7 +35,9 @@ from lsst.ts.idl.enums.Script import ScriptState
 from lsst.ts import scriptqueue
 
 STD_TIMEOUT = 10
+# Time to load a script (sec)
 START_TIMEOUT = 60
+# Time for a process to exit once it has said it is quitting (sec)
 END_TIMEOUT = 10
 
 

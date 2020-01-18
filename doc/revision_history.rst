@@ -15,6 +15,7 @@ Requirements:
 
 * ts_salobj 5.4
 * ts_idl 1
+* ts_xml 4.7
 * IDL files for Script and ScriptQueue, e.g. built with ``make_idl_files.py``
 * asynctest
 

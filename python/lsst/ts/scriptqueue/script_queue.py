@@ -23,7 +23,12 @@ __all__ = ["ScriptQueue"]
 
 import asyncio
 import os
+import pathlib
+import shutil
 import subprocess
+import tempfile
+import urllib.parse
+import xml.etree.ElementTree
 
 import numpy as np
 
@@ -124,6 +129,8 @@ class ScriptQueue(salobj.BaseCsc):
         standardpath = self._get_scripts_path(standardpath, is_standard=True)
         externalpath = self._get_scripts_path(externalpath, is_standard=False)
         self.verbose = verbose
+        self.temp_config_dir = None
+        self.original_ospl_uri = os.environ["OSPL_URI"]
 
         min_sal_index = index * SCRIPT_INDEX_MULT
         max_sal_index = min_sal_index + SCRIPT_INDEX_MULT - 1
@@ -143,6 +150,8 @@ class ScriptQueue(salobj.BaseCsc):
                                 min_sal_index=min_sal_index,
                                 max_sal_index=max_sal_index,
                                 verbose=verbose)
+
+        self._make_temp_ospl_configuration()
 
     def _get_scripts_path(self, patharg, is_standard):
         """Get the scripts path from the ``standardpath`` or ``externalpath``
@@ -177,6 +186,30 @@ class ScriptQueue(salobj.BaseCsc):
             raise ValueError(f"{category} scripts path {dir_path} is not a directory")
         return dir_path
 
+    def _make_temp_ospl_configuration(self):
+        """Read the current OSPL configuration and make a local copy
+        with masterPriority="0" for scripts, if possible.
+        """
+        parsed_config_uri = urllib.parse.urlparse(self.original_ospl_uri)
+        config_path = parsed_config_uri.path
+        with open(config_path, "r") as f:
+            config = xml.etree.ElementTree.parse(f)
+        policy_name = "DurabilityService/NameSpaces/Policy"
+        policy = config.find(policy_name)
+        if policy is None:
+            self.log.warning(f"Cannot find {policy_name!r} to modify in $OSPL_URI={self.original_ospl_uri}; "
+                             "scripts may launch slowly")
+            return
+        policy.attrib["masterPriority"] = "0"
+
+        self.temp_config_dir = pathlib.Path(tempfile.mkdtemp())
+        temp_config_path = self.temp_config_dir / "ospl.xml"
+        config.write(temp_config_path)
+        temp_parsed_config_uri = parsed_config_uri._replace(path=str(temp_config_path))
+        temp_ospl_uri = urllib.parse.urlunparse(temp_parsed_config_uri)
+        os.environ["OSPL_URI"] = temp_ospl_uri
+        self.log.info(f"Created modified $OSPL_URI={temp_ospl_uri} to speed up script launching")
+
     async def start(self):
         """Finish creating the script queue."""
         await super().start()
@@ -190,6 +223,9 @@ class ScriptQueue(salobj.BaseCsc):
         """Shut down the queue, terminate all scripts and free resources."""
         await self.model.close()
         await super().close_tasks()
+        if self.temp_config_dir is not None:
+            shutil.rmtree(self.temp_config_dir, ignore_errors=False)
+            os.environ["OSPL_URI"] = self.original_ospl_uri
 
     def do_showAvailableScripts(self, data=None):
         """Output a list of available scripts.

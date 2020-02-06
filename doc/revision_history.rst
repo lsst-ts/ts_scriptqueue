@@ -9,7 +9,11 @@ Revision History
 v2.5.0
 ======
 
-Output the ``nextVisit`` and ``nextVisitCanceled`` events.
+Major changes:
+
+* Output the ``nextVisit`` and ``nextVisitCanceled`` events.
+* Have the ScriptQueue modify the OpenSplice configuration to assign a use a ``masterPriority`` of 0 for scripts, if practical.
+  It appears there is no way to do this directly with the ``dds`` library, so create a modified copy of the OpenSplice configuration file to be used by scripts.
 
 Requirements:
 

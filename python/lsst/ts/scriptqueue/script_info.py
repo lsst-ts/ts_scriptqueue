@@ -325,7 +325,7 @@ class ScriptInfo:
         or to an exception if the setGroupId Script command fails.
 
         Parameters
-        ---------
+        ----------
         group_id : `str`
             New group ID; "" to clear the group ID.
 

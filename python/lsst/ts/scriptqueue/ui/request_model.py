@@ -50,7 +50,7 @@ class RequestModel:
         self.queue = salobj.Remote(self.domain, "ScriptQueue", index)
         self.evt_loop = asyncio.get_event_loop()
 
-        self.cmd_timeout = 120.
+        self.cmd_timeout = 120.0
         self.max_lost_heartbeats = 5
         """Specify the tolerance in subsequent heartbeats lost when
         monitoring a script.
@@ -63,8 +63,10 @@ class RequestModel:
         # Initialize information about the queue. If the queue is not in
         # enable or offline state it will be left unchanged.
         if self.query_queue_state() < 0:
-            self.log.warning("Could not get state of the queue. Make sure queue is running and is "
-                             "in enabled state.")
+            self.log.warning(
+                "Could not get state of the queue. Make sure queue is running and is "
+                "in enabled state."
+            )
             return
 
         self.query_scripts_info()  # Ask the queue for the state of all scripts
@@ -85,9 +87,11 @@ class RequestModel:
         It will try to identify the current state of the queue and if it fails,
         assumes the queue is in STANDBY.
         """
-        self.run(salobj.set_summary_state(remote=self.queue,
-                                          state=salobj.State.ENABLED,
-                                          timeout=self.cmd_timeout))
+        self.run(
+            salobj.set_summary_state(
+                remote=self.queue, state=salobj.State.ENABLED, timeout=self.cmd_timeout
+            )
+        )
 
     def get_scripts(self):
         """Return available scripts.
@@ -106,11 +110,14 @@ class RequestModel:
 
         self.run(self.queue.cmd_showAvailableScripts.start(timeout=self.cmd_timeout))
 
-        script_list = self.run(self.queue.evt_availableScripts.next(flush=False,
-                                                                    timeout=self.cmd_timeout))
+        script_list = self.run(
+            self.queue.evt_availableScripts.next(flush=False, timeout=self.cmd_timeout)
+        )
 
-        return {'external': script_list.external.split(':'),
-                'standard': script_list.standard.split(':')}
+        return {
+            "external": script_list.external.split(":"),
+            "standard": script_list.standard.split(":"),
+        }
 
     def pause_queue(self):
         """Pause the queue."""
@@ -129,8 +136,11 @@ class RequestModel:
     def quit_queue(self):
         """Tell the script queue to quit.
         """
-        self.run(salobj.set_summary_state(remote=self.queue, state=salobj.State.OFFLINE,
-                                          timeout=self.cmd_timeout))
+        self.run(
+            salobj.set_summary_state(
+                remote=self.queue, state=salobj.State.OFFLINE, timeout=self.cmd_timeout
+            )
+        )
 
     def stop_scripts(self, sal_indices, terminate=False):
         """Stop list of scripts.
@@ -180,11 +190,15 @@ class RequestModel:
         salindex : int
             The salindex of the script added to the queue.
         """
-        ackcmd = self.run(self.queue.cmd_add.set_start(isStandard=is_standard,
-                                                       path=path,
-                                                       config=config,
-                                                       location=Location.LAST,
-                                                       timeout=self.cmd_timeout))
+        ackcmd = self.run(
+            self.queue.cmd_add.set_start(
+                isStandard=is_standard,
+                path=path,
+                config=config,
+                location=Location.LAST,
+                timeout=self.cmd_timeout,
+            )
+        )
 
         self.state.add_script(int(ackcmd.result))
 
@@ -198,7 +212,9 @@ class RequestModel:
         level : int
             Log level; error=40, warning=30, info=20, debug=10
         """
-        self.run(self.queue.cmd_setLogLevel.set_start(level=level, timeout=self.cmd_timeout))
+        self.run(
+            self.queue.cmd_setLogLevel.set_start(level=level, timeout=self.cmd_timeout)
+        )
 
     def set_script_log_level(self, index, level):
         """Set the log level for a script.
@@ -215,27 +231,32 @@ class RequestModel:
         KeyError
             If the script is not on the queue.
         """
-        if self.state.scripts[index]['remote'] is None:
+        if self.state.scripts[index]["remote"] is None:
             self.get_script_remote(index)
 
-        remote = self.state.scripts[index]['remote']
-        self.run(remote.cmd_setLogLevel.set_start(level=level, timeout=self.cmd_timeout))
+        remote = self.state.scripts[index]["remote"]
+        self.run(
+            remote.cmd_setLogLevel.set_start(level=level, timeout=self.cmd_timeout)
+        )
 
     def listen_heartbeat(self):
         """Listen for queue heartbeats."""
-        return self.run(self.queue.evt_heartbeat.next(flush=True,
-                                                      timeout=self.cmd_timeout))
+        return self.run(
+            self.queue.evt_heartbeat.next(flush=True, timeout=self.cmd_timeout)
+        )
 
     def get_script_remote(self, salindex):
         """Listen for a script log messages."""
         self.update_scripts_info()
         info = self.state.scripts[salindex]
 
-        if (info["process_state"] < ScriptProcessState.DONE and
-                self.state.scripts[salindex]['remote'] is None):
-            self.log.debug('Starting script remote')
+        if (
+            info["process_state"] < ScriptProcessState.DONE
+            and self.state.scripts[salindex]["remote"] is None
+        ):
+            self.log.debug("Starting script remote")
             remote = salobj.Remote(self.domain, "Script", salindex)
-            self.state.scripts[salindex]['remote'] = remote
+            self.state.scripts[salindex]["remote"] = remote
         elif info["process_state"] >= ScriptProcessState.DONE:
             raise RuntimeError(f"Script {salindex} in a final state.")
 
@@ -285,8 +306,10 @@ class RequestModel:
         if queue_state is None:
             pass  # try next
         elif queue_state.summaryState != salobj.State.ENABLED:
-            self.log.warning(f'Queue summary state is {salobj.State(queue_state.summaryState)!r}. '
-                             f'Enable it first and try again.')
+            self.log.warning(
+                f"Queue summary state is {salobj.State(queue_state.summaryState)!r}. "
+                f"Enable it first and try again."
+            )
             return -1
 
         queue_coro = self.queue.evt_queue.next(flush=False, timeout=self.cmd_timeout)
@@ -294,7 +317,7 @@ class RequestModel:
         try:
             queue = self.run(queue_coro)
         except Exception:
-            self.log.exception('Could not get state of the queue.')
+            self.log.exception("Could not get state of the queue.")
             return -1
 
         self.state.update(queue)
@@ -335,10 +358,16 @@ class RequestModel:
         """
         for salindex in self.state.script_indices:
             try:
-                self.run(self.queue.cmd_showScript.set_start(salIndex=salindex, timeout=self.cmd_timeout))
+                self.run(
+                    self.queue.cmd_showScript.set_start(
+                        salIndex=salindex, timeout=self.cmd_timeout
+                    )
+                )
             except salobj.AckError as ack_err:
-                self.log.error(f"Could not get info on script {salindex}. "
-                               f"Failed with ack.result={ack_err.ack.result}")
+                self.log.error(
+                    f"Could not get info on script {salindex}. "
+                    f"Failed with ack.result={ack_err.ack.result}"
+                )
 
     @staticmethod
     def parse_info(info):
@@ -357,14 +386,16 @@ class RequestModel:
         if info is None:
             return "None"
 
-        parsed_str = f"[salIndex:{info['index']}]" \
-                     f"[{info['type']}]" \
-                     f"[path:{info['path']}]" \
-                     f"[timestamp_process_start:{round(info['timestamp_process_start'], 2)}]" \
-                     f"[timestamp_run_start:{round(info['timestamp_run_start'], 2)}]" \
-                     f"[timestamp_process_end:{round(info['timestamp_process_end'], 2)}]" \
-                     f"[{str(info['script_state'])}]" \
-                     f"[{str(info['process_state'])}]"
+        parsed_str = (
+            f"[salIndex:{info['index']}]"
+            f"[{info['type']}]"
+            f"[path:{info['path']}]"
+            f"[timestamp_process_start:{round(info['timestamp_process_start'], 2)}]"
+            f"[timestamp_run_start:{round(info['timestamp_run_start'], 2)}]"
+            f"[timestamp_process_end:{round(info['timestamp_process_end'], 2)}]"
+            f"[{str(info['script_state'])}]"
+            f"[{str(info['process_state'])}]"
+        )
         return parsed_str
 
     def monitor_script(self, salindex):
@@ -377,11 +408,16 @@ class RequestModel:
         """
         self.get_script_remote(salindex)
         finished, unfinished = self.evt_loop.run_until_complete(
-            asyncio.wait([self.monitor_script_info(salindex),
-                          self.monitor_script_log(salindex),
-                          self.monitor_script_checkpoint(salindex),
-                          self.monitor_script_heartbeat(salindex)],
-                         return_when=asyncio.FIRST_COMPLETED))
+            asyncio.wait(
+                [
+                    self.monitor_script_info(salindex),
+                    self.monitor_script_log(salindex),
+                    self.monitor_script_checkpoint(salindex),
+                    self.monitor_script_heartbeat(salindex),
+                ],
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+        )
         for task in unfinished:
             task.cancel()
 
@@ -393,7 +429,7 @@ class RequestModel:
         salindex : int
 
         """
-        if self.state.scripts[salindex]['remote'] is None:
+        if self.state.scripts[salindex]["remote"] is None:
             raise RuntimeError(f"No remote for script {salindex}")
 
         while True:
@@ -402,9 +438,13 @@ class RequestModel:
                 return
             # Don't set a timeout because we cannot predict when, if ever,
             # scripts will output log messages.
-            log_message = await self.state.scripts[salindex]['remote'].evt_logMessage.next(flush=False)
-            self.log.log(log_message.level,
-                         f'[{salindex}]:{log_message.message}{log_message.traceback}')
+            log_message = await self.state.scripts[salindex][
+                "remote"
+            ].evt_logMessage.next(flush=False)
+            self.log.log(
+                log_message.level,
+                f"[{salindex}]:{log_message.message}{log_message.traceback}",
+            )
 
     async def monitor_script_info(self, salindex):
         """Coroutine to monitor the state of a script.
@@ -439,7 +479,9 @@ class RequestModel:
         while True:
             # Don't set a timeout because we cannot predict when, if ever,
             # scripts will output checkpoint events.
-            state = await self.state.scripts[salindex]['remote'].evt_state.next(flush=False)
+            state = await self.state.scripts[salindex]["remote"].evt_state.next(
+                flush=False
+            )
             self.log.debug(f"[{salindex}]:[checkpoint]{state.lastCheckpoint}")
 
     async def monitor_script_heartbeat(self, salindex):
@@ -456,31 +498,37 @@ class RequestModel:
 
         while True:
 
-            if self.state.scripts[salindex]['process_state'] >= ScriptProcessState.DONE:
+            if self.state.scripts[salindex]["process_state"] >= ScriptProcessState.DONE:
                 self.log.debug(f"Script {salindex} finalized.")
                 return
-            elif self.state.scripts[salindex]['remote'] is None:
+            elif self.state.scripts[salindex]["remote"] is None:
                 self.log.debug(f"No remote for script {salindex}.")
                 return
             elif nlost_subsequent > self.max_lost_heartbeats:
-                self.log.error(f"Script is not responding. Lost {nlost_subsequent} "
-                               f"subsequent heartbeats. You may have to interrupt the script execution."
-                               f"If this is an expected behaviour you should be able to restart the "
-                               f"monitoring routine.")
+                self.log.error(
+                    f"Script is not responding. Lost {nlost_subsequent} "
+                    f"subsequent heartbeats. You may have to interrupt the script execution."
+                    f"If this is an expected behaviour you should be able to restart the "
+                    f"monitoring routine."
+                )
                 return
 
             try:
-                await self.state.scripts[salindex]['remote'].evt_heartbeat.next(
-                    flush=False,
-                    timeout=salobj.BaseScript.HEARTBEAT_INTERVAL*3)
+                await self.state.scripts[salindex]["remote"].evt_heartbeat.next(
+                    flush=False, timeout=salobj.BaseScript.HEARTBEAT_INTERVAL * 3
+                )
                 nbeats += 1
                 nlost_subsequent = 0
-                self.log.debug(f"[{salindex}]:[heartbeat:{nbeats}] - ["
-                               f"total lost:{nlost_total}]")
+                self.log.debug(
+                    f"[{salindex}]:[heartbeat:{nbeats}] - ["
+                    f"total lost:{nlost_total}]"
+                )
             except asyncio.TimeoutError:
                 nlost_subsequent += 1
                 nlost_total += 1
-                self.log.warning(f"[{salindex}]:[heartbeat:{nbeats}] - "
-                                 f"[total lost:{nlost_total} - "
-                                 f"subsequent lost: {nlost_subsequent}]:"
-                                 f"[Missing heartbeats from script.]")
+                self.log.warning(
+                    f"[{salindex}]:[heartbeat:{nbeats}] - "
+                    f"[total lost:{nlost_total} - "
+                    f"subsequent lost: {nlost_subsequent}]:"
+                    f"[Missing heartbeats from script.]"
+                )

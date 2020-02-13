@@ -38,6 +38,7 @@ STD_TIMEOUT = 5  # timeout for fast commands
 class ConfigAction(argparse.Action):
     """Read config from a file.
     """
+
     def __call__(self, parser, namespace, value, option_string=None):
         """Read config from a file.
 
@@ -63,6 +64,7 @@ class ConfigAction(argparse.Action):
 class ParameterAction(argparse.Action):
     """Parse name=value pairs as config.
     """
+
     def __call__(self, parser, namespace, values, option_string):
         """Parse name=value pairs as config.
 
@@ -81,7 +83,10 @@ class ParameterAction(argparse.Action):
         for nameValue in values:
             name, sep, valueStr = nameValue.partition("=")
             if not valueStr:
-                parser.error("%s value %s must be in form name=value" % (option_string, nameValue))
+                parser.error(
+                    "%s value %s must be in form name=value"
+                    % (option_string, nameValue)
+                )
             config_list.append(f"{name}: {valueStr}")
         namespace.config = "\n".join(config_list)
 
@@ -91,25 +96,43 @@ def parse_run_one_script_cmd(args=None):
     """
     description = "Run one SAL script."
 
-    parser = argparse.ArgumentParser(description=description,
-                                     formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser = argparse.ArgumentParser(
+        description=description, formatter_class=argparse.ArgumentDefaultsHelpFormatter
+    )
 
     parser.add_argument("script", help="Path of script to run.")
-    parser.add_argument("--index", type=int, help="Script index; default is a random value")
-    parser.add_argument("-l", "--loglevel", type=int,
-                        help="Logging level; debug=10, info=20, warning=30, error=40")
+    parser.add_argument(
+        "--index", type=int, help="Script index; default is a random value"
+    )
+    parser.add_argument(
+        "-l",
+        "--loglevel",
+        type=int,
+        help="Logging level; debug=10, info=20, warning=30, error=40",
+    )
 
     config_group = parser.add_mutually_exclusive_group(required=False)
-    config_group.add_argument("-c", "--config", action=ConfigAction,
-                              help="Configuration vales for the script, in yaml format.")
-    config_group.add_argument("-p", "--parameters", nargs="+", action=ParameterAction,
-                              help="Configuration for the script, in key=value format.")
+    config_group.add_argument(
+        "-c",
+        "--config",
+        action=ConfigAction,
+        help="Configuration vales for the script, in yaml format.",
+    )
+    config_group.add_argument(
+        "-p",
+        "--parameters",
+        nargs="+",
+        action=ParameterAction,
+        help="Configuration for the script, in key=value format.",
+    )
 
     cmd = parser.parse_args(args=args)
     if cmd.index is None:
-        cmd.index = random.randint(1, scriptqueue.script_queue.SCRIPT_INDEX_MULT-1)
+        cmd.index = random.randint(1, scriptqueue.script_queue.SCRIPT_INDEX_MULT - 1)
     elif not 0 < cmd.index <= salobj.MAX_SAL_INDEX:
-        parser.error(f"index={cmd.index} must be in the range [1, {salobj.MAX_SAL_INDEX}], inclusive")
+        parser.error(
+            f"index={cmd.index} must be in the range [1, {salobj.MAX_SAL_INDEX}], inclusive"
+        )
     if cmd.config is None:
         cmd.config = ""
     return cmd
@@ -138,19 +161,32 @@ async def run_one_script(index, script, config, loglevel=None):
     async with salobj.Domain() as domain:
         # make a remote to communicate with the script; set max_history=0
         # because it needs no late joiner data
-        remote = salobj.Remote(domain=domain, name="Script", index=index,
-                               evt_max_history=0, tel_max_history=0)
+        remote = salobj.Remote(
+            domain=domain,
+            name="Script",
+            index=index,
+            evt_max_history=0,
+            tel_max_history=0,
+        )
         await remote.start_task
 
         def log_callback(data):
             iso_time = datetime.datetime.now().time().isoformat(timespec="milliseconds")
             print(f"{iso_time} {logging.getLevelName(data.level)}: {data.message}")
+
         remote.evt_logMessage.callback = log_callback
 
         print("starting the script process")
-        script_info = scriptqueue.ScriptInfo(log=remote.salinfo.log, remote=remote, index=index, seq_num=1,
-                                             is_standard=False, path=script, config=config,
-                                             descr="run_one_script.py")
+        script_info = scriptqueue.ScriptInfo(
+            log=remote.salinfo.log,
+            remote=remote,
+            index=index,
+            seq_num=1,
+            is_standard=False,
+            path=script,
+            config=config,
+            descr="run_one_script.py",
+        )
         try:
             remote.evt_state.callback = script_info._script_state_callback
             await script_info.start_loading(script)
@@ -160,7 +196,9 @@ async def run_one_script(index, script, config, loglevel=None):
             await script_info.config_task
             if loglevel is not None:
                 print(f"setting script log level to {loglevel}")
-                await remote.cmd_setLogLevel.set_start(level=loglevel, timeout=STD_TIMEOUT)
+                await remote.cmd_setLogLevel.set_start(
+                    level=loglevel, timeout=STD_TIMEOUT
+                )
             group_id = astropy.time.Time.now().tai.isot
             print(f"setting group ID={group_id}")
             await script_info.set_group_id(group_id=group_id)

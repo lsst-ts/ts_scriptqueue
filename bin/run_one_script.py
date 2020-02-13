@@ -27,8 +27,9 @@ from lsst.ts.scriptqueue import ui
 
 async def main():
     cmd = ui.parse_run_one_script_cmd()
-    await ui.run_one_script(index=cmd.index, script=cmd.script, config=cmd.config,
-                            loglevel=cmd.loglevel)
+    await ui.run_one_script(
+        index=cmd.index, script=cmd.script, config=cmd.config, loglevel=cmd.loglevel
+    )
 
 
 if __name__ == "__main__":

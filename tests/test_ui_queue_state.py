@@ -31,10 +31,10 @@ from lsst.ts.scriptqueue.ui import QueueState
 
 
 class TestQueueState(asynctest.TestCase):
-
     async def test_queue_state(self):
-        async with salobj.Domain() as domain, \
-                salobj.Remote(domain=domain, name="ScriptQueue") as remote:
+        async with salobj.Domain() as domain, salobj.Remote(
+            domain=domain, name="ScriptQueue"
+        ) as remote:
             queue = remote.evt_queue.DataType()
 
             queue.enabled = True
@@ -55,36 +55,36 @@ class TestQueueState(asynctest.TestCase):
             current_script = remote.evt_script.DataType()
             current_script.salIndex = 100
             current_script.isStandard = True
-            current_script.path = 'test'
-            current_script.timestampProcessStart = time.time()-20.
-            current_script.timestampRunStart = time.time()-5.
-            current_script.timestampProcessEnd = 0.
-            current_script.timestampConfigureStart = time.time()-15.
-            current_script.timestampConfigureEnd = time.time()-14.
+            current_script.path = "test"
+            current_script.timestampProcessStart = time.time() - 20.0
+            current_script.timestampRunStart = time.time() - 5.0
+            current_script.timestampProcessEnd = 0.0
+            current_script.timestampConfigureStart = time.time() - 15.0
+            current_script.timestampConfigureEnd = time.time() - 14.0
             current_script.processState = ScriptProcessState.RUNNING
             current_script.scriptState = ScriptState.RUNNING
 
             past_script = remote.evt_script.DataType()
             past_script.salIndex = 99
             past_script.isStandard = True
-            past_script.path = 'test'
-            past_script.timestampProcessStart = time.time()-40.
-            past_script.timestampRunStart = time.time()-25.
-            past_script.timestampProcessEnd = time.time()-6.
-            past_script.timestampConfigureStart = time.time()-35.
-            past_script.timestampConfigureEnd = time.time()-34.
+            past_script.path = "test"
+            past_script.timestampProcessStart = time.time() - 40.0
+            past_script.timestampRunStart = time.time() - 25.0
+            past_script.timestampProcessEnd = time.time() - 6.0
+            past_script.timestampConfigureStart = time.time() - 35.0
+            past_script.timestampConfigureEnd = time.time() - 34.0
             past_script.processState = ScriptProcessState.DONE
             past_script.scriptState = ScriptState.DONE
 
             next_script = remote.evt_script.DataType()
             next_script.salIndex = 101
             next_script.isStandard = True
-            next_script.path = 'test'
-            next_script.timestampProcessStart = time.time()-19.
-            next_script.timestampRunStart = 0.
-            next_script.timestampProcessEnd = 0.
-            next_script.timestampConfigureStart = time.time()-13.
-            next_script.timestampConfigureEnd = time.time()-12.
+            next_script.path = "test"
+            next_script.timestampProcessStart = time.time() - 19.0
+            next_script.timestampRunStart = 0.0
+            next_script.timestampProcessEnd = 0.0
+            next_script.timestampConfigureStart = time.time() - 13.0
+            next_script.timestampConfigureEnd = time.time() - 12.0
             next_script.processState = ScriptProcessState.CONFIGURED
             next_script.scriptState = ScriptState.CONFIGURED
 

@@ -29,7 +29,6 @@ from lsst.ts.scriptqueue.ui import RequestModel
 
 
 class TestRequestModel(unittest.TestCase):
-
     def test_request_model(self):
         salobj.set_random_lsst_dds_domain()
         index = 1
@@ -38,9 +37,16 @@ class TestRequestModel(unittest.TestCase):
         externalpath = os.path.join(datadir, "external")
 
         print("start subprocess")
-        with subprocess.Popen(["run_script_queue.py", str(index),
-                               "--standard", standardpath,
-                               "--external", externalpath]) as proc:
+        with subprocess.Popen(
+            [
+                "run_script_queue.py",
+                str(index),
+                "--standard",
+                standardpath,
+                "--external",
+                externalpath,
+            ]
+        ) as proc:
             try:
                 ui_model = RequestModel(index)
 
@@ -53,9 +59,18 @@ class TestRequestModel(unittest.TestCase):
                 available_scripts = ui_model.get_scripts()
 
                 print("check available scripts")
-                expected_std_set = set(["script1", "script2", "unloadable",
-                                        "subdir/script3", "subdir/subsubdir/script4"])
-                expected_ext_set = set(["script1", "script5", "subdir/script3", "subdir/script6"])
+                expected_std_set = set(
+                    [
+                        "script1",
+                        "script2",
+                        "unloadable",
+                        "subdir/script3",
+                        "subdir/subsubdir/script4",
+                    ]
+                )
+                expected_ext_set = set(
+                    ["script1", "script5", "subdir/script3", "subdir/script6"]
+                )
                 self.assertEqual(set(available_scripts["standard"]), expected_std_set)
                 self.assertEqual(set(available_scripts["external"]), expected_ext_set)
 

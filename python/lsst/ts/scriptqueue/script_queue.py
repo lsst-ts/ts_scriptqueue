@@ -29,13 +29,14 @@ import numpy as np
 
 from lsst.ts import salobj
 from . import utils
-from .queue_model import QueueModel, ScriptInfo
+from .script_info import ScriptInfo
+from .queue_model import QueueModel
 
 SCRIPT_INDEX_MULT = 100000
 """Minimum Script SAL index is ScriptQueue SAL index * SCRIPT_INDEX_MULT
 and the maximum is SCRIPT_INDEX_MULT-1 more.
 """
-_MAX_SCRIPTQUEUE_INDEX = salobj.MAX_SAL_INDEX//SCRIPT_INDEX_MULT - 1
+_MAX_SCRIPTQUEUE_INDEX = salobj.MAX_SAL_INDEX // SCRIPT_INDEX_MULT - 1
 
 
 class ScriptQueue(salobj.BaseCsc):
@@ -118,9 +119,12 @@ class ScriptQueue(salobj.BaseCsc):
     * When each script is configured, the script (not `ScriptQueue`)
       outputs a ``metadata`` event that includes estimated duration.
     """
+
     def __init__(self, index, standardpath=None, externalpath=None, verbose=False):
         if index < 0 or index > _MAX_SCRIPTQUEUE_INDEX:
-            raise ValueError(f"index {index} must be >= 0 and <= {_MAX_SCRIPTQUEUE_INDEX}")
+            raise ValueError(
+                f"index {index} must be >= 0 and <= {_MAX_SCRIPTQUEUE_INDEX}"
+            )
         standardpath = self._get_scripts_path(standardpath, is_standard=True)
         externalpath = self._get_scripts_path(externalpath, is_standard=False)
         self.verbose = verbose
@@ -132,15 +136,19 @@ class ScriptQueue(salobj.BaseCsc):
 
         super().__init__("ScriptQueue", index)
 
-        self.model = QueueModel(domain=self.domain,
-                                log=self.log,
-                                standardpath=standardpath,
-                                externalpath=externalpath,
-                                queue_callback=self.put_queue,
-                                script_callback=self.put_script,
-                                min_sal_index=min_sal_index,
-                                max_sal_index=max_sal_index,
-                                verbose=verbose)
+        self.model = QueueModel(
+            domain=self.domain,
+            log=self.log,
+            standardpath=standardpath,
+            externalpath=externalpath,
+            next_visit_callback=self.put_next_visit,
+            next_visit_canceled_callback=self.put_next_visit_canceled,
+            queue_callback=self.put_queue,
+            script_callback=self.put_script,
+            min_sal_index=min_sal_index,
+            max_sal_index=max_sal_index,
+            verbose=verbose,
+        )
 
     def _get_scripts_path(self, patharg, is_standard):
         """Get the scripts path from the ``standardpath`` or ``externalpath``
@@ -179,9 +187,11 @@ class ScriptQueue(salobj.BaseCsc):
         """Finish creating the script queue."""
         await super().start()
         await self.model.start_task
-        self.evt_rootDirectories.set_put(standard=self.model.standardpath,
-                                         external=self.model.externalpath,
-                                         force_output=True)
+        self.evt_rootDirectories.set_put(
+            standard=self.model.standardpath,
+            external=self.model.externalpath,
+            force_output=True,
+        )
         self.put_queue()
 
     async def close_tasks(self):
@@ -218,19 +228,23 @@ class ScriptQueue(salobj.BaseCsc):
         initialpath = os.environ["PATH"]
         scriptdir, scriptname = os.path.split(fullpath)
         os.environ["PATH"] = scriptdir + ":" + initialpath
-        process = await asyncio.create_subprocess_exec(scriptname, "0", "--schema",
-                                                       stdout=subprocess.PIPE,
-                                                       stderr=subprocess.PIPE)
+        process = await asyncio.create_subprocess_exec(
+            scriptname, "0", "--schema", stdout=subprocess.PIPE, stderr=subprocess.PIPE
+        )
         try:
             stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=20)
-            self.evt_configSchema.set_put(isStandard=data.isStandard,
-                                          path=data.path,
-                                          configSchema=stdout,
-                                          force_output=True)
+            self.evt_configSchema.set_put(
+                isStandard=data.isStandard,
+                path=data.path,
+                configSchema=stdout,
+                force_output=True,
+            )
         except Exception:
             if process.returncode is None:
                 process.terminate()
-                self.log.warning("showSchema killed a process that was not properly terminated")
+                self.log.warning(
+                    "showSchema killed a process that was not properly terminated"
+                )
             raise
         finally:
             os.environ["PATH"] = initialpath
@@ -255,8 +269,7 @@ class ScriptQueue(salobj.BaseCsc):
             Command data. Ignored.
         """
         self.assert_enabled("showScript")
-        script_info = self.model.get_script_info(data.salIndex,
-                                                 search_history=True)
+        script_info = self.model.get_script_info(data.salIndex, search_history=True)
         self.put_script(script_info, force_output=True)
 
     def do_pause(self, data):
@@ -311,16 +324,21 @@ class ScriptQueue(salobj.BaseCsc):
             location=data.location,
             location_sal_index=data.locationSalIndex,
         )
-        return self.salinfo.makeAckCmd(private_seqNum=data.private_seqNum,
-                                       ack=salobj.SalRetCode.CMD_COMPLETE, result=str(script_info.index))
+        return self.salinfo.makeAckCmd(
+            private_seqNum=data.private_seqNum,
+            ack=salobj.SalRetCode.CMD_COMPLETE,
+            result=str(script_info.index),
+        )
 
     def do_move(self, data):
         """Move a script within the queue.
         """
         self.assert_enabled("move")
-        self.model.move(sal_index=data.salIndex,
-                        location=data.location,
-                        location_sal_index=data.locationSalIndex)
+        self.model.move(
+            sal_index=data.salIndex,
+            location=data.location,
+            location_sal_index=data.locationSalIndex,
+        )
 
     async def do_requeue(self, data):
         """Put a script back on the queue with the same configuration.
@@ -342,9 +360,13 @@ class ScriptQueue(salobj.BaseCsc):
         self.assert_enabled("stopScripts")
         if data.length <= 0:
             raise salobj.ExpectedError(f"length={data.length} must be positive")
-        timeout = 5 + 0.2*data.length
-        await asyncio.wait_for(self.model.stop_scripts(sal_indices=data.salIndices[0:data.length],
-                                                       terminate=data.terminate), timeout)
+        timeout = 5 + 0.2 * data.length
+        await asyncio.wait_for(
+            self.model.stop_scripts(
+                sal_indices=data.salIndices[0 : data.length], terminate=data.terminate
+            ),
+            timeout,
+        )
 
     def report_summary_state(self):
         super().report_summary_state()
@@ -353,6 +375,45 @@ class ScriptQueue(salobj.BaseCsc):
         if enabled:
             self.do_showAvailableScripts()
 
+    def put_next_visit(self, script_info):
+        """Output the ``nextVisit`` event.
+        """
+        if self.verbose:
+            print(
+                f"put_next_visit: index={script_info.index}, "
+                f"group_id={script_info.group_id}"
+            )
+        if script_info.metadata is None:
+            raise RuntimeError("script_info has no metadata")
+        if not script_info.group_id:
+            raise RuntimeError("script_info has no group_id")
+        metadata_dict = {
+            key: value
+            for key, value in script_info.metadata.get_vars().items()
+            if not key.startswith("private_")
+        }
+        del metadata_dict["ScriptID"]
+        self.evt_nextVisit.set_put(
+            salIndex=script_info.index,
+            groupId=script_info.group_id,
+            **metadata_dict,
+            force_output=True,
+        )
+
+    def put_next_visit_canceled(self, script_info):
+        """Output the ``nextVisitCanceled`` event.
+        """
+        if self.verbose:
+            print(
+                f"put_next_visit_canceled: index={script_info.index}, "
+                f"group_id={script_info.group_id}"
+            )
+        if not script_info.group_id:
+            raise RuntimeError("script_info has no group_id")
+        self.evt_nextVisitCanceled.set_put(
+            salIndex=script_info.index, groupId=script_info.group_id, force_output=True
+        )
+
     def put_queue(self):
         """Output the queued scripts as a ``queue`` event.
 
@@ -360,28 +421,33 @@ class ScriptQueue(salobj.BaseCsc):
         which alter the queue can rely on the event being published,
         even if the command has no effect (e.g. moving a script before itself).
         """
-        sal_indices = np.zeros_like(self.evt_queue.data.salIndices)
-        indlen = min(len(self.model.queue), len(sal_indices))
-        sal_indices[0:indlen] = [info.index for info in self.model.queue][0:indlen]
+        raw_sal_indices = self.model.queue_indices
+        output_sal_indices = np.zeros_like(self.evt_queue.data.salIndices)
+        indlen = min(len(raw_sal_indices), len(output_sal_indices))
+        output_sal_indices[0:indlen] = raw_sal_indices[0:indlen]
 
-        past_sal_indices = np.zeros_like(self.evt_queue.data.pastSalIndices)
-        pastlen = min(len(self.model.history), len(past_sal_indices))
-        past_sal_indices[0:pastlen] = [info.index for info in self.model.history][0:pastlen]
+        output_past_sal_indices = np.zeros_like(self.evt_queue.data.pastSalIndices)
+        raw_past_sal_indices = self.model.history_indices
+        pastlen = min(len(raw_past_sal_indices), len(output_past_sal_indices))
+        output_past_sal_indices[0:pastlen] = raw_past_sal_indices[0:pastlen]
 
         if self.verbose:
-            print(f"put_queue: enabled={self.model.enabled}, running={self.model.running}, "
-                  f"currentSalIndex={self.model.current_index}, "
-                  f"salIndices={sal_indices[0:indlen]}, "
-                  f"pastSalIndices={past_sal_indices[0:pastlen]}")
+            print(
+                f"put_queue: enabled={self.model.enabled}, running={self.model.running}, "
+                f"currentSalIndex={self.model.current_index}, "
+                f"salIndices={output_sal_indices[0:indlen]}, "
+                f"pastSalIndices={output_past_sal_indices[0:pastlen]}"
+            )
         self.evt_queue.set_put(
             enabled=self.model.enabled,
             running=self.model.running,
             currentSalIndex=self.model.current_index,
             length=indlen,
-            salIndices=sal_indices,
+            salIndices=output_sal_indices,
             pastLength=pastlen,
-            pastSalIndices=past_sal_indices,
-            force_output=True)
+            pastSalIndices=output_past_sal_indices,
+            force_output=True,
+        )
 
     def put_script(self, script_info, force_output=False):
         """Output information about a script as a ``script`` event.
@@ -399,9 +465,11 @@ class ScriptQueue(salobj.BaseCsc):
             return
 
         if self.verbose:
-            print(f"put_script: index={script_info.index}, "
-                  f"process_state={script_info.process_state}, "
-                  f"script_state={script_info.script_state}")
+            print(
+                f"put_script: index={script_info.index}, "
+                f"process_state={script_info.process_state}, "
+                f"script_state={script_info.script_state}"
+            )
         self.evt_script.set_put(
             cmdId=script_info.seq_num,
             salIndex=script_info.index,
@@ -419,13 +487,21 @@ class ScriptQueue(salobj.BaseCsc):
 
     @classmethod
     def add_arguments(cls, parser):
-        parser.add_argument("--standard",
-                            help="Directory containing standard scripts; "
-                                 "defaults to ts_standardscripts/scripts")
-        parser.add_argument("--external",
-                            help="Directory containing external scripts; "
-                                 "defaults to ts_externalscripts/scripts")
-        parser.add_argument("--verbose", action="store_true", help="Print diagnostic information to stdout")
+        parser.add_argument(
+            "--standard",
+            help="Directory containing standard scripts; "
+            "defaults to ts_standardscripts/scripts",
+        )
+        parser.add_argument(
+            "--external",
+            help="Directory containing external scripts; "
+            "defaults to ts_externalscripts/scripts",
+        )
+        parser.add_argument(
+            "--verbose",
+            action="store_true",
+            help="Print diagnostic information to stdout",
+        )
 
     @classmethod
     def add_kwargs_from_args(cls, args, kwargs):

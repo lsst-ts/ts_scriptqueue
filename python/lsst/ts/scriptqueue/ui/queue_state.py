@@ -28,7 +28,6 @@ from lsst.ts.idl.enums.ScriptQueue import ScriptProcessState
 
 
 class QueueState:
-
     def __init__(self):
         """State of the Script Queue for the User Interface model.
         """
@@ -55,7 +54,7 @@ class QueueState:
             'Running' or 'Stopped'
 
         """
-        return 'Running' if self.running else 'Stopped'
+        return "Running" if self.running else "Stopped"
 
     @property
     def script_indices(self):
@@ -90,7 +89,9 @@ class QueueState:
         self.running = queue.running
         self._current_script_index = queue.currentSalIndex
         self._queue_script_indices = [queue.salIndices[i] for i in range(queue.length)]
-        self._past_script_indices = [queue.pastSalIndices[i] for i in range(queue.pastLength)]
+        self._past_script_indices = [
+            queue.pastSalIndices[i] for i in range(queue.pastLength)
+        ]
 
         self.clear_scripts()
 
@@ -102,10 +103,12 @@ class QueueState:
         """
         current_indices = list(self.scripts.keys())
         for salindex in current_indices:
-            if (salindex not in self._queue_script_indices and
-                    salindex not in self._past_script_indices and
-                    salindex != self._current_script_index and
-                    salindex < max(self._queue_script_indices, default=salindex)):
+            if (
+                salindex not in self._queue_script_indices
+                and salindex not in self._past_script_indices
+                and salindex != self._current_script_index
+                and salindex < max(self._queue_script_indices, default=salindex)
+            ):
                 self.log.debug(f"Removing script {salindex}")
                 del self.scripts[salindex]
 
@@ -117,39 +120,70 @@ class QueueState:
         script : ``ScriptQueue.evt_script.DataType``
             Script state.
         """
-        s_type = 'Standard' if script.isStandard else 'External'
+        s_type = "Standard" if script.isStandard else "External"
 
         if script.salIndex not in self.scripts:
             self.scripts[script.salIndex] = self.new_script(script.salIndex)
 
-            self.scripts[script.salIndex]['type'] = s_type
-            self.scripts[script.salIndex]['path'] = script.path
-            self.scripts[script.salIndex]['timestamp_process_start'] = script.timestampProcessStart
-            self.scripts[script.salIndex]['timestamp_run_start'] = script.timestampRunStart
-            self.scripts[script.salIndex]['timestamp_configure_start'] = script.timestampConfigureStart
-            self.scripts[script.salIndex]['timestamp_configure_end'] = script.timestampConfigureEnd
-            self.scripts[script.salIndex]['timestamp_process_end'] = script.timestampProcessEnd
-            self.scripts[script.salIndex]['script_state'] = ScriptState(script.scriptState)
-            self.scripts[script.salIndex]['process_state'] = ScriptProcessState(script.processState)
-            self.scripts[script.salIndex]['updated'] = True
+            self.scripts[script.salIndex]["type"] = s_type
+            self.scripts[script.salIndex]["path"] = script.path
+            self.scripts[script.salIndex][
+                "timestamp_process_start"
+            ] = script.timestampProcessStart
+            self.scripts[script.salIndex][
+                "timestamp_run_start"
+            ] = script.timestampRunStart
+            self.scripts[script.salIndex][
+                "timestamp_configure_start"
+            ] = script.timestampConfigureStart
+            self.scripts[script.salIndex][
+                "timestamp_configure_end"
+            ] = script.timestampConfigureEnd
+            self.scripts[script.salIndex][
+                "timestamp_process_end"
+            ] = script.timestampProcessEnd
+            self.scripts[script.salIndex]["script_state"] = ScriptState(
+                script.scriptState
+            )
+            self.scripts[script.salIndex]["process_state"] = ScriptProcessState(
+                script.processState
+            )
+            self.scripts[script.salIndex]["updated"] = True
 
         else:
-            self.scripts[script.salIndex]['type'] = s_type
-            self.scripts[script.salIndex]['path'] = script.path
-            self.scripts[script.salIndex]['timestamp_process_start'] = script.timestampProcessStart
-            self.scripts[script.salIndex]['timestamp_configure_start'] = script.timestampConfigureStart
-            self.scripts[script.salIndex]['timestamp_configure_end'] = script.timestampConfigureEnd
-            self.scripts[script.salIndex]['timestamp_run_start'] = script.timestampRunStart
-            self.scripts[script.salIndex]['timestamp_process_end'] = script.timestampProcessEnd
-            self.scripts[script.salIndex]['script_state'] = ScriptState(script.scriptState)
-            self.scripts[script.salIndex]['process_state'] = ScriptProcessState(script.processState)
-            self.scripts[script.salIndex]['updated'] = True
+            self.scripts[script.salIndex]["type"] = s_type
+            self.scripts[script.salIndex]["path"] = script.path
+            self.scripts[script.salIndex][
+                "timestamp_process_start"
+            ] = script.timestampProcessStart
+            self.scripts[script.salIndex][
+                "timestamp_configure_start"
+            ] = script.timestampConfigureStart
+            self.scripts[script.salIndex][
+                "timestamp_configure_end"
+            ] = script.timestampConfigureEnd
+            self.scripts[script.salIndex][
+                "timestamp_run_start"
+            ] = script.timestampRunStart
+            self.scripts[script.salIndex][
+                "timestamp_process_end"
+            ] = script.timestampProcessEnd
+            self.scripts[script.salIndex]["script_state"] = ScriptState(
+                script.scriptState
+            )
+            self.scripts[script.salIndex]["process_state"] = ScriptProcessState(
+                script.processState
+            )
+            self.scripts[script.salIndex]["updated"] = True
 
             # delete remote if script is done
-            if (self.scripts[script.salIndex]['process_state'] >= ScriptProcessState.DONE and
-                    self.scripts[script.salIndex]['remote'] is not None):
-                del self.scripts[script.salIndex]['remote']
-                self.scripts[script.salIndex]['remote'] = None
+            if (
+                self.scripts[script.salIndex]["process_state"]
+                >= ScriptProcessState.DONE
+                and self.scripts[script.salIndex]["remote"] is not None
+            ):
+                del self.scripts[script.salIndex]["remote"]
+                self.scripts[script.salIndex]["remote"] = None
 
     def new_script(self, salindex):
         """Return an empty dictionary with the definition of a script.
@@ -159,18 +193,18 @@ class QueueState:
         script : `dict`
         """
         return {
-            'index': salindex,
-            'type': "UNKNOWN",
-            'path': "UNKNOWN",
-            'timestamp_process_start': 0.,
-            'timestamp_run_start': 0.,
-            'timestamp_configure_start': 0.,
-            'timestamp_configure_end': 0.,
-            'timestamp_process_end': 0.,
-            'script_state': 0,
-            'process_state': 0,
-            'remote': None,
-            'updated': False
+            "index": salindex,
+            "type": "UNKNOWN",
+            "path": "UNKNOWN",
+            "timestamp_process_start": 0.0,
+            "timestamp_run_start": 0.0,
+            "timestamp_configure_start": 0.0,
+            "timestamp_configure_end": 0.0,
+            "timestamp_process_end": 0.0,
+            "script_state": 0,
+            "process_state": 0,
+            "remote": None,
+            "updated": False,
         }
 
     def add_script(self, salindex):
@@ -192,21 +226,23 @@ class QueueState:
 
         """
 
-        state = {'state': self.state,
-                 'queue_scripts': {},
-                 'past_scripts': {},
-                 'current': None}
+        state = {
+            "state": self.state,
+            "queue_scripts": {},
+            "past_scripts": {},
+            "current": None,
+        }
 
         for index in self._queue_script_indices:
             if index in self.scripts:
-                state['queue_scripts'][index] = self.scripts[index]
+                state["queue_scripts"][index] = self.scripts[index]
             else:
-                state['queue_scripts'][index] = self.new_script(index)
+                state["queue_scripts"][index] = self.new_script(index)
 
         for index in self._past_script_indices:
-            state['past_scripts'][index] = self.scripts[index]
+            state["past_scripts"][index] = self.scripts[index]
 
         if self._current_script_index > 0:
-            state['current'] = self.scripts[self._current_script_index]
+            state["current"] = self.scripts[self._current_script_index]
 
         return state

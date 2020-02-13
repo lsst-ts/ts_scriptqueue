@@ -6,6 +6,22 @@
 Revision History
 ################
 
+v2.5.0
+======
+
+Major changes:
+
+* Output the ``nextVisit`` and ``nextVisitCanceled`` events.
+* Code formatted by ``black``, with a pre-commit hook to enforce this. See the README file for configuration instructions.
+
+Requirements:
+
+* ts_salobj 5.4
+* ts_idl 1
+* ts_xml 4.7
+* IDL files for Script and ScriptQueue, e.g. built with ``make_idl_files.py``
+* asynctest
+
 v2.4.0
 ======
 

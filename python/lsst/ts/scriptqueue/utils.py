@@ -19,7 +19,12 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-__all__ = ["find_public_scripts", "configure_logging", "generate_logfile", "get_default_scripts_dir"]
+__all__ = [
+    "find_public_scripts",
+    "configure_logging",
+    "generate_logfile",
+    "get_default_scripts_dir",
+]
 
 import os
 import logging
@@ -45,7 +50,11 @@ def find_public_scripts(root):
     paths = []
     for dirpath, dirnames, filenames in os.walk(root, topdown=True, followlinks=False):
         dirnames[:] = [name for name in dirnames if not name.startswith(".")]
-        paths += [os.path.join(dirpath, filename) for filename in filenames if filename[0] not in (".", "_")]
+        paths += [
+            os.path.join(dirpath, filename)
+            for filename in filenames
+            if filename[0] not in (".", "_")
+        ]
     executables = [path for path in paths if os.access(path, os.X_OK)]
     return [os.path.relpath(exe, root) for exe in executables]
 
@@ -94,7 +103,7 @@ def generate_logfile(basename="scriptqueue"):
     """Generate a log file name based on current time.
     """
     timestr = time.strftime("%Y-%m-%d_%H:%M:%S")
-    log_path = os.path.expanduser('~/.{}/log'.format(basename))
+    log_path = os.path.expanduser("~/.{}/log".format(basename))
     if not os.path.exists(log_path):
         os.makedirs(log_path)
     logfilename = os.path.join(log_path, "%s.%s.log" % (basename, timestr))
@@ -123,7 +132,9 @@ def get_default_scripts_dir(is_standard):
     """
     if is_standard:
         import lsst.ts.standardscripts
+
         return lsst.ts.standardscripts.get_scripts_dir()
     else:
         import lsst.ts.externalscripts
+
         return lsst.ts.externalscripts.get_scripts_dir()

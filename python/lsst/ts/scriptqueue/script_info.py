@@ -28,7 +28,8 @@ import time
 from lsst.ts.idl.enums.Script import ScriptState
 from lsst.ts.idl.enums.ScriptQueue import ScriptProcessState
 
-_CONFIGURE_TIMEOUT = 60  # seconds
+_SET_GROUP_ID_TIMEOUT = 5  # Time limit for setGroupId command (seconds)
+_CONFIGURE_TIMEOUT = 60  # Time limit for the configure command (seconds)
 
 
 class ScriptInfo:
@@ -67,9 +68,23 @@ class ScriptInfo:
     verbose : `bool` (optional)
         If True then print log messages from the script to stdout.
     """
-    def __init__(self, log, remote, index, seq_num, is_standard, path, config, descr,
-                 log_level=0, pause_checkpoint="", stop_checkpoint="", verbose=False):
-        self.log = log
+
+    def __init__(
+        self,
+        log,
+        remote,
+        index,
+        seq_num,
+        is_standard,
+        path,
+        config,
+        descr,
+        log_level=0,
+        pause_checkpoint="",
+        stop_checkpoint="",
+        verbose=False,
+    ):
+        self.log = log.getChild(f"ScriptInfo(index={index})")
         self.remote = remote
         self.index = int(index)
         self.seq_num = int(seq_num)
@@ -80,9 +95,13 @@ class ScriptInfo:
         self.pause_checkpoint = pause_checkpoint
         self.stop_checkpoint = stop_checkpoint
         self.descr = descr
+        # The most recent group ID set by `set_group_id`.
+        self.group_id = ""
         self.verbose = verbose
-        # the most recent state reported by the Script
-        # or 0 if the script is not yet loaded
+        # Most recent value of script metadata; None until set.
+        self.metadata = None
+        # The most recent state reported by the Script,
+        # or 0 if the script is not yet loaded.
         self.script_state = 0
         # Delay between when the script sent state and it was received (sec)
         self.state_delay = 0
@@ -117,6 +136,12 @@ class ScriptInfo:
         # Task awaiting configuration to complete, or None if
         # configuration has not yet started.
         self.config_task = None
+        # Task awaiting clearing group ID. None if group ID not cleared.
+        # Reset to None when group ID is set.
+        self.clear_group_id_task = None
+        # Task awaiting setting group ID, None if group ID is not set.
+        # Reset to None when group ID is cleared.
+        self.set_group_id_task = None
         self._callback = None
 
         # The following guarantees that if we terminate a process
@@ -160,6 +185,12 @@ class ScriptInfo:
     def running(self):
         """True if the script was commanded to run and is not done."""
         return self.timestamp_run_start > 0 and not self.process_done
+
+    @property
+    def started(self):
+        """True if the script was commanded to run or terminate.
+        """
+        self.timestamp_run_start > 0 or self.terminated or self.process_done
 
     @property
     def process_done(self):
@@ -242,11 +273,87 @@ class ScriptInfo:
     def runnable(self):
         """Can the script be run?
 
-        For a script to be runnable it must be configured,
-        the process must not have finished,
-        and ``run`` must not have been called.
+        For a script to be runnable it must be configured, not started,
+        and it must have a group ID.
         """
-        return self.configured and not (self.process_done or self.timestamp_run_start > 0)
+        return self.configured and not self.started and self.group_id
+
+    @property
+    def setting_group_id(self):
+        """Return True if the group ID is being set.
+        """
+        return self.set_group_id_task and not self.set_group_id_task.done()
+
+    @property
+    def needs_group_id(self):
+        """Is this script ready to be assigned a group ID?
+
+        True if the script is configured and not started,
+        and the group ID is neither set nor being set.
+        """
+        return (
+            self.configured
+            and not self.started
+            and not self.group_id
+            and not self.setting_group_id
+        )
+
+    def clear_group_id(self, command_script):
+        """Clear the group ID.
+
+        Can be called in any state.
+
+        Parameters
+        ----------
+        command_script : `bool`
+            If True and if the script is configured and not started,
+            then send setGroupId command to the script.
+        """
+        self.group_id = ""
+        self._cancel_set_clear_group_id()
+        if command_script and self.configured and not self.started:
+            self.clear_group_id_task = asyncio.create_task(
+                self.remote.cmd_setGroupId.set_start(
+                    ScriptID=self.index, groupId="", timeout=_SET_GROUP_ID_TIMEOUT
+                )
+            )
+
+    async def set_group_id(self, group_id):
+        """Set the group ID.
+
+        Also creates ``self.set_group_id_task`` and sets it done on success
+        or to an exception if the setGroupId Script command fails.
+
+        Parameters
+        ---------
+        group_id : `str`
+            New group ID; "" to clear the group ID.
+
+        Raises
+        ------
+        RuntimeError
+            If the script is not in state CONFIGURED.
+
+        asyncio.TimeoutError
+            If the command or reply takes too long.
+        """
+        if not group_id:
+            raise ValueError(f"group_id={group_id} must not be blank")
+
+        if not self.needs_group_id:
+            raise RuntimeError(
+                f"script {self.index} is not in a state to have group ID set."
+            )
+
+        self._cancel_set_clear_group_id()
+        self.set_group_id_task = asyncio.create_task(
+            self.remote.cmd_setGroupId.set_start(
+                ScriptID=self.index, groupId=group_id, timeout=_SET_GROUP_ID_TIMEOUT
+            )
+        )
+        await self.set_group_id_task
+        self.group_id = group_id
+        self._run_callback()
 
     async def start_loading(self, fullpath):
         """Start the script process and start a task that will configure
@@ -267,7 +374,8 @@ class ScriptInfo:
             os.environ["PATH"] = scriptdir + ":" + initialpath
             # save task so process creation can be cancelled if it hangs
             self.create_process_task = asyncio.create_task(
-                asyncio.create_subprocess_exec(scriptname, str(self.index)))
+                asyncio.create_subprocess_exec(scriptname, str(self.index))
+            )
             self.process = await self.create_process_task
             self.process_task = asyncio.create_task(self.process.wait())
             self.timestamp_process_start = time.time()
@@ -308,7 +416,10 @@ class ScriptInfo:
         """
         if not self.process_done:
             self._terminated = True
-            if self.create_process_task is not None and not self.create_process_task.done():
+            if (
+                self.create_process_task is not None
+                and not self.create_process_task.done()
+            ):
                 # cancel creating the process
                 self.create_process_task.cancel()
             if self.process is not None:
@@ -323,9 +434,24 @@ class ScriptInfo:
         return not (self == other)
 
     def __repr__(self):
-        return f"ScriptInfo(index={self.index}, seq_num={self.seq_num}, " \
-            f"is_standard={self.is_standard}, path={self.path}, " \
+        return (
+            f"ScriptInfo(index={self.index}, seq_num={self.seq_num}, "
+            f"is_standard={self.is_standard}, path={self.path}, "
             f"config={self.config}, descr={self.descr})"
+        )
+
+    def _cancel_set_clear_group_id(self):
+        """Cancel set and/or clear group ID tasks, if running.
+
+        Set the tasks to None.
+        """
+        if self.clear_group_id_task and not self.clear_group_id_task.done():
+            self.clear_group_id_task.cancel()
+        self.clear_group_id_task = None
+
+        if self.set_group_id_task and not self.set_group_id_task.done():
+            self.set_group_id_task.cancel()
+        self.set_group_id_task = None
 
     def _cleanup(self, returncode=None):
         """Clean up when the Script subprocess exits.
@@ -334,8 +460,9 @@ class ScriptInfo:
         delete the remote, run the callback and delete the callback.
         """
         self.timestamp_process_end = time.time()
-        if self.config_task and not self.config_task.done():
+        if self.config_task:
             self.config_task.cancel()
+        self._cancel_set_clear_group_id()
         self.remote = None
         self._run_callback()
         self._callback = None
@@ -352,15 +479,20 @@ class ScriptInfo:
         """
         try:
             if self.script_state != ScriptState.UNCONFIGURED:
-                raise RuntimeError(f"Cannot configure script {self.index} "
-                                   f"because it is in state {self.script_state} "
-                                   f"instead of {ScriptState.UNCONFIGURED}")
+                raise RuntimeError(
+                    f"Cannot configure script {self.index} "
+                    f"because it is in state {self.script_state} "
+                    f"instead of {ScriptState.UNCONFIGURED}"
+                )
 
-            await self.remote.cmd_configure.set_start(ScriptID=self.index, config=self.config,
-                                                      logLevel=self.log_level,
-                                                      pauseCheckpoint=self.pause_checkpoint,
-                                                      stopCheckpoint=self.stop_checkpoint,
-                                                      timeout=_CONFIGURE_TIMEOUT)
+            await self.remote.cmd_configure.set_start(
+                ScriptID=self.index,
+                config=self.config,
+                logLevel=self.log_level,
+                pauseCheckpoint=self.pause_checkpoint,
+                stopCheckpoint=self.stop_checkpoint,
+                timeout=_CONFIGURE_TIMEOUT,
+            )
         except Exception:
             # terminate the script but first let the configure_task fail
             self.log.exception(f"Configure failed for script {self.index}")

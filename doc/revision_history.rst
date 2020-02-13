@@ -9,7 +9,10 @@ Revision History
 v2.5.0
 ======
 
-Output the ``nextVisit`` and ``nextVisitCanceled`` events.
+Major changes:
+
+* Output the ``nextVisit`` and ``nextVisitCanceled`` events.
+* Code formatted by ``black``, with a pre-commit hook to enforce this. See the README file for configuration instructions.
 
 Requirements:
 

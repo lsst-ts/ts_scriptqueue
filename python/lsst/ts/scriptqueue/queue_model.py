@@ -19,7 +19,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-__all__ = ["QueueModel", "ScriptInfo"]
+__all__ = ["QueueModel"]
 
 import asyncio
 import collections
@@ -51,6 +51,7 @@ class Scripts:
     external : ``iterable`` of `str`
         Relative paths to external SAL scripts
     """
+
     def __init__(self, standard, external):
         self.standard = standard
         self.external = external
@@ -65,6 +66,7 @@ class ScriptKey:
         Index of script. This must be unique among all Script SAL
         components that are currently running.
     """
+
     def __init__(self, index):
         self.index = int(index)
 
@@ -122,26 +124,33 @@ class QueueModel:
     ValueError
         If ``standardpath`` or ``externalpath`` does not exist.
     """
-    def __init__(self,
-                 domain,
-                 log,
-                 standardpath,
-                 externalpath,
-                 next_visit_callback=None,
-                 next_visit_canceled_callback=None,
-                 queue_callback=None,
-                 script_callback=None,
-                 min_sal_index=MIN_SAL_INDEX,
-                 max_sal_index=salobj.MAX_SAL_INDEX,
-                 verbose=False):
+
+    def __init__(
+        self,
+        domain,
+        log,
+        standardpath,
+        externalpath,
+        next_visit_callback=None,
+        next_visit_canceled_callback=None,
+        queue_callback=None,
+        script_callback=None,
+        min_sal_index=MIN_SAL_INDEX,
+        max_sal_index=salobj.MAX_SAL_INDEX,
+        verbose=False,
+    ):
         if not os.path.isdir(standardpath):
             raise ValueError(f"No such dir standardpath={standardpath}")
         if not os.path.isdir(externalpath):
             raise ValueError(f"No such dir externalpath={externalpath}")
         if next_visit_callback and not callable(next_visit_callback):
-            raise TypeError(f"next_visit_callback={next_visit_callback} is not callable")
+            raise TypeError(
+                f"next_visit_callback={next_visit_callback} is not callable"
+            )
         if next_visit_canceled_callback and not callable(next_visit_canceled_callback):
-            raise TypeError(f"next_visit_canceled_callback={next_visit_canceled_callback} is not callable")
+            raise TypeError(
+                f"next_visit_canceled_callback={next_visit_canceled_callback} is not callable"
+            )
         if queue_callback and not callable(queue_callback):
             raise TypeError(f"queue_callback={queue_callback} is not callable")
         if script_callback and not callable(script_callback):
@@ -164,11 +173,14 @@ class QueueModel:
         self.current_script = None
         self._running = True
         self._enabled = False
-        self._index_generator = salobj.index_generator(imin=min_sal_index, imax=max_sal_index)
+        self._index_generator = salobj.index_generator(
+            imin=min_sal_index, imax=max_sal_index
+        )
         self._scripts_being_stopped = set()
         # use index=0 so we get messages for all scripts
-        self.remote = salobj.Remote(domain=domain, name="Script", index=0,
-                                    evt_max_history=0, tel_max_history=0)
+        self.remote = salobj.Remote(
+            domain=domain, name="Script", index=0, evt_max_history=0, tel_max_history=0
+        )
         self.remote.evt_metadata.callback = self._script_metadata_callback
         self.remote.evt_state.callback = self._script_state_callback
         if self.verbose:
@@ -206,9 +218,11 @@ class QueueModel:
         # do this first to make sure the path exists
         fullpath = self.make_full_path(script_info.is_standard, script_info.path)
 
-        self._insert_script(script_info=script_info,
-                            location=location,
-                            location_sal_index=location_sal_index)
+        self._insert_script(
+            script_info=script_info,
+            location=location,
+            location_sal_index=location_sal_index,
+        )
 
         coro = script_info.start_loading(fullpath=fullpath)
         await asyncio.wait_for(coro, _LOAD_TIMEOUT)
@@ -350,8 +364,10 @@ class QueueModel:
             If location is relative and a script at ``location_sal_index``
             is not queued.
         """
-        if location in (Location.BEFORE, Location.AFTER) \
-                and location_sal_index == sal_index:
+        if (
+            location in (Location.BEFORE, Location.AFTER)
+            and location_sal_index == sal_index
+        ):
             # this is a no-op, and is not properly handled by _insert_script,
             # but first make sure the script is on the queue
             self.get_queue_index(sal_index)
@@ -361,9 +377,11 @@ class QueueModel:
         old_queue = copy.copy(self.queue)
         script_info = self.pop_script_info(sal_index)
         try:
-            self._insert_script(script_info=script_info,
-                                location=location,
-                                location_sal_index=location_sal_index)
+            self._insert_script(
+                script_info=script_info,
+                location=location,
+                location_sal_index=location_sal_index,
+            )
         except Exception:
             self.queue = old_queue
             raise
@@ -436,9 +454,11 @@ class QueueModel:
             descr=old_script_info.descr,
             verbose=self.verbose,
         )
-        await self.add(script_info=script_info,
-                       location=location,
-                       location_sal_index=location_sal_index)
+        await self.add(
+            script_info=script_info,
+            location=location,
+            location_sal_index=location_sal_index,
+        )
         return script_info
 
     async def stop_scripts(self, sal_indices, terminate):
@@ -499,7 +519,9 @@ class QueueModel:
         if script_info.script_state == ScriptState.RUNNING:
             # process is running, so send the "stop" command
             try:
-                await script_info.remote.cmd_stop.set_start(ScriptID=script_info.index, timeout=2)
+                await script_info.remote.cmd_stop.set_start(
+                    ScriptID=script_info.index, timeout=2
+                )
                 # give the process time to terminate
                 await asyncio.wait_for(script_info.process.wait(), timeout=5)
                 # let the script be removed or moved
@@ -533,8 +555,12 @@ class QueueModel:
             return
         # Clear the group ID, if appropriate. Do not command the script,
         # since we are about to kill it anyway.
-        if self.queue and self.queue[0].index == script_info.index and \
-                script_info.group_id or script_info.setting_group_id:
+        if (
+            self.queue
+            and self.queue[0].index == script_info.index
+            and script_info.group_id
+            or script_info.setting_group_id
+        ):
             self.clear_group_id(script_info=script_info, command_script=False)
 
         # Kill the script
@@ -575,7 +601,8 @@ class QueueModel:
         if self._running != was_running:
             self._update_queue(pause_on_failure=False)
 
-    def next_group_id(self):
+    @staticmethod
+    def next_group_id():
         """Get the next group ID.
 
         The group ID is the current TAI date and time as a string in ISO
@@ -609,8 +636,12 @@ class QueueModel:
     async def wait_terminate_all(self, timeout=10):
         """Awaitable version of terminate_all"""
         term_info_list = self.terminate_all()
-        await asyncio.wait_for(asyncio.gather(*[info.process_task for info in term_info_list
-                                                if not info.process_done]), timeout)
+        await asyncio.wait_for(
+            asyncio.gather(
+                *[info.process_task for info in term_info_list if not info.process_done]
+            ),
+            timeout,
+        )
 
     def _insert_script(self, script_info, location, location_sal_index):
         """Insert a script info into the queue
@@ -685,8 +716,10 @@ class QueueModel:
         data : `Script_logevent_logMessageC`
             Log message data.
         """
-        print(f"Script {data.ScriptID} log message={data.message!r}; "
-              f"level={data.level}; traceback={data.traceback!r}")
+        print(
+            f"Script {data.ScriptID} log message={data.message!r}; "
+            f"level={data.level}; traceback={data.traceback!r}"
+        )
 
     def clear_group_id(self, script_info, command_script):
         """Clear the group ID of the specified script, if appropriate.
@@ -704,7 +737,9 @@ class QueueModel:
             The only time you would set this False is if you are about
             to terminate the script.
         """
-        self.log.debug(f"Clear group info for {script_info.index}; command_script={command_script}")
+        self.log.debug(
+            f"Clear group info for {script_info.index}; command_script={command_script}"
+        )
         if self.next_visit_canceled_callback:
             try:
                 self.next_visit_canceled_callback(script_info)
@@ -754,10 +789,14 @@ class QueueModel:
             # not a script for this QueueModel
             return None
         try:
-            script_info = self.get_script_info(sal_index=sal_index, search_history=False)
+            script_info = self.get_script_info(
+                sal_index=sal_index, search_history=False
+            )
         except ValueError:
-            self.log.warning(f"QueueModel got a Script {event_name} event for script {sal_index}, "
-                             "which is neither running nor on the queue")
+            self.log.warning(
+                f"QueueModel got a Script {event_name} event for script {sal_index}, "
+                "which is neither running nor on the queue"
+            )
             return None
         return script_info
 
@@ -783,8 +822,11 @@ class QueueModel:
             asyncio.create_task(self._remove_script(script_info.index))
             return
 
-        if self.queue and self.queue[0].index == script_info.index and \
-                script_info.configured:
+        if (
+            self.queue
+            and self.queue[0].index == script_info.index
+            and script_info.configured
+        ):
             # This script is next in line and may need its group ID set
             # or be ready to be run.
             self._update_queue(force_callback=False)
@@ -814,7 +856,9 @@ class QueueModel:
         initial_history_indices = self.history_indices
         if self.current_script:
             if self.current_script.process_done:
-                if self.current_script.failed and (pause_on_failure or not self.running):
+                if self.current_script.failed and (
+                    pause_on_failure or not self.running
+                ):
                     # set `_running` instead of `running` so as to
                     # not trigger _update_queue
                     self._running = False
@@ -830,8 +874,11 @@ class QueueModel:
                 if script_info.process_done or script_info.terminated:
                     self.queue.popleft()
                     continue
-                if not self.current_script and script_info.runnable and \
-                        script_info.index not in self._scripts_being_stopped:
+                if (
+                    not self.current_script
+                    and script_info.runnable
+                    and script_info.index not in self._scripts_being_stopped
+                ):
                     self.current_script = script_info
                     self.queue.popleft()
                     script_info.run()
@@ -849,10 +896,13 @@ class QueueModel:
                     if script_info.group_id or script_info.setting_group_id:
                         self.clear_group_id(script_info, command_script=True)
 
-        if self.queue_callback and force_callback or \
-                self.current_index != initial_current_index or \
-                self.queue_indices != initial_queue_indices or \
-                self.history_indices != initial_history_indices:
+        if (
+            self.queue_callback
+            and force_callback
+            or self.current_index != initial_current_index
+            or self.queue_indices != initial_queue_indices
+            or self.history_indices != initial_history_indices
+        ):
             try:
                 self.queue_callback()
             except Exception:

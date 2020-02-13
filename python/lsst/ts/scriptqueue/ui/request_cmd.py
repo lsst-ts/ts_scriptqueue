@@ -30,19 +30,23 @@ from lsst.ts.salobj import AckError
 try:
     from cmd2 import Cmd
 except ModuleNotFoundError:
-    warnings.warn("Could not find module cmd2. Fallback to standard "
-                  "cmd library. This may limit the functionality of the shell.")
+    warnings.warn(
+        "Could not find module cmd2. Fallback to standard "
+        "cmd library. This may limit the functionality of the shell."
+    )
     from cmd import Cmd
 
 from .request_model import RequestModel
 
 queue_names = ["Main", "Auxiliary"]
 
-LOG_LEVEL_DICT = dict(debug=logging.DEBUG,
-                      info=logging.INFO,
-                      warning=logging.WARNING,
-                      error=logging.ERROR,
-                      critical=logging.CRITICAL)
+LOG_LEVEL_DICT = dict(
+    debug=logging.DEBUG,
+    info=logging.INFO,
+    warning=logging.WARNING,
+    error=logging.ERROR,
+    critical=logging.CRITICAL,
+)
 
 
 class CmdError(RuntimeError):
@@ -59,7 +63,7 @@ class RequestCmd(Cmd):
         operate with the LSST script queue.
 
         Type help or ? to list commands."""
-        self.prompt = f'(cmd:None): '
+        self.prompt = f"(cmd:None): "
 
         super().__init__()
 
@@ -72,21 +76,38 @@ class RequestCmd(Cmd):
 
         # Defining an argparse to handle arguments for the do_run method
         self.__run_parser = argparse.ArgumentParser(prog="run")
-        self.__run_parser.add_argument('type',
-                                       help="Choose the type of script to run (standard or external).",
-                                       choices=("standard", "std", "s", "external", "ext", "e"))
-        self.__run_parser.add_argument('script',
-                                       help="Name of script to run.")
+        self.__run_parser.add_argument(
+            "type",
+            help="Choose the type of script to run (standard or external).",
+            choices=("standard", "std", "s", "external", "ext", "e"),
+        )
+        self.__run_parser.add_argument("script", help="Name of script to run.")
 
         config_group = self.__run_parser.add_mutually_exclusive_group(required=False)
-        config_group.add_argument('-c', '--config', help="Configuration file for the script.")
-        config_group.add_argument('-p', '--parameters', nargs='+',
-                                  help="In line configuration string for the script. Must be "
-                                       "in yaml format.")
-        self.__run_parser.add_argument("-m", "--monitor", dest="monitor", action="store_true",
-                                       help="Monitor script execution all the way to the end.")
-        self.__run_parser.add_argument("--timeout", dest="timeout", default=120., type=float,
-                                       help="Timeout for monitoring scripts.")
+        config_group.add_argument(
+            "-c", "--config", help="Configuration file for the script."
+        )
+        config_group.add_argument(
+            "-p",
+            "--parameters",
+            nargs="+",
+            help="In line configuration string for the script. Must be "
+            "in yaml format.",
+        )
+        self.__run_parser.add_argument(
+            "-m",
+            "--monitor",
+            dest="monitor",
+            action="store_true",
+            help="Monitor script execution all the way to the end.",
+        )
+        self.__run_parser.add_argument(
+            "--timeout",
+            dest="timeout",
+            default=120.0,
+            type=float,
+            help="Timeout for monitoring scripts.",
+        )
 
     def do_set_max_past(self, arg):
         """Set the maximum number of scripts in the past queue to show."""
@@ -104,8 +125,10 @@ class RequestCmd(Cmd):
             try:
                 nbeats = int(arg)
             except ValueError:
-                self.log.warning(f"Could not parse {arg!r} as an integer; "
-                                 f"using {nbeats} heartbeats (the default) instead.")
+                self.log.warning(
+                    f"Could not parse {arg!r} as an integer; "
+                    f"using {nbeats} heartbeats (the default) instead."
+                )
         for i in range(nbeats):
             self.model.listen_heartbeat()
             self.log.info(f"Heartbeat {i+1}/{nbeats}...")
@@ -121,13 +144,13 @@ class RequestCmd(Cmd):
 
         scripts = self.model.get_scripts()
 
-        print('List of external scripts:')
+        print("List of external scripts:")
         for script in scripts["external"]:
-            print(f'\t - {script}', )
+            print(f"\t - {script}")
 
-        print('List of standard scripts:')
+        print("List of standard scripts:")
         for script in scripts["standard"]:
-            print(f'\t - {script}', )
+            print(f"\t - {script}")
 
     def do_pause(self, arg):
         """Pause the queue."""
@@ -166,7 +189,7 @@ class RequestCmd(Cmd):
         args : str
             Comma separated list of scripts indices.
         """
-        print(f'Stopping script {args}.')
+        print(f"Stopping script {args}.")
         sal_indices = [int(i) for i in args.split(",")]
         self.model.stop_scripts(sal_indices, terminate=False)
 
@@ -183,7 +206,7 @@ class RequestCmd(Cmd):
         args : str
             Comma separated list of scripts indices.
         """
-        print(f'Terminating script {args}')
+        print(f"Terminating script {args}")
 
         sal_indices = [int(i) for i in args.split(",")]
         self.model.stop_scripts(sal_indices, terminate=True)
@@ -196,31 +219,35 @@ class RequestCmd(Cmd):
         print("#\n# Showing tasks in the queue.\n#")
         queue_state = self.model.get_queue_state()
 
-        print(f'\tQueue summary state: {self.model.summary_state!s}')
+        print(f"\tQueue summary state: {self.model.summary_state!s}")
         print(f'\tQueue status: {queue_state["state"]}')
         print(f'\tCurrent running: {self.model.parse_info(queue_state["current"])}')
         print(f'\tCurrent queue size: {len(queue_state["queue_scripts"])}')
         print(f'\tPast queue size: {len(queue_state["past_scripts"])}')
 
         if len(queue_state["queue_scripts"]) > 0:
-            print(f'\nItems on queue:')
-            for item in queue_state['queue_scripts']:
-                print(f"{item}: {self.model.parse_info(queue_state['queue_scripts'][item])}")
+            print(f"\nItems on queue:")
+            for item in queue_state["queue_scripts"]:
+                print(
+                    f"{item}: {self.model.parse_info(queue_state['queue_scripts'][item])}"
+                )
         else:
-            print('\nNo items on queue.')
+            print("\nNo items on queue.")
 
         if len(queue_state["past_scripts"]) > 0:
-            print(f'\nItems on past queue:')
+            print(f"\nItems on past queue:")
 
-            for i, item in enumerate(queue_state['past_scripts']):
-                print(self.model.parse_info(queue_state['past_scripts'][item]))
-                if i+1 >= self.max_items_past:
+            for i, item in enumerate(queue_state["past_scripts"]):
+                print(self.model.parse_info(queue_state["past_scripts"][item]))
+                if i + 1 >= self.max_items_past:
                     break
             if len(queue_state["past_scripts"]) > self.max_items_past:
-                print(f" ... (+{len(queue_state['past_scripts'])-self.max_items_past}) "
-                      f"items on past queue")
+                print(
+                    f" ... (+{len(queue_state['past_scripts'])-self.max_items_past}) "
+                    f"items on past queue"
+                )
         else:
-            print('\nNo items on past queue.')
+            print("\nNo items on past queue.")
 
         return 0
 
@@ -244,36 +271,44 @@ class RequestCmd(Cmd):
 
         scripts = self.model.get_scripts()
 
-        is_standard = True if parsed.type in ('standard', 'std', 's') else False
+        is_standard = True if parsed.type in ("standard", "std", "s") else False
 
-        if is_standard and parsed.script not in scripts['standard']:
-            self.log.error('Requested script %s not in the list of standard scripts.', parsed.script)
+        if is_standard and parsed.script not in scripts["standard"]:
+            self.log.error(
+                "Requested script %s not in the list of standard scripts.",
+                parsed.script,
+            )
             return
 
-        if not is_standard and parsed.script not in scripts['external']:
-            self.log.error('Requested script %s not in the list of external scripts.', parsed.script)
+        if not is_standard and parsed.script not in scripts["external"]:
+            self.log.error(
+                "Requested script %s not in the list of external scripts.",
+                parsed.script,
+            )
             return
 
         # Reading in input file
         config = ""
         if parsed.config is not None:
             self.log.debug("Reading configuration from %s", parsed.config)
-            with open(parsed.config, 'r') as stream:
+            with open(parsed.config, "r") as stream:
                 yconfig = yaml.load(stream)
                 config = yaml.safe_dump(yconfig)
-                self.log.debug('Configuration: %s', config)
+                self.log.debug("Configuration: %s", config)
         elif parsed.parameters is not None:
             self.log.debug("Parsing parameters: %s", parsed.parameters)
             yconfig = {}
 
             if len(parsed.parameters) % 2 > 0:
-                self.log.warning(f"Parameters has wrong number of items. "
-                                 f"Must be key/value pair. Ignoring {parsed.parameters[-1]}")
+                self.log.warning(
+                    f"Parameters has wrong number of items. "
+                    f"Must be key/value pair. Ignoring {parsed.parameters[-1]}"
+                )
 
             for i in range(len(parsed.parameters) // 2):
                 yconfig[parsed.parameters[i * 2]] = parsed.parameters[i * 2 + 1]
             config = yaml.safe_dump(yconfig)
-            self.log.debug('Configuration: %s', config)
+            self.log.debug("Configuration: %s", config)
         else:
             self.log.debug("No configuration file or in line parameters.")
 
@@ -300,8 +335,10 @@ class RequestCmd(Cmd):
             try:
                 level = int(strlevel)
             except ValueError:
-                raise CmdError(f"*** Log level {strlevel!r} must be one of "
-                               f"{tuple(LOG_LEVEL_DICT.keys())} or an integer")
+                raise CmdError(
+                    f"*** Log level {strlevel!r} must be one of "
+                    f"{tuple(LOG_LEVEL_DICT.keys())} or an integer"
+                )
         return level
 
     def do_set_log_level(self, args):
@@ -362,12 +399,12 @@ class RequestCmd(Cmd):
         """
         print(f"Registering as {args} ...")
         self.username = args
-        self.prompt = f'(cmd:{self.username}): '
+        self.prompt = f"(cmd:{self.username}): "
 
     def do_logout(self, args):
         """Unregister username."""
         self.username = None
-        self.prompt = f'(cmd:None): '
+        self.prompt = f"(cmd:None): "
 
     def monitor_script(self, salindex):
         """Monitor the execution of a script. Will block until
@@ -380,7 +417,7 @@ class RequestCmd(Cmd):
         """
         queue_state = self.model.get_queue_state()
 
-        if queue_state['state'] != "Running":
+        if queue_state["state"] != "Running":
             self.log.warning("Queue not running, cannot monitor script.")
             return
 
@@ -396,7 +433,9 @@ class RequestCmd(Cmd):
         try:
             return super().onecmd(*args)
         except AckError as ack_err:
-            self.log.error(f"onecmd(*{args}) failed with ack.result={ack_err.ack.result}")
+            self.log.error(
+                f"onecmd(*{args}) failed with ack.result={ack_err.ack.result}"
+            )
         except CmdError as e:
             self.log.error(f"*** {e.args[0]}")
         except Exception:

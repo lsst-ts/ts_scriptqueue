@@ -51,15 +51,19 @@ class ParseRunOneScriptTestCase(unittest.TestCase):
         config_path = DATA_DIR / "config1.yaml"
         with open(config_path, "r") as f:
             expected_config = f.read()
-        cmd = ui.parse_run_one_script_cmd(args=[str(script), "--config", config_path.as_posix()])
+        cmd = ui.parse_run_one_script_cmd(
+            args=[str(script), "--config", config_path.as_posix()]
+        )
         self.assertTrue(script.samefile(cmd.script))
         self.assertEqual(cmd.config, expected_config)
 
     def test_parameters_arg(self):
         script = DATA_DIR / "external" / "script1"
-        config_dict = dict(abool=True, anint=47, afloat=0.2, astr="string_value", )
+        config_dict = dict(abool=True, anint=47, afloat=0.2, astr="string_value")
         config_arg_list = [f"{key}={value}" for key, value in config_dict.items()]
-        cmd = ui.parse_run_one_script_cmd(args=[str(script), "--parameters"] + config_arg_list)
+        cmd = ui.parse_run_one_script_cmd(
+            args=[str(script), "--parameters"] + config_arg_list
+        )
         self.assertTrue(script.samefile(cmd.script))
         config_dict_from_parser = yaml.safe_load(cmd.config)
         self.assertEqual(config_dict_from_parser, config_dict)
@@ -70,7 +74,9 @@ class ParseRunOneScriptTestCase(unittest.TestCase):
         self.assertIsNone(cmd.loglevel)
 
         loglevel = 15
-        cmd = ui.parse_run_one_script_cmd(args=[str(script), "--loglevel", str(loglevel)])
+        cmd = ui.parse_run_one_script_cmd(
+            args=[str(script), "--loglevel", str(loglevel)]
+        )
         self.assertTrue(cmd.loglevel, loglevel)
 
         loglevel = 21
@@ -92,7 +98,9 @@ class ParseRunOneScriptTestCase(unittest.TestCase):
             ui.parse_run_one_script_cmd(args=[str(script), "--invalid"])
         with self.assertRaises(SystemExit):
             # nonexistent config file
-            ui.parse_run_one_script_cmd(args=[str(script), "--config", "nonexistent_config_file.yaml"])
+            ui.parse_run_one_script_cmd(
+                args=[str(script), "--config", "nonexistent_config_file.yaml"]
+            )
         with self.assertRaises(SystemExit):
             # --index must have a value if specified
             ui.parse_run_one_script_cmd(args=[str(script), "--index"])
@@ -102,7 +110,9 @@ class ParseRunOneScriptTestCase(unittest.TestCase):
         with self.assertRaises(SystemExit):
             # --index must be <= salobj.MAX_SAL_INDEX
             too_large_index = salobj.MAX_SAL_INDEX + 1
-            ui.parse_run_one_script_cmd(args=[str(script), "--index", str(too_large_index)])
+            ui.parse_run_one_script_cmd(
+                args=[str(script), "--index", str(too_large_index)]
+            )
         with self.assertRaises(SystemExit):
             # --index must be an integer
             ui.parse_run_one_script_cmd(args=[str(script), "--index", "not_an_integer"])
@@ -111,14 +121,25 @@ class ParseRunOneScriptTestCase(unittest.TestCase):
             ui.parse_run_one_script_cmd(args=[str(script), "--parameters"])
         with self.assertRaises(SystemExit):
             # invalid data for --parameters; no =
-            ui.parse_run_one_script_cmd(args=[str(script), "--parameters", "invalid_parameter"])
+            ui.parse_run_one_script_cmd(
+                args=[str(script), "--parameters", "invalid_parameter"]
+            )
         with self.assertRaises(SystemExit):
             # invalid data for --parameters; space
-            ui.parse_run_one_script_cmd(args=[str(script), "--parameters", "wait_time", "=", "0.1"])
+            ui.parse_run_one_script_cmd(
+                args=[str(script), "--parameters", "wait_time", "=", "0.1"]
+            )
         with self.assertRaises(SystemExit):
             # cannot specify both --config and --parameters
-            ui.parse_run_one_script_cmd(args=[str(script), "--config", config_path.as_posix(),
-                                              "--parameters", "wait_time=0.1"])
+            ui.parse_run_one_script_cmd(
+                args=[
+                    str(script),
+                    "--config",
+                    config_path.as_posix(),
+                    "--parameters",
+                    "wait_time=0.1",
+                ]
+            )
 
 
 class RunOneScriptTestCase(asynctest.TestCase):
@@ -136,17 +157,26 @@ class RunOneScriptTestCase(asynctest.TestCase):
         exe_name = "run_one_script.py"
         exe_path = shutil.which(exe_name)
         if exe_path is None:
-            self.fail(f"Could not find bin script {exe_name}; did you setup and scons this package?")
+            self.fail(
+                f"Could not find bin script {exe_name}; did you setup and scons this package?"
+            )
 
         index = 135
         script = DATA_DIR / "standard" / "subdir" / "script3"
         config_path = DATA_DIR / "config1.yaml"
-        async with salobj.Domain() as domain, \
-                salobj.Remote(domain=domain, name="Script", index=index) as remote:
-            process = await asyncio.create_subprocess_exec(exe_name, str(script),
-                                                           "--config", str(config_path),
-                                                           "--index", str(index),
-                                                           "--loglevel", "10")
+        async with salobj.Domain() as domain, salobj.Remote(
+            domain=domain, name="Script", index=index
+        ) as remote:
+            process = await asyncio.create_subprocess_exec(
+                exe_name,
+                str(script),
+                "--config",
+                str(config_path),
+                "--index",
+                str(index),
+                "--loglevel",
+                "10",
+            )
             try:
                 t0 = time.time()
                 await asyncio.wait_for(process.wait(), timeout=START_TIMEOUT)

@@ -68,8 +68,22 @@ class ScriptInfo:
     verbose : `bool` (optional)
         If True then print log messages from the script to stdout.
     """
-    def __init__(self, log, remote, index, seq_num, is_standard, path, config, descr,
-                 log_level=0, pause_checkpoint="", stop_checkpoint="", verbose=False):
+
+    def __init__(
+        self,
+        log,
+        remote,
+        index,
+        seq_num,
+        is_standard,
+        path,
+        config,
+        descr,
+        log_level=0,
+        pause_checkpoint="",
+        stop_checkpoint="",
+        verbose=False,
+    ):
         self.log = log.getChild(f"ScriptInfo(index={index})")
         self.remote = remote
         self.index = int(index)
@@ -277,8 +291,12 @@ class ScriptInfo:
         True if the script is configured and not started,
         and the group ID is neither set nor being set.
         """
-        return self.configured and not self.started and \
-            not self.group_id and not self.setting_group_id
+        return (
+            self.configured
+            and not self.started
+            and not self.group_id
+            and not self.setting_group_id
+        )
 
     def clear_group_id(self, command_script):
         """Clear the group ID.
@@ -295,9 +313,10 @@ class ScriptInfo:
         self._cancel_set_clear_group_id()
         if command_script and self.configured and not self.started:
             self.clear_group_id_task = asyncio.create_task(
-                self.remote.cmd_setGroupId.set_start(ScriptID=self.index,
-                                                     groupId="",
-                                                     timeout=_SET_GROUP_ID_TIMEOUT))
+                self.remote.cmd_setGroupId.set_start(
+                    ScriptID=self.index, groupId="", timeout=_SET_GROUP_ID_TIMEOUT
+                )
+            )
 
     async def set_group_id(self, group_id):
         """Set the group ID.
@@ -322,13 +341,16 @@ class ScriptInfo:
             raise ValueError(f"group_id={group_id} must not be blank")
 
         if not self.needs_group_id:
-            raise RuntimeError(f"script {self.index} is not in a state to have group ID set.")
+            raise RuntimeError(
+                f"script {self.index} is not in a state to have group ID set."
+            )
 
         self._cancel_set_clear_group_id()
         self.set_group_id_task = asyncio.create_task(
-            self.remote.cmd_setGroupId.set_start(ScriptID=self.index,
-                                                 groupId=group_id,
-                                                 timeout=_SET_GROUP_ID_TIMEOUT))
+            self.remote.cmd_setGroupId.set_start(
+                ScriptID=self.index, groupId=group_id, timeout=_SET_GROUP_ID_TIMEOUT
+            )
+        )
         await self.set_group_id_task
         self.group_id = group_id
         self._run_callback()
@@ -352,7 +374,8 @@ class ScriptInfo:
             os.environ["PATH"] = scriptdir + ":" + initialpath
             # save task so process creation can be cancelled if it hangs
             self.create_process_task = asyncio.create_task(
-                asyncio.create_subprocess_exec(scriptname, str(self.index)))
+                asyncio.create_subprocess_exec(scriptname, str(self.index))
+            )
             self.process = await self.create_process_task
             self.process_task = asyncio.create_task(self.process.wait())
             self.timestamp_process_start = time.time()
@@ -393,7 +416,10 @@ class ScriptInfo:
         """
         if not self.process_done:
             self._terminated = True
-            if self.create_process_task is not None and not self.create_process_task.done():
+            if (
+                self.create_process_task is not None
+                and not self.create_process_task.done()
+            ):
                 # cancel creating the process
                 self.create_process_task.cancel()
             if self.process is not None:
@@ -408,9 +434,11 @@ class ScriptInfo:
         return not (self == other)
 
     def __repr__(self):
-        return f"ScriptInfo(index={self.index}, seq_num={self.seq_num}, " \
-            f"is_standard={self.is_standard}, path={self.path}, " \
+        return (
+            f"ScriptInfo(index={self.index}, seq_num={self.seq_num}, "
+            f"is_standard={self.is_standard}, path={self.path}, "
             f"config={self.config}, descr={self.descr})"
+        )
 
     def _cancel_set_clear_group_id(self):
         """Cancel set and/or clear group ID tasks, if running.
@@ -451,15 +479,20 @@ class ScriptInfo:
         """
         try:
             if self.script_state != ScriptState.UNCONFIGURED:
-                raise RuntimeError(f"Cannot configure script {self.index} "
-                                   f"because it is in state {self.script_state} "
-                                   f"instead of {ScriptState.UNCONFIGURED}")
+                raise RuntimeError(
+                    f"Cannot configure script {self.index} "
+                    f"because it is in state {self.script_state} "
+                    f"instead of {ScriptState.UNCONFIGURED}"
+                )
 
-            await self.remote.cmd_configure.set_start(ScriptID=self.index, config=self.config,
-                                                      logLevel=self.log_level,
-                                                      pauseCheckpoint=self.pause_checkpoint,
-                                                      stopCheckpoint=self.stop_checkpoint,
-                                                      timeout=_CONFIGURE_TIMEOUT)
+            await self.remote.cmd_configure.set_start(
+                ScriptID=self.index,
+                config=self.config,
+                logLevel=self.log_level,
+                pauseCheckpoint=self.pause_checkpoint,
+                stopCheckpoint=self.stop_checkpoint,
+                timeout=_CONFIGURE_TIMEOUT,
+            )
         except Exception:
             # terminate the script but first let the configure_task fail
             self.log.exception(f"Configure failed for script {self.index}")

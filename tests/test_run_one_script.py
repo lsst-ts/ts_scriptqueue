@@ -32,9 +32,9 @@ from lsst.ts.idl.enums.Script import ScriptState
 from lsst.ts import salobj
 from lsst.ts.scriptqueue import ui
 
-STD_TIMEOUT = 10
-START_TIMEOUT = 60
-END_TIMEOUT = 10
+# Long enough to perform any reasonable operation
+# including starting a CSC or loading a script (seconds)
+STD_TIMEOUT = 60
 
 DATA_DIR = pathlib.Path(__file__).resolve().parent / "data"
 
@@ -179,7 +179,7 @@ class RunOneScriptTestCase(asynctest.TestCase):
             )
             try:
                 t0 = time.time()
-                await asyncio.wait_for(process.wait(), timeout=START_TIMEOUT)
+                await asyncio.wait_for(process.wait(), timeout=STD_TIMEOUT)
                 dt = time.time() - t0
                 print(f"It took {dt:0.2f} seconds to run the script")
             except Exception:

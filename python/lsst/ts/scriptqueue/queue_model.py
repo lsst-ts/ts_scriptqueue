@@ -190,11 +190,9 @@ class QueueModel:
     async def add(self, script_info, location, location_sal_index):
         """Add a script to the queue.
 
-        Start a script in a subprocess, set ``self.process`` to the
-        resulting ``asyncio.Process``, and set ``self.process_task`` to an
-        ``asyncio.Task`` that waits for the process to finish.
-        Wait for the process to start.
-        Configure the script.
+        Launch the script in a new subprocess and wait for the subprocess
+        to start. Start a background task to configure the script
+        when it is ready.
 
         Parameters
         ----------
@@ -413,6 +411,13 @@ class QueueModel:
     async def requeue(self, sal_index, seq_num, location, location_sal_index):
         """Requeue a script.
 
+        Add a script that is a copy of an existing script,
+        including the same configuration.
+
+        Launch the script in a new subprocess and wait for the subprocess
+        to start. Start a background task to configure the script
+        when it is ready.
+
         Parameters
         ----------
         domain : `lsst.ts.salobj.Domain`
@@ -616,6 +621,7 @@ class QueueModel:
         """Terminate all scripts and return info for the ones terminated.
 
         Does not wait for termination to actually finish.
+        See also `wait_terminate_all`.
 
         Returns
         -------
@@ -634,17 +640,29 @@ class QueueModel:
         return info_list
 
     async def wait_terminate_all(self, timeout=10):
-        """Awaitable version of terminate_all"""
-        term_info_list = self.terminate_all()
+        """Awaitable version of terminate_all.
+
+        Parameters
+        ----------
+        timeout : `float`
+            Timeout waiting for the process tasks to terminate.
+
+        Returns
+        -------
+        info_list : `list` [`ScriptInfo`]
+            List of all scripts that were terminated.
+        """
+        info_list = self.terminate_all()
         await asyncio.wait_for(
             asyncio.gather(
-                *[info.process_task for info in term_info_list if not info.process_done]
+                *[info.process_task for info in info_list if not info.process_done]
             ),
             timeout,
         )
+        return info_list
 
     def _insert_script(self, script_info, location, location_sal_index):
-        """Insert a script info into the queue
+        """Insert a script info into the queue.
 
         Parameters
         ----------

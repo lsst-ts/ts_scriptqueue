@@ -6,6 +6,27 @@
 Revision History
 ################
 
+v2.5.1
+======
+
+Changes:
+
+* Add ``tests/test_black.py`` to verify that files are formatted with black.
+  This requires ts_salobj 5.11 or later.
+* Make `ui.RequestModel` compatible with ts_salobj 5.12.
+* Make time limits in unit tests simpler and more generous.
+  This makes the tests simpler and should help tests pass on machines with limited resources.
+* Fix flake8 warnings about f strings with no {}.
+* Update ``.travis.yml`` to remove ``sudo: false`` to github travis checks pass once again.
+
+Requirements:
+
+* ts_salobj 5.11
+* ts_idl 1
+* ts_xml 4.7
+* IDL files for Script and ScriptQueue, e.g. built with ``make_idl_files.py``
+* asynctest
+
 v2.5.0
 ======
 

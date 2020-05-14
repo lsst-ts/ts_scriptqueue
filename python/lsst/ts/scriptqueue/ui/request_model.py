@@ -49,6 +49,8 @@ class RequestModel:
         self.domain = salobj.Domain()
         self.queue = salobj.Remote(self.domain, "ScriptQueue", index)
         self.evt_loop = asyncio.get_event_loop()
+        # Wait for the Remote to start
+        self.run(self._wait_queue_remote_start())
 
         self.cmd_timeout = 120.0
         self.max_lost_heartbeats = 5
@@ -80,6 +82,11 @@ class RequestModel:
             return 0
         else:
             return salobj.State(data.summaryState)
+
+    async def _wait_queue_remote_start(self):
+        """Wait for the queue remote to start.
+        """
+        await self.queue.start_task
 
     def enable_queue(self):
         """Enable the script queue.

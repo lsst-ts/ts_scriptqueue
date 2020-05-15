@@ -1,10 +1,10 @@
 .. py:currentmodule:: lsst.ts.scriptqueue
 
-.. _lsst.ts.scriptqueue.revision_history:
+.. _lsst.ts.scriptqueue.version_history:
 
-################
-Revision History
-################
+###############
+Version History
+###############
 
 v2.5.1
 ======

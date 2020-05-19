@@ -50,9 +50,9 @@ Python API reference
     :no-inheritance-diagram:
 .. _Commandable SAL Component: https://docushare.lsst.org/docushare/dsweb/View/LSE-209
 
-Revision History
-================
+Version History
+===============
 
 .. toctree::
-    revision_history
+    version_history
     :maxdepth: 1

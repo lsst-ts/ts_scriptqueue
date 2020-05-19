@@ -35,11 +35,9 @@ from lsst.ts.idl.enums.ScriptQueue import Location, ScriptProcessState
 from lsst.ts.idl.enums.Script import ScriptState
 from lsst.ts import scriptqueue
 
-STD_TIMEOUT = 10
-# Time to load a script or start the script queue (sec)
-START_TIMEOUT = 60
-# Time for a process to exit once it has said it is quitting (sec)
-END_TIMEOUT = 10
+# Long enough to perform any reasonable operation
+# including starting a CSC or loading a script (seconds)
+STD_TIMEOUT = 60
 
 I0 = scriptqueue.script_queue.SCRIPT_INDEX_MULT  # initial Script SAL index
 
@@ -234,7 +232,7 @@ class ScriptQueueTestCase(asynctest.TestCase):
         await self.remote.cmd_start.start(timeout=STD_TIMEOUT)
 
     async def tearDown(self):
-        nkilled = len(self.queue.model.terminate_all())
+        nkilled = len(await self.queue.model.wait_terminate_all())
         if nkilled > 0:
             warnings.warn(f"Killed {nkilled} subprocesses")
         await self.queue.close()
@@ -301,9 +299,7 @@ class ScriptQueueTestCase(asynctest.TestCase):
         #       f"currentSalIndex={currentSalIndex}, "
         #       f"sal_indices={salIndices}, "
         #       f"past_sal_indices={pastSalIndices}")
-        queue_data = await self.remote.evt_queue.next(
-            flush=False, timeout=START_TIMEOUT
-        )
+        queue_data = await self.remote.evt_queue.next(flush=False, timeout=STD_TIMEOUT)
         self.assertIsNotNone(queue_data)
         if enabled:
             self.assertTrue(queue_data.enabled)
@@ -323,7 +319,7 @@ class ScriptQueueTestCase(asynctest.TestCase):
             # Top script not running yet; its group ID is probably being set.
             # Skip this event and check the next.
             queue_data = await self.remote.evt_queue.next(
-                flush=False, timeout=START_TIMEOUT
+                flush=False, timeout=STD_TIMEOUT
             )
         self.assertEqual(queue_data.currentSalIndex, current_sal_index)
         self.assertEqual(
@@ -993,7 +989,7 @@ class ScriptQueueTestCase(asynctest.TestCase):
                 timeout=STD_TIMEOUT,
             )
 
-        # Nake sure those commands did not alter the queue.
+        # Make sure those commands did not alter the queue.
         await self.remote.cmd_showQueue.start(timeout=STD_TIMEOUT)
         await self.assert_next_queue(sal_indices=[I0 + 2, I0 + 1, I0])
 
@@ -1357,7 +1353,7 @@ class ScriptQueueTestCase(asynctest.TestCase):
             script_info = self.queue.model.get_script_info(
                 sal_index, search_history=False
             )
-            await asyncio.wait_for(script_info.start_task, timeout=START_TIMEOUT)
+            await asyncio.wait_for(script_info.start_task, timeout=STD_TIMEOUT)
             print(f"waiting for script {sal_index} to be configured")
             await asyncio.wait_for(script_info.config_task, STD_TIMEOUT)
 
@@ -1400,7 +1396,7 @@ class CmdLineTestCase(asynctest.TestCase):
             try:
 
                 summaryState_data = await remote.evt_summaryState.next(
-                    flush=False, timeout=START_TIMEOUT
+                    flush=False, timeout=STD_TIMEOUT
                 )
                 self.assertEqual(summaryState_data.summaryState, salobj.State.STANDBY)
 
@@ -1421,7 +1417,7 @@ class CmdLineTestCase(asynctest.TestCase):
                 )
                 self.assertEqual(summaryState_data.summaryState, salobj.State.OFFLINE)
 
-                await asyncio.wait_for(process.wait(), timeout=END_TIMEOUT)
+                await asyncio.wait_for(process.wait(), timeout=STD_TIMEOUT)
             except Exception:
                 if process.returncode is None:
                     process.terminate()
@@ -1444,7 +1440,7 @@ class CmdLineTestCase(asynctest.TestCase):
             try:
 
                 summaryState_data = await remote.evt_summaryState.next(
-                    flush=False, timeout=START_TIMEOUT
+                    flush=False, timeout=STD_TIMEOUT
                 )
                 self.assertEqual(summaryState_data.summaryState, salobj.State.STANDBY)
 
@@ -1465,7 +1461,7 @@ class CmdLineTestCase(asynctest.TestCase):
                 )
                 self.assertEqual(summaryState_data.summaryState, salobj.State.OFFLINE)
 
-                await asyncio.wait_for(process.wait(), timeout=END_TIMEOUT)
+                await asyncio.wait_for(process.wait(), timeout=STD_TIMEOUT)
             except Exception:
                 if process.returncode is None:
                     process.terminate()

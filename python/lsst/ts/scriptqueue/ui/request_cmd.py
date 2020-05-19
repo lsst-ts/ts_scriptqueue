@@ -63,7 +63,7 @@ class RequestCmd(Cmd):
         operate with the LSST script queue.
 
         Type help or ? to list commands."""
-        self.prompt = f"(cmd:None): "
+        self.prompt = "(cmd:None): "
 
         super().__init__()
 
@@ -226,7 +226,7 @@ class RequestCmd(Cmd):
         print(f'\tPast queue size: {len(queue_state["past_scripts"])}')
 
         if len(queue_state["queue_scripts"]) > 0:
-            print(f"\nItems on queue:")
+            print("\nItems on queue:")
             for item in queue_state["queue_scripts"]:
                 print(
                     f"{item}: {self.model.parse_info(queue_state['queue_scripts'][item])}"
@@ -235,7 +235,7 @@ class RequestCmd(Cmd):
             print("\nNo items on queue.")
 
         if len(queue_state["past_scripts"]) > 0:
-            print(f"\nItems on past queue:")
+            print("\nItems on past queue:")
 
             for i, item in enumerate(queue_state["past_scripts"]):
                 print(self.model.parse_info(queue_state["past_scripts"][item]))
@@ -244,7 +244,7 @@ class RequestCmd(Cmd):
             if len(queue_state["past_scripts"]) > self.max_items_past:
                 print(
                     f" ... (+{len(queue_state['past_scripts'])-self.max_items_past}) "
-                    f"items on past queue"
+                    "items on past queue"
                 )
         else:
             print("\nNo items on past queue.")
@@ -301,7 +301,7 @@ class RequestCmd(Cmd):
 
             if len(parsed.parameters) % 2 > 0:
                 self.log.warning(
-                    f"Parameters has wrong number of items. "
+                    "Parameters has wrong number of items. "
                     f"Must be key/value pair. Ignoring {parsed.parameters[-1]}"
                 )
 
@@ -404,7 +404,7 @@ class RequestCmd(Cmd):
     def do_logout(self, args):
         """Unregister username."""
         self.username = None
-        self.prompt = f"(cmd:None): "
+        self.prompt = "(cmd:None): "
 
     def monitor_script(self, salindex):
         """Monitor the execution of a script. Will block until

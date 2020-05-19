@@ -315,7 +315,7 @@ class RequestModel:
         elif queue_state.summaryState != salobj.State.ENABLED:
             self.log.warning(
                 f"Queue summary state is {salobj.State(queue_state.summaryState)!r}. "
-                f"Enable it first and try again."
+                "Enable it first and try again."
             )
             return -1
 
@@ -514,9 +514,9 @@ class RequestModel:
             elif nlost_subsequent > self.max_lost_heartbeats:
                 self.log.error(
                     f"Script is not responding. Lost {nlost_subsequent} "
-                    f"subsequent heartbeats. You may have to interrupt the script execution."
-                    f"If this is an expected behaviour you should be able to restart the "
-                    f"monitoring routine."
+                    "subsequent heartbeats. You may have to interrupt the script execution."
+                    "If this is an expected behaviour you should be able to restart the "
+                    "monitoring routine."
                 )
                 return
 
@@ -537,5 +537,5 @@ class RequestModel:
                     f"[{salindex}]:[heartbeat:{nbeats}] - "
                     f"[total lost:{nlost_total} - "
                     f"subsequent lost: {nlost_subsequent}]:"
-                    f"[Missing heartbeats from script.]"
+                    "[Missing heartbeats from script.]"
                 )

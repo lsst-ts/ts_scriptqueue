@@ -6,6 +6,21 @@
 Version History
 ###############
 
+v2.5.2
+======
+
+Changes:
+
+* Fixed warnings in ``tests/test_queue_model.py`` caused by not allowing all queued scripts to finish.
+
+Requirements:
+
+* ts_salobj 5.11
+* ts_idl 1
+* ts_xml 4.7
+* IDL files for Script and ScriptQueue, e.g. built with ``make_idl_files.py``
+* asynctest
+
 v2.5.1
 ======
 

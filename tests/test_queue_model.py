@@ -609,6 +609,19 @@ class QueueModelTestCase(asynctest.TestCase):
             )
             self.assert_script_info_equal(script_info, expected_script_info)
 
+        await self.assert_next_queue(
+            running=True,
+            current_sal_index=i0 + 2,
+            sal_indices=[],
+            past_sal_indices=[i0 + 1, i0],
+        )
+        await self.assert_next_queue(
+            running=True,
+            current_sal_index=0,
+            sal_indices=[],
+            past_sal_indices=[i0 + 2, i0 + 1, i0],
+        )
+
     def test_make_full_path(self):
         for is_standard, badpath in (
             (True, "../script5"),  # file is in external, not standard
@@ -750,6 +763,12 @@ class QueueModelTestCase(asynctest.TestCase):
                 sal_index=1234, location=Location.AFTER, location_sal_index=1234
             )
         await self.assert_next_queue(sal_indices=[i0 + 2, i0 + 1, i0], wait=False)
+
+        # Don't wait for the scripts to finish loading; termination is faster.
+        await asyncio.wait_for(
+            self.model.stop_scripts(sal_indices=[i0 + 2, i0 + 1, i0], terminate=True),
+            timeout=STD_TIMEOUT,
+        )
 
     async def test_clear_group_id(self):
         """Test that a script at the top of the queue has its group ID cleared

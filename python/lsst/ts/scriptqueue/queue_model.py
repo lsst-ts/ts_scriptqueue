@@ -773,8 +773,8 @@ class QueueModel:
         script_info : `ScriptInfo`
             Script info.
 
-        Raise
-        -----
+        Raises
+        ------
         RuntimeError
             If the group ID cannot be set.
         """

@@ -6,6 +6,22 @@
 Version History
 ###############
 
+v2.6.0
+======
+
+Changes:
+
+* Replaced ``bin/request_script.py`` with ``bin/command_script_queue.py``, which is based on `lsst.ts.salobj.CscCommander`.
+  This change requires ts_sal v5.17.0 or later.
+
+Requirements:
+
+* ts_salobj 5.17
+* ts_idl 1
+* ts_xml 4.7
+* IDL files for Script and ScriptQueue, e.g. built with ``make_idl_files.py``
+* asynctest
+
 v2.5.2
 ======
 

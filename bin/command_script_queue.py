@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 # This file is part of ts_scriptqueue.
 #
 # Developed for the LSST Telescope and Site Systems.
@@ -19,8 +20,8 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-from .queue_state import *
-from .request_model import *
-from .request_cmd import *
-from .run_one_script import *
-from .script_queue_commander import *
+import asyncio
+
+from lsst.ts import scriptqueue
+
+asyncio.run(scriptqueue.ui.ScriptQueueCommander.amain(index=True))

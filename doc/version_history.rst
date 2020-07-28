@@ -6,6 +6,19 @@
 Version History
 ###############
 
+v2.6.1
+======
+
+Salobj 6 changed the name of the ``SalInfo.makeAckCmd`` method to ``SalInfo.make_ackcmd``.
+Add a check to make sure ``SalInfo`` has a ``make_ackcmd`` attribute and use ``makeAckCmd`` if not.
+
+Changes:
+
+* Add backward compatibility between salobj 5 and 6.
+* Add Jenkinsfile for CI job.
+* In test_utils.py separate testing ``get_scripts_dir`` from standard and external scripts.
+  Since packages are optional, skip tests if packages cannot be imported.
+
 v2.6.0
 ======
 

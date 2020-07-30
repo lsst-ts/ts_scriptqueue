@@ -23,8 +23,15 @@ import os
 import pathlib
 import unittest
 
-from lsst.ts import standardscripts
-from lsst.ts import externalscripts
+try:
+    from lsst.ts import standardscripts
+except ImportError:
+    standardscripts = None
+
+try:
+    from lsst.ts import externalscripts
+except ImportError:
+    externalscripts = None
 from lsst.ts import scriptqueue
 
 
@@ -43,12 +50,15 @@ class UtilsTestCase(unittest.TestCase):
         )
         self.assertEqual(set(scripts), expectedscripts)
 
-    def test_get_default_scripts_dir(self):
+    @unittest.skipIf(standardscripts is None, "Could not import ts_standardscripts")
+    def test_get_default_standard_scripts_dir(self):
         standard_dir = scriptqueue.get_default_scripts_dir(is_standard=True)
         self.assertIsInstance(standard_dir, pathlib.Path)
         self.assertTrue(standard_dir.samefile(standardscripts.get_scripts_dir()))
         self.assertEqual(standard_dir.name, "scripts")
 
+    @unittest.skipIf(externalscripts is None, "Could not import ts_externalscripts")
+    def test_get_default_external_scripts_dir(self):
         external_dir = scriptqueue.get_default_scripts_dir(is_standard=False)
         self.assertIsInstance(external_dir, pathlib.Path)
         self.assertTrue(external_dir.samefile(externalscripts.get_scripts_dir()))

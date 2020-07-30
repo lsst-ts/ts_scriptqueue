@@ -35,6 +35,16 @@ from lsst.ts.idl.enums.ScriptQueue import Location, ScriptProcessState
 from lsst.ts.idl.enums.Script import ScriptState
 from lsst.ts import scriptqueue
 
+try:
+    from lsst.ts import standardscripts
+except ImportError:
+    standardscripts = None
+
+try:
+    from lsst.ts import externalscripts
+except ImportError:
+    externalscripts = None
+
 # Long enough to perform any reasonable operation
 # including starting a CSC or loading a script (seconds)
 STD_TIMEOUT = 60
@@ -94,17 +104,29 @@ class MakeAddKwargs(MakeKWargs):
 class ScriptQueueConstructorTestCase(asynctest.TestCase):
     def setUp(self):
         salobj.set_random_lsst_dds_domain()
-        self.default_standardpath = scriptqueue.get_default_scripts_dir(
-            is_standard=True
-        )
-        self.default_externalpath = scriptqueue.get_default_scripts_dir(
-            is_standard=False
-        )
+        try:
+            self.default_standardpath = scriptqueue.get_default_scripts_dir(
+                is_standard=True
+            )
+        except ImportError:
+            self.default_standardpath = None
+
+        try:
+            self.default_externalpath = scriptqueue.get_default_scripts_dir(
+                is_standard=False
+            )
+        except ImportError:
+            self.default_externalpath = None
+
         self.datadir = os.path.abspath(os.path.join(os.path.dirname(__file__), "data"))
         self.testdata_standardpath = os.path.join(self.datadir, "standard")
         self.testdata_externalpath = os.path.join(self.datadir, "external")
         self.badpath = os.path.join(self.datadir, "not_a_directory")
 
+    @unittest.skipIf(
+        standardscripts is None or externalscripts is None,
+        "Could not import ts_standardscripts and/or ts_externalscripts.",
+    )
     async def test_default_paths(self):
         async with scriptqueue.ScriptQueue(index=1) as queue, salobj.Remote(
             domain=queue.domain, name="ScriptQueue", index=1
@@ -153,6 +175,9 @@ class ScriptQueueConstructorTestCase(asynctest.TestCase):
                 os.path.samefile(rootDir_data.external, self.testdata_externalpath)
             )
 
+    @unittest.skipIf(
+        standardscripts is None, "Could not import ts_standardscripts.",
+    )
     async def test_default_standard_path(self):
         async with scriptqueue.ScriptQueue(
             index=1, externalpath=self.testdata_externalpath
@@ -175,6 +200,9 @@ class ScriptQueueConstructorTestCase(asynctest.TestCase):
                 os.path.samefile(rootDir_data.external, self.testdata_externalpath)
             )
 
+    @unittest.skipIf(
+        externalscripts is None, "Could not import ts_externalscripts.",
+    )
     async def test_default_external_path(self):
         async with scriptqueue.ScriptQueue(
             index=1, standardpath=self.testdata_standardpath
@@ -1362,12 +1390,20 @@ class CmdLineTestCase(asynctest.TestCase):
     def setUp(self):
         salobj.set_random_lsst_dds_domain()
         self.index = 1
-        self.default_standardpath = scriptqueue.get_default_scripts_dir(
-            is_standard=True
-        )
-        self.default_externalpath = scriptqueue.get_default_scripts_dir(
-            is_standard=False
-        )
+        try:
+            self.default_standardpath = scriptqueue.get_default_scripts_dir(
+                is_standard=True
+            )
+        except ImportError:
+            self.default_standardpath = None
+
+        try:
+            self.default_externalpath = scriptqueue.get_default_scripts_dir(
+                is_standard=False
+            )
+        except ImportError:
+            self.default_externalpath = None
+
         self.datadir = os.path.abspath(os.path.join(os.path.dirname(__file__), "data"))
         self.testdata_standardpath = os.path.join(self.datadir, "standard")
         self.testdata_externalpath = os.path.join(self.datadir, "external")
@@ -1423,6 +1459,10 @@ class CmdLineTestCase(asynctest.TestCase):
                     process.terminate()
                 raise
 
+    @unittest.skipIf(
+        standardscripts is None or externalscripts is None,
+        "Could not import ts_standardscripts and/or ts_externalscripts.",
+    )
     async def test_run_default_standard_external(self):
         exe_name = "run_script_queue.py"
         exe_path = shutil.which(exe_name)

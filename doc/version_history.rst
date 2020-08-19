@@ -13,6 +13,7 @@ Changes:
 
 * Fix the stopScripts command in `ScriptQueueCommander`.
 * Update the pre-commit hook to block the commit if any code is not formatted with black.
+* Update SConstruct so it does not need configuration and remove cfg file from ups.
 
 Requirements:
 

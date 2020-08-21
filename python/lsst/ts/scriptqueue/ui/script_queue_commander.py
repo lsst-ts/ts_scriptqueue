@@ -39,6 +39,9 @@ class ScriptQueueCommander(salobj.CscCommander):
     • type = s or std for standard, e or ext for external
     • config = @yaml_file_path or keyword1=value1 keyword2=value2 ..."""
         self.help_dict["showSchema"] = "type path  # type=s, std, e, or ext"
+        self.help_dict[
+            "stopScripts"
+        ] = "sal_index1 [sal_index2 [... sal_indexN]] terminate (0 or 1)"
         self.script_remote = salobj.Remote(
             domain=self.domain,
             name="Script",
@@ -158,3 +161,20 @@ class ScriptQueueCommander(salobj.CscCommander):
         await self.remote.cmd_showSchema.set_start(
             isStandard=is_standard, path=path,
         )
+
+    async def do_stopScripts(self, args):
+        """Handle the stopScript command, which takes a list of script indices.
+        """
+        if len(args) < 2:
+            raise ValueError("Need at least 2 arguments; sal_index terminate")
+        terminate_str = args[-1]
+        if terminate_str not in ("0", "1"):
+            raise ValueError(f"terminate={terminate_str} must be 0 or 1")
+        sal_indices = [int(sal_index) for sal_index in args[:-1]]
+        terminate = bool(int(terminate_str))
+
+        stop_data = self.remote.cmd_stopScripts.DataType()
+        stop_data.length = len(sal_indices)
+        stop_data.salIndices[0 : stop_data.length] = sal_indices
+        stop_data.terminate = terminate
+        await self.remote.cmd_stopScripts.start(data=stop_data)

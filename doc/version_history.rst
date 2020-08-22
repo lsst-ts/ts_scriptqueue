@@ -6,6 +6,23 @@
 Version History
 ###############
 
+v2.6.2
+======
+
+Changes:
+
+* Fix the stopScripts command in `ScriptQueueCommander`.
+* Update the pre-commit hook to block the commit if any code is not formatted with black.
+* Update SConstruct so it does not need configuration and remove cfg file from ups.
+
+Requirements:
+
+* ts_salobj 5.17
+* ts_idl 1
+* ts_xml 4.7
+* IDL files for Script and ScriptQueue, e.g. built with ``make_idl_files.py``
+* asynctest
+
 v2.6.1
 ======
 

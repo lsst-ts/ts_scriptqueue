@@ -6,6 +6,22 @@
 Version History
 ###############
 
+v2.6.3
+======
+
+Changes:
+
+* Enhance the ScriptQueue commander to add options for the "add" command
+  and to accept a default log level for scripts as a command-line argument.
+
+Requirements:
+
+* ts_salobj 5.17
+* ts_idl 1
+* ts_xml 4.7
+* IDL files for Script and ScriptQueue, e.g. built with ``make_idl_files.py``
+* asynctest
+
 v2.6.2
 ======
 

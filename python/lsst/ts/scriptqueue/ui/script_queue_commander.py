@@ -22,6 +22,8 @@
 __all__ = ["ScriptQueueCommander"]
 
 import logging
+import pathlib
+import string
 
 from lsst.ts.idl.enums.ScriptQueue import Location
 from lsst.ts.idl.enums.Script import ScriptState
@@ -31,17 +33,48 @@ ADD_TIMEOUT = 5  # Timeout for the add command (seconds).
 
 
 class ScriptQueueCommander(salobj.CscCommander):
-    def __init__(self, **kwargs):
+    """ScriptQueue command-line commander.
+
+    Parameters
+    ----------
+    script_log_level : `int`
+        Default log level for scripts.
+    """
+
+    def __init__(self, script_log_level, **kwargs):
         super().__init__(name="ScriptQueue", **kwargs)
+        self.script_log_level = script_log_level
         self.help_dict[
             "add"
-        ] = """type path config  # add a script to the end of the queue:
+        ] = f"""type path config options  # add a script to the end of the queue:
     • type = s or std for standard, e or ext for external
-    • config = @yaml_file_path or keyword1=value1 keyword2=value2 ..."""
+    • config = @yaml_path or keyword1=value1 keyword2=value2 ...
+      where yaml_path is the path to a yaml file; the .yaml suffix is optional
+    • options can be any of the following, in any order
+      (but all option args must follow all config args):
+      -location=int  # first=0, last=1, before=2, after=3
+      -locationSalIndex=int
+      -logLevel=int  # error=40, warning=30, info=20, debug=10; default is {script_log_level}
+      -pauseCheckpoint=str  # a regex
+      -stopCheckpoint=str  # a regex
+    • examples:
+      add s auxtel/slew_telescope_icrs.py ra=10 dec=0 -location=1
+      add s auxtel/slew_telescope_icrs.py @target -logLevel=10 -location=0
+    """
+        # Default options for the add command
+        self.default_add_options = dict(
+            location=Location.LAST,
+            locationSalIndex=0,
+            logLevel=self.script_log_level,
+            pauseCheckpoint="",
+            stopCheckpoint="",
+        )
+
         self.help_dict["showSchema"] = "type path  # type=s, std, e, or ext"
         self.help_dict[
             "stopScripts"
         ] = "sal_index1 [sal_index2 [... sal_indexN]] terminate (0 or 1)"
+
         self.script_remote = salobj.Remote(
             domain=self.domain,
             name="Script",
@@ -127,27 +160,67 @@ class ScriptQueueCommander(salobj.CscCommander):
             raise ValueError("Need at least 2 arguments")
         is_standard = self.get_is_standard(args[0])
         path = args[1]
-        if len(args) == 2:
-            config_yaml = ""
-        elif len(args) == 3 and args[2].startswith("@"):
-            config_path = args[2][1:]
-            with open(config_path, "r") as f:
-                config_yaml = f.read()
+
+        # Parse config
+        config_path = None
+        config_yaml_items = []
+        config_start_ind = 2
+        options_start_ind = 2
+        if len(args) > 2 and args[2].startswith("@"):
+            config_path = pathlib.Path(args[2][1:])  # Skip the leading @
+            # Add .yaml if not specified
+            config_path = config_path.with_suffix(".yaml")
+            options_start_ind = 3
         else:
-            config_yaml_items = []
-            for config_arg in args[2:]:
-                name_value = config_arg.split("=", 1)
+            for arg in args[config_start_ind:]:
+                if arg[0] == "-":
+                    # Start of options
+                    break
+                elif args[0] not in string.ascii_letters:
+                    raise ValueError(
+                        f"Argument {arg!r} should start with a letter, in args={args}"
+                    )
+                else:
+                    options_start_ind += 1
+                    name_value = arg.split("=", 1)
+                    if len(name_value) != 2:
+                        raise ValueError(
+                            f"Could not parse config arg {arg!r} as keyword=value, in {args}"
+                        )
+                    name, value = name_value
+                    config_yaml_items.append(f"{name}: {value}")
+
+        options_dict = self.default_add_options.copy()
+        for arg in args[options_start_ind:]:
+            if arg.startswith("-"):
+                name_value = arg[1:].split("=", 1)
                 if len(name_value) != 2:
-                    raise ValueError(f"Could not parse {config_arg!r} as keyword=value")
+                    raise ValueError(
+                        f"Could not parse option arg {arg!r} as keyword=value, in {args}"
+                    )
                 name, value = name_value
-                config_yaml_items.append(f"{name}: {value}")
-            config_yaml = "\n".join(config_yaml_items)
+                default_value = options_dict.get(name, None)
+                if default_value is None:
+                    raise ValueError(f"Unknown option {name} in {args}")
+                if hasattr(default_value, "value"):
+                    # An enum; first cast value to an integer, then to the enum
+                    value = int(value)
+                options_dict[name] = type(default_value)(value)
+            else:
+                raise ValueError(f"Option {arg!r} must start with '-', in {args}")
+
+        if config_path:
+            with open(config_path, "r") as f:
+                config = f.read()
+        else:
+            config = "\n".join(config_yaml_items)
+        print(f"config={config!r}")
 
         await self.remote.cmd_add.set_start(
             isStandard=is_standard,
             path=path,
-            config=config_yaml,
-            location=Location.LAST,
+            config=config,
+            **options_dict,
             timeout=ADD_TIMEOUT,
         )
 
@@ -178,3 +251,17 @@ class ScriptQueueCommander(salobj.CscCommander):
         stop_data.salIndices[0 : stop_data.length] = sal_indices
         stop_data.terminate = terminate
         await self.remote.cmd_stopScripts.start(data=stop_data)
+
+    @classmethod
+    def add_arguments(cls, parser):
+        parser.add_argument(
+            "-l",
+            "--loglevel",
+            type=int,
+            help="Default log level for scripts, as an integer: error=40, warning=30, info=20, debug=10",
+            default=logging.INFO,
+        )
+
+    @classmethod
+    def add_kwargs_from_args(cls, args, kwargs):
+        kwargs["script_log_level"] = args.loglevel

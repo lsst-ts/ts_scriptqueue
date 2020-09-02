@@ -436,6 +436,12 @@ class ScriptQueueTestCase(asynctest.TestCase):
         self.assertGreater(script_data.timestampProcessStart, 0)
         self.assertEqual(script_data.timestampProcessEnd, 0)
 
+        # Run showScript for a script that does not exist.
+        with salobj.assertRaisesAckError():
+            await self.remote.cmd_showScript.set_start(
+                salIndex=I0 - 1, timeout=STD_TIMEOUT
+            )
+
         # Add script I0+1 last: test add last.
         add_kwargs = make_add_kwargs(location=Location.LAST)
         ackcmd = await self.remote.cmd_add.set_start(**add_kwargs, timeout=STD_TIMEOUT)
@@ -893,6 +899,12 @@ class ScriptQueueTestCase(asynctest.TestCase):
             )
             await self.assert_next_queue(sal_indices=sal_indices[0 : i + 1])
 
+        # Try to move a script that does not exist
+        with salobj.assertRaisesAckError():
+            await self.remote.cmd_move.set_start(
+                salIndex=I0 - 1, location=Location.FIRST, timeout=STD_TIMEOUT
+            )
+
         # Move I0+2 first.
         await self.remote.cmd_move.set_start(
             salIndex=I0 + 2, location=Location.FIRST, timeout=STD_TIMEOUT
@@ -1079,6 +1091,12 @@ class ScriptQueueTestCase(asynctest.TestCase):
         await self.assert_next_queue(
             enabled=True, running=False, sal_indices=sal_indices
         )
+
+        # Requeue a script that does not exist
+        with salobj.assertRaisesAckError():
+            await self.remote.cmd_requeue.set_start(
+                salIndex=I0 - 1, location=Location.LAST, timeout=STD_TIMEOUT
+            )
 
         # Requeue I0 to last, creating I0+3.
         await self.remote.cmd_requeue.set_start(

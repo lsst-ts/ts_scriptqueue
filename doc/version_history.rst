@@ -6,6 +6,21 @@
 Version History
 ###############
 
+v2.6.4
+======
+
+Changes:
+
+* Make the `move`, `requeue` and `showScript` commands fail without logging an exception if a specified script does not exist.
+
+Requirements:
+
+* ts_salobj 5.17
+* ts_idl 1
+* ts_xml 4.7
+* IDL files for Script and ScriptQueue, e.g. built with ``make_idl_files.py``
+* asynctest
+
 v2.6.3
 ======
 

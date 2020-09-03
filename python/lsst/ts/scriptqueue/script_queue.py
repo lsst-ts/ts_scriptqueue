@@ -269,7 +269,10 @@ class ScriptQueue(salobj.BaseCsc):
             Command data. Ignored.
         """
         self.assert_enabled("showScript")
-        script_info = self.model.get_script_info(data.salIndex, search_history=True)
+        try:
+            script_info = self.model.get_script_info(data.salIndex, search_history=True)
+        except ValueError:
+            raise salobj.ExpectedError(f"Unknown script {data.salIndex}")
         self.put_script(script_info, force_output=True)
 
     def do_pause(self, data):
@@ -344,22 +347,28 @@ class ScriptQueue(salobj.BaseCsc):
         """Move a script within the queue.
         """
         self.assert_enabled("move")
-        self.model.move(
-            sal_index=data.salIndex,
-            location=data.location,
-            location_sal_index=data.locationSalIndex,
-        )
+        try:
+            self.model.move(
+                sal_index=data.salIndex,
+                location=data.location,
+                location_sal_index=data.locationSalIndex,
+            )
+        except ValueError as e:
+            raise salobj.ExpectedError(str(e))
 
     async def do_requeue(self, data):
         """Put a script back on the queue with the same configuration.
         """
         self.assert_enabled("requeue")
-        await self.model.requeue(
-            sal_index=data.salIndex,
-            seq_num=data.private_seqNum,
-            location=data.location,
-            location_sal_index=data.locationSalIndex,
-        )
+        try:
+            await self.model.requeue(
+                sal_index=data.salIndex,
+                seq_num=data.private_seqNum,
+                location=data.location,
+                location_sal_index=data.locationSalIndex,
+            )
+        except ValueError as e:
+            raise salobj.ExpectedError(str(e))
 
     async def do_stopScripts(self, data):
         """Stop one or more queued scripts and/or the current script.

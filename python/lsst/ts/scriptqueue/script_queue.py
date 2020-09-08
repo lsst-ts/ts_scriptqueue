@@ -120,6 +120,8 @@ class ScriptQueue(salobj.BaseCsc):
       outputs a ``metadata`` event that includes estimated duration.
     """
 
+    valid_simulation_modes = [0]
+
     def __init__(self, index, standardpath=None, externalpath=None, verbose=False):
         if index < 0 or index > _MAX_SCRIPTQUEUE_INDEX:
             raise ValueError(

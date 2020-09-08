@@ -64,60 +64,6 @@ class ScriptQueue(salobj.BaseCsc):
     ValueError
         If ``index`` < 0 or > MAX_SAL_INDEX//100,000 - 1.
         If ``standardpath`` or ``externalpath`` is not an existing directory.
-
-    Notes
-    -----
-    .. _script_queue_basic_usage:
-
-    Basic usage:
-
-    * Send the ``add`` command to the ``ScriptQueue`` to add a script
-      to the queue. The added script is loaded in a subprocess
-      as a new ``Script`` SAL component with a unique SAL index:
-
-      * The script's SAL index is used to uniquely identify the script
-        for commands such as ``move`` and ``stopScript``.
-      * The index is returned as the ``result`` field of
-        the final acknowledgement of the ``add`` command.
-      * The first script loaded has index ``min_sal_index``,
-        the next has index ``min_sal_index+1``,
-        then  ``min_sal_index+2``, ... ``max_sal_index``,
-        then wrap around to start over at ``min_sal_index``.
-      * The minimum SAL script index is 100,000 * the SAL index
-        of `ScriptQueue`: 100,000 for the main telescope
-        and 200,000 for the auxiliary telescope.
-        The maximum is, naturally, 99,999 more than that.
-
-    * Once a script is added, it reports its state as
-      `ScriptState.UNCONFIGURED`. At that point the `ScriptQueue`
-      configures it, using the configuration specified in the
-      ``add`` command.
-    * Configuring a script causes it to output the ``metadata`` event,
-      which includes an estimated duration, and changes the script's
-      state to `ScriptState.CONFIGURED`. This means it can now be run.
-    * When the current script is finished, its information is moved
-      to a history list, in order to support requeueing old scripts. Then:
-
-      * If the queue is running, then when the first script in the queue
-        has been configured, it is moved to the ``current`` slot and run.
-      * If the queue is paused, then the current slot is left empty
-        and no new script is run.
-    * Once a script has finished running, its information is moved to
-      a history list, which is output as part of the ``queue`` event.
-      The history list allows ``requeue`` to work with scripts that
-      have already run.
-
-    Events:
-
-    * As each script is added or changes state `ScriptQueue` outputs
-      a ``script_info`` event which includes the script's SAL index,
-      path and state.
-    * As the script queue changes state `ScriptQueue` outputs the
-      ``queue`` event listing the SAL indices of scripts on the queue,
-      the currently running script, and scripts that have been run
-      (the history list).
-    * When each script is configured, the script (not `ScriptQueue`)
-      outputs a ``metadata`` event that includes estimated duration.
     """
 
     valid_simulation_modes = [0]

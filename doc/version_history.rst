@@ -6,6 +6,22 @@
 Version History
 ###############
 
+v2.7.0
+======
+
+Changes:
+
+* Overhaul the documentation.
+* Add all finished scripts to the history, even if they failed.
+
+Requirements:
+
+* ts_salobj 5.17
+* ts_idl 1
+* ts_xml 4.7
+* IDL files for Script and ScriptQueue, e.g. built with ``make_idl_files.py``
+* asynctest
+
 v2.6.4
 ======
 

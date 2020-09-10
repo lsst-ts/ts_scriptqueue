@@ -160,10 +160,16 @@ class QueueModelTestCase(asynctest.TestCase):
             SAL indices of scripts on the queue.
         past_sal_indices : ``sequence`` of `int`
             SAL indices of scripts in history.
+            If this is a `set` then order is ignored when comparing.
         wait : `bool`
             If True then check the next queue state on a queue of states
             that is loaded by the queue_callback, waiting if necessary.
             If False check the current queue state.
+
+        Returns
+        -------
+        queue_info : QueueInfo
+            Queue info
 
         Notes
         -----
@@ -198,9 +204,12 @@ class QueueModelTestCase(asynctest.TestCase):
             )
         self.assertEqual(queue_info.current_index, current_sal_index)
         self.assertEqual([info.index for info in queue_info.queue], list(sal_indices))
-        self.assertEqual(
-            [info.index for info in queue_info.history], list(past_sal_indices)
-        )
+        actual_past_sal_indices = [info.index for info in queue_info.history]
+        if isinstance(past_sal_indices, set):
+            self.assertEqual(set(actual_past_sal_indices), past_sal_indices)
+        else:
+            self.assertEqual(actual_past_sal_indices, list(past_sal_indices))
+        return queue_info
 
     def assert_script_info_equal(self, info1, info2, is_requeue=False):
         """Assert two ScriptInfo are equal.
@@ -422,7 +431,14 @@ class QueueModelTestCase(asynctest.TestCase):
             ),
             timeout=STD_TIMEOUT,
         )
-        await self.assert_next_queue(sal_indices=[i0 + 2, i0 + 1, i0 + 3])
+        # The order in which the stopped scripts appear in the history
+        # is unknown, but once set, is fixed, so record it
+        # and use it in the remaining tests.
+        queue_info = await self.assert_next_queue(
+            sal_indices=[i0 + 2, i0 + 1, i0 + 3],
+            past_sal_indices={i0 + 6, i0 + 5, i0, i0 + 4},
+        )
+        stopped_scripts = [info.index for info in queue_info.history]
 
         # Make sure all scripts are runnable before starting the queue,
         # for predictability.
@@ -432,12 +448,18 @@ class QueueModelTestCase(asynctest.TestCase):
         # the queue does not start running until we enable it again.
         self.model.enabled = False
         await self.assert_next_queue(
-            enabled=False, running=False, sal_indices=[i0 + 2, i0 + 1, i0 + 3]
+            enabled=False,
+            running=False,
+            sal_indices=[i0 + 2, i0 + 1, i0 + 3],
+            past_sal_indices=stopped_scripts,
         )
 
         self.model.running = True
         await self.assert_next_queue(
-            enabled=False, running=True, sal_indices=[i0 + 2, i0 + 1, i0 + 3]
+            enabled=False,
+            running=True,
+            sal_indices=[i0 + 2, i0 + 1, i0 + 3],
+            past_sal_indices=stopped_scripts,
         )
 
         self.model.enabled = True
@@ -446,27 +468,27 @@ class QueueModelTestCase(asynctest.TestCase):
             running=True,
             current_sal_index=i0 + 2,
             sal_indices=[i0 + 1, i0 + 3],
-            past_sal_indices=[],
+            past_sal_indices=stopped_scripts,
         )
         await self.assert_next_next_visit(sal_index=i0 + 1)
         await self.assert_next_queue(
             running=True,
             current_sal_index=i0 + 1,
             sal_indices=[i0 + 3],
-            past_sal_indices=[i0 + 2],
+            past_sal_indices=[i0 + 2] + stopped_scripts,
         )
         await self.assert_next_next_visit(sal_index=i0 + 3)
         await self.assert_next_queue(
             running=True,
             current_sal_index=i0 + 3,
             sal_indices=[],
-            past_sal_indices=[i0 + 1, i0 + 2],
+            past_sal_indices=[i0 + 1, i0 + 2] + stopped_scripts,
         )
         await self.assert_next_queue(
             running=True,
             current_sal_index=0,
             sal_indices=[],
-            past_sal_indices=[i0 + 3, i0 + 1, i0 + 2],
+            past_sal_indices=[i0 + 3, i0 + 1, i0 + 2] + stopped_scripts,
         )
 
         # Make sure that next_visit_canceled_callback was not called
@@ -484,7 +506,7 @@ class QueueModelTestCase(asynctest.TestCase):
         await asyncio.wait_for(self.model.add(**add_kwargs), timeout=STD_TIMEOUT)
         await self.assert_next_queue(running=True, sal_indices=[i0])
         await self.assert_next_queue(
-            running=True, current_sal_index=0, sal_indices=[], past_sal_indices=[],
+            running=True, current_sal_index=0, sal_indices=[], past_sal_indices=[i0],
         )
         await script0.process_task
         self.assertTrue(script0.configure_failed)
@@ -509,7 +531,9 @@ class QueueModelTestCase(asynctest.TestCase):
             self.model.stop_scripts(sal_indices=[i0], terminate=terminate),
             timeout=STD_TIMEOUT,
         )
-        await self.assert_next_queue(sal_indices=[], running=True)
+        await self.assert_next_queue(
+            sal_indices=[], running=True, past_sal_indices=[i0]
+        )
         if not add_task.done():
             with self.assertRaises(asyncio.CancelledError):
                 await add_task
@@ -1189,7 +1213,9 @@ class QueueModelTestCase(asynctest.TestCase):
             running=True,
             current_sal_index=i0 + 2,
             sal_indices=[],
-            past_sal_indices=[i0 + 1, i0],
+            # Use a set because we're not sure of the order in which
+            # the stopped scripts are added to the history.
+            past_sal_indices={i0 + 3, i0 + 1, i0},
             wait=False,
         )
 
@@ -1246,7 +1272,7 @@ class QueueModelTestCase(asynctest.TestCase):
             running=True,
             current_sal_index=0,
             sal_indices=[],
-            past_sal_indices=[i0 + 2, i0 + 1, i0],
+            past_sal_indices={i0 + 2, i0 + 3, i0 + 1, i0},
         )
 
         # try to stop a script that doesn't exist

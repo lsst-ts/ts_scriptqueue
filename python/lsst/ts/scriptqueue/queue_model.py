@@ -713,7 +713,8 @@ class QueueModel:
                 # removal is handled by _update_queue
                 self._update_queue()
         elif key in self.queue:
-            self.pop_script_info(sal_index)
+            script_info = self.pop_script_info(sal_index)
+            self.history.appendleft(script_info)
             if sal_index in self._scripts_being_stopped:
                 self._scripts_being_stopped.remove(sal_index)
                 if not self._scripts_being_stopped:
@@ -888,8 +889,11 @@ class QueueModel:
             # Clear done scripts from the top of the queue.
             # Done scripts on the queue is rare, but can happen.
             while self.queue:
+                # Don't pop here because we leave the script
+                # on the queue if it's not yet runnable.
                 script_info = self.queue[0]
                 if script_info.process_done or script_info.terminated:
+                    self.history.appendleft(script_info)
                     self.queue.popleft()
                     continue
                 if (

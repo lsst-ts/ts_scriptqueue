@@ -290,6 +290,7 @@ class ScriptQueueTestCase(asynctest.TestCase):
         current_sal_index=0,
         sal_indices=(),
         past_sal_indices=(),
+        verbose=False,
     ):
         """Get the next queue event and check values.
 
@@ -310,6 +311,12 @@ class ScriptQueueTestCase(asynctest.TestCase):
             SAL indices of scripts on the queue.
         past_sal_indices : ``sequence`` of `int`
             SAL indices of scripts in history.
+            If this is a `set` then order is ignored when comparing.
+
+        Returns
+        -------
+        queue_data : ``evt_queue.DataType``
+            queue message.
 
         Notes
         -----
@@ -322,12 +329,24 @@ class ScriptQueueTestCase(asynctest.TestCase):
         * The specified ``current_sal_index != 0``
         * The actual current SAL index is 0 and the queue is not empty
         """
-        # print(f"assert_next_queue(enabled={enabled}, "
-        #       f"running={running}, "
-        #       f"currentSalIndex={currentSalIndex}, "
-        #       f"sal_indices={salIndices}, "
-        #       f"past_sal_indices={pastSalIndices}")
+        if verbose:
+            print(
+                f"assert_next_queue(enabled={enabled}, "
+                f"running={running}, "
+                f"currentSalIndex={current_sal_index}, "
+                f"sal_indices={sal_indices}, "
+                f"past_sal_indices={past_sal_indices}"
+            )
         queue_data = await self.remote.evt_queue.next(flush=False, timeout=STD_TIMEOUT)
+        if verbose:
+            print(
+                "assert_next_queue read: "
+                f"enabled={queue_data.enabled}; "
+                f"running={queue_data.running}; "
+                f"currentSalIndex={queue_data.currentSalIndex}; "
+                f"sal_indices={queue_data.salIndices[0 : queue_data.length]}; "
+                f"past_sal_indices={queue_data.pastSalIndices[0 : queue_data.pastLength]}"
+            )
         self.assertIsNotNone(queue_data)
         if enabled:
             self.assertTrue(queue_data.enabled)
@@ -344,19 +363,37 @@ class ScriptQueueTestCase(asynctest.TestCase):
             and queue_data.currentSalIndex == 0
             and queue_data.length > 0
         ):
+            if verbose:
+                print(
+                    "assert_next_queue: top script not running yet; await next queue event"
+                )
             # Top script not running yet; its group ID is probably being set.
             # Skip this event and check the next.
             queue_data = await self.remote.evt_queue.next(
                 flush=False, timeout=STD_TIMEOUT
             )
+            if verbose:
+                print(
+                    "assert_next_queue: next read: "
+                    f"enabled={queue_data.enabled}; "
+                    f"running={queue_data.running}; "
+                    f"currentSalIndex={queue_data.currentSalIndex}; "
+                    f"sal_indices={sal_indices}; "
+                    f"past_sal_indices={past_sal_indices}"
+                )
         self.assertEqual(queue_data.currentSalIndex, current_sal_index)
         self.assertEqual(
             list(queue_data.salIndices[0 : queue_data.length]), list(sal_indices)
         )
-        self.assertEqual(
-            list(queue_data.pastSalIndices[0 : queue_data.pastLength]),
-            list(past_sal_indices),
-        )
+        if isinstance(past_sal_indices, set):
+            set(queue_data.pastSalIndices[0 : queue_data.pastLength]),
+            past_sal_indices,
+        else:
+            self.assertEqual(
+                list(queue_data.pastSalIndices[0 : queue_data.pastLength]),
+                list(past_sal_indices),
+            )
+        return queue_data
 
     async def assert_next_next_visit(self, sal_index):
         """Assert that the next nextVisit event is for the specified index
@@ -507,7 +544,11 @@ class ScriptQueueTestCase(asynctest.TestCase):
             [I0 + 6, I0 + 5, I0 + 4, I0, 5432], terminate=False
         )
         await self.remote.cmd_stopScripts.start(stop_data, timeout=STD_TIMEOUT)
-        await self.assert_next_queue(sal_indices=[I0 + 2, I0 + 1, I0 + 3])
+        queue_data = await self.assert_next_queue(
+            sal_indices=[I0 + 2, I0 + 1, I0 + 3],
+            past_sal_indices={I0 + 6, I0 + 5, I0 + 4, I0},
+        )
+        stopped_scripts = list(queue_data.pastSalIndices[0 : queue_data.pastLength])
 
         # Make sure all scripts are configured, then start the queue
         # and let it run.
@@ -535,7 +576,7 @@ class ScriptQueueTestCase(asynctest.TestCase):
             running=True,
             current_sal_index=I0 + 2,
             sal_indices=[I0 + 1, I0 + 3],
-            past_sal_indices=[],
+            past_sal_indices=stopped_scripts,
         )
 
         await self.assert_next_next_visit(sal_index=I0 + 1)
@@ -543,7 +584,7 @@ class ScriptQueueTestCase(asynctest.TestCase):
             running=True,
             current_sal_index=I0 + 1,
             sal_indices=[I0 + 3],
-            past_sal_indices=[I0 + 2],
+            past_sal_indices=[I0 + 2] + stopped_scripts,
         )
 
         await self.assert_next_next_visit(sal_index=I0 + 3)
@@ -551,13 +592,13 @@ class ScriptQueueTestCase(asynctest.TestCase):
             running=True,
             current_sal_index=I0 + 3,
             sal_indices=[],
-            past_sal_indices=[I0 + 1, I0 + 2],
+            past_sal_indices=[I0 + 1, I0 + 2] + stopped_scripts,
         )
         await self.assert_next_queue(
             running=True,
             current_sal_index=0,
             sal_indices=[],
-            past_sal_indices=[I0 + 3, I0 + 1, I0 + 2],
+            past_sal_indices=[I0 + 3, I0 + 1, I0 + 2] + stopped_scripts,
         )
 
         # Test that nextVisitCanceled was not output.
@@ -812,7 +853,7 @@ class ScriptQueueTestCase(asynctest.TestCase):
             running=False,
             current_sal_index=I0,
             sal_indices=[I0 + 2],
-            past_sal_indices=[],
+            past_sal_indices=[I0 + 1],
         )
 
         script_data1 = self.remote.evt_script.get()
@@ -827,13 +868,13 @@ class ScriptQueueTestCase(asynctest.TestCase):
             running=True,
             current_sal_index=I0 + 2,
             sal_indices=[],
-            past_sal_indices=[I0],
+            past_sal_indices=[I0, I0 + 1],
         )
         await self.assert_next_queue(
             running=True,
             current_sal_index=0,
             sal_indices=[],
-            past_sal_indices=[I0 + 2, I0],
+            past_sal_indices=[I0 + 2, I0, I0 + 1],
         )
 
         script_data2 = self.remote.evt_script.get()
@@ -871,7 +912,7 @@ class ScriptQueueTestCase(asynctest.TestCase):
         )
         self.assertEqual(script_data0.processState, ScriptProcessState.LOADFAILED)
 
-        await self.assert_next_queue(enabled=True, running=True)
+        await self.assert_next_queue(enabled=True, running=True, past_sal_indices=[I0])
 
     async def test_move(self):
         """Test move, pause and showQueue
@@ -1166,7 +1207,11 @@ class ScriptQueueTestCase(asynctest.TestCase):
             [I0 + 5, I0 + 4, I0, I0 + 6, I0 + 3, I0 + 7, I0 + 8], terminate=False
         )
         await self.remote.cmd_stopScripts.start(stop_data, timeout=STD_TIMEOUT)
-        await self.assert_next_queue(sal_indices=[I0 + 1, I0 + 2])
+        queue_data = await self.assert_next_queue(
+            sal_indices=[I0 + 1, I0 + 2],
+            past_sal_indices={I0 + 5, I0 + 4, I0, I0 + 6, I0 + 3, I0 + 7, I0 + 8},
+        )
+        stopped_scripts = list(queue_data.pastSalIndices[0 : queue_data.pastLength])
 
         await self.wait_configured(I0 + 1, I0 + 2)
 
@@ -1176,19 +1221,19 @@ class ScriptQueueTestCase(asynctest.TestCase):
             running=True,
             current_sal_index=I0 + 1,
             sal_indices=[I0 + 2],
-            past_sal_indices=[],
+            past_sal_indices=stopped_scripts,
         )
         await self.assert_next_queue(
             running=True,
             current_sal_index=I0 + 2,
             sal_indices=[],
-            past_sal_indices=[I0 + 1],
+            past_sal_indices=[I0 + 1] + stopped_scripts,
         )
         await self.assert_next_queue(
             running=True,
             current_sal_index=0,
             sal_indices=[],
-            past_sal_indices=[I0 + 2, I0 + 1],
+            past_sal_indices=[I0 + 2, I0 + 1] + stopped_scripts,
         )
 
         # Pause while we requeue from history.
@@ -1197,7 +1242,7 @@ class ScriptQueueTestCase(asynctest.TestCase):
             running=False,
             current_sal_index=0,
             sal_indices=[],
-            past_sal_indices=[I0 + 2, I0 + 1],
+            past_sal_indices=[I0 + 2, I0 + 1] + stopped_scripts,
         )
 
         # Requeue a script from the history queue, creating I0+9.
@@ -1208,7 +1253,7 @@ class ScriptQueueTestCase(asynctest.TestCase):
             running=False,
             current_sal_index=0,
             sal_indices=[I0 + 9],
-            past_sal_indices=[I0 + 2, I0 + 1],
+            past_sal_indices=[I0 + 2, I0 + 1] + stopped_scripts,
         )
 
         # Wait for script I0+9 to be configured, then
@@ -1219,13 +1264,13 @@ class ScriptQueueTestCase(asynctest.TestCase):
             running=True,
             current_sal_index=I0 + 9,
             sal_indices=[],
-            past_sal_indices=[I0 + 2, I0 + 1],
+            past_sal_indices=[I0 + 2, I0 + 1] + stopped_scripts,
         )
         await self.assert_next_queue(
             running=True,
             current_sal_index=0,
             sal_indices=[],
-            past_sal_indices=[I0 + 9, I0 + 2, I0 + 1],
+            past_sal_indices=[I0 + 9, I0 + 2, I0 + 1] + stopped_scripts,
         )
 
     async def test_next_visit_canceled(self):
@@ -1268,7 +1313,10 @@ class ScriptQueueTestCase(asynctest.TestCase):
         stop_data = self.make_stop_data([I0 + 1], terminate=False)
         await self.remote.cmd_stopScripts.start(stop_data, timeout=STD_TIMEOUT)
         await self.assert_next_queue(
-            running=True, current_sal_index=I0, sal_indices=[I0 + 2, I0 + 3]
+            running=True,
+            current_sal_index=I0,
+            sal_indices=[I0 + 2, I0 + 3],
+            past_sal_indices=[I0 + 1],
         )
         await self.assert_next_next_visit_canceled(sal_index=I0 + 1)
         await self.assert_next_next_visit(sal_index=I0 + 2)
@@ -1279,14 +1327,20 @@ class ScriptQueueTestCase(asynctest.TestCase):
             salIndex=I0 + 2, location=Location.LAST, timeout=STD_TIMEOUT
         )
         await self.assert_next_queue(
-            running=True, current_sal_index=I0, sal_indices=[I0 + 3, I0 + 2]
+            running=True,
+            current_sal_index=I0,
+            sal_indices=[I0 + 3, I0 + 2],
+            past_sal_indices=[I0 + 1],
         )
         await self.assert_next_next_visit_canceled(sal_index=I0 + 2)
         await self.assert_next_next_visit(sal_index=I0 + 3)
         stop_data = self.make_stop_data([I0, I0 + 2, I0 + 3], terminate=False)
         await self.remote.cmd_stopScripts.start(stop_data, timeout=STD_TIMEOUT)
         await self.assert_next_queue(
-            running=True, current_sal_index=0, sal_indices=[], past_sal_indices=[I0]
+            running=True,
+            current_sal_index=0,
+            sal_indices=[],
+            past_sal_indices={I0, I0 + 2, I0 + 3, I0 + 1},
         )
 
     async def test_show_available_scripts(self):

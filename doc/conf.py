@@ -13,3 +13,4 @@ _g.update(
         project_name="ts_scriptqueue", version=lsst.ts.scriptqueue.__version__
     )
 )
+intersphinx_mapping["ts_salobj"] = ("https://ts-salobj.lsst.io", None)  # noqa

@@ -359,8 +359,15 @@ class ScriptInfo:
         """Start the script process and start a task that will configure
         the script when it is ready.
 
+        Parameters
+        ----------
         fullpath : `str`, `bytes` or `os.PathLike`
             Full path to the script.
+
+        Notes
+        -----
+        If loading is canceled the script process is terminated.
+        If loading fails the script is marked as terminated.
         """
         if self.create_process_task is not None:
             raise RuntimeError("Already started loading")
@@ -383,7 +390,12 @@ class ScriptInfo:
             # note: process_task may already be done if the script cannot
             # be run, in which case the callback will be called immediately
             self.process_task.add_done_callback(self._cleanup)
+        except asyncio.CancelledError:
+            self.log.info("Loading cancelled")
+            self._terminated = True
+            raise
         except Exception:
+            self.log.exception("Loading failed")
             self._terminated = True
             raise
         finally:
@@ -414,6 +426,7 @@ class ScriptInfo:
         * If the process is running then terminate it by sending SIGTERM.
         * If the process is being started then cancel that.
         """
+        self.log.debug("Terminate")
         if not self.process_done:
             self._terminated = True
             if (
@@ -470,7 +483,7 @@ class ScriptInfo:
     async def _configure(self):
         """Configure the script.
 
-        If configuration fails then terminate the script.
+        If configuration fails or is cancelled then terminate the script.
 
         Raises
         ------
@@ -482,7 +495,7 @@ class ScriptInfo:
                 raise RuntimeError(
                     f"Cannot configure script {self.index} "
                     f"because it is in state {self.script_state} "
-                    f"instead of {ScriptState.UNCONFIGURED}"
+                    f"instead of {ScriptState.UNCONFIGURED!r}"
                 )
 
             await self.remote.cmd_configure.set_start(
@@ -493,9 +506,13 @@ class ScriptInfo:
                 stopCheckpoint=self.stop_checkpoint,
                 timeout=_CONFIGURE_TIMEOUT,
             )
+        except asyncio.CancelledError:
+            self.log.info("Configuration cancelled")
+            asyncio.create_task(self._start_terminate())
+            raise
         except Exception:
             # terminate the script but first let the configure_task fail
-            self.log.exception(f"Configure failed for script {self.index}")
+            self.log.exception("Configuration failed")
             asyncio.create_task(self._start_terminate())
             raise
         finally:

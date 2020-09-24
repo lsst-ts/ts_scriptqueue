@@ -6,6 +6,21 @@
 Version History
 ###############
 
+v2.8.1
+======
+
+Changes:
+
+* Enhance the ScriptQueue commander by adding a heartbeat monitor for the currently running script.
+
+Requirements:
+
+* ts_salobj 5.17 / 6
+* ts_idl 1 / 2
+* ts_xml 4.7
+* IDL files for Script and ScriptQueue, e.g. built with ``make_idl_files.py``
+* asynctest
+
 v2.7.0
 ======
 

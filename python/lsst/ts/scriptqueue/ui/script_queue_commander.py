@@ -21,6 +21,7 @@
 
 __all__ = ["ScriptQueueCommander"]
 
+import asyncio
 import logging
 import pathlib
 import string
@@ -30,6 +31,8 @@ from lsst.ts.idl.enums.Script import ScriptState
 from lsst.ts import salobj
 
 ADD_TIMEOUT = 5  # Timeout for the add command (seconds).
+# How long to wait before warning that a script heartbeat is late (seconds).
+HEARTBEAT_ALARM_INTERVAL = 3
 
 
 class ScriptQueueCommander(salobj.CscCommander):
@@ -80,14 +83,19 @@ class ScriptQueueCommander(salobj.CscCommander):
             name="Script",
             index=0,
             readonly=True,
-            include=["logMessage", "state"],
+            include=["heartbeat", "logMessage", "state"],
         )
         self.script_remote.evt_logMessage.callback = self.script_log_message
         self.script_remote.evt_state.callback = self.script_state
+        self.script_remote.evt_heartbeat.callback = self.script_heartbeat
         # Dict of "type" argument: isStandard
         self.script_type_dict = dict(
             s=True, std=True, standard=True, e=False, ext=False, external=False
         )
+        # SAL index of script whose heartbeat is being monitored;
+        # this should be the currently executing script.
+        self._script_to_monitor = 0
+        self.script_heartbeat_monitor_task = salobj.make_done_future()
 
     async def start(self):
         await super().start()
@@ -114,6 +122,13 @@ class ScriptQueueCommander(salobj.CscCommander):
             print(f"• {name}")
 
     def evt_queue_callback(self, data):
+        if self._script_to_monitor != data.currentSalIndex:
+            self._script_to_monitor = data.currentSalIndex
+            self.script_heartbeat_monitor_task.cancel()
+            if data.currentSalIndex != 0:
+                self.script_heartbeat_monitor_task = asyncio.create_task(
+                    self.script_heartbeat_monitor()
+                )
         salIndices = data.salIndices[0 : data.length]
         pastSalIndices = data.pastSalIndices[0 : data.pastLength]
         print(
@@ -124,6 +139,14 @@ class ScriptQueueCommander(salobj.CscCommander):
             f"salIndices={salIndices}, "
             f"pastSalIndices={pastSalIndices}"
         )
+
+    async def script_heartbeat_monitor(self):
+        while True:
+            await asyncio.sleep(HEARTBEAT_ALARM_INTERVAL)
+            print(
+                f"WARNING: Current script {self._script_to_monitor} "
+                f"heartbeat not seen in {HEARTBEAT_ALARM_INTERVAL} seconds"
+            )
 
     def script_log_message(self, data):
         exception_str = (
@@ -151,6 +174,15 @@ class ScriptQueueCommander(salobj.CscCommander):
         print(
             f"{data.private_sndStamp:0.3f} Script:{data.ScriptID} "
             f"state={state.name}{reason}, lastCheckpoint={data.lastCheckpoint}"
+        )
+
+    def script_heartbeat(self, data):
+        if data.ScriptID != self._script_to_monitor:
+            # A heartbeat from the wrong script.
+            return
+        self.script_heartbeat_monitor_task.cancel()
+        self.script_heartbeat_monitor_task = asyncio.create_task(
+            self.script_heartbeat_monitor()
         )
 
     async def do_add(self, args):

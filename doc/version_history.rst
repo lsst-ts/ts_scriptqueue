@@ -6,6 +6,22 @@
 Version History
 ###############
 
+v2.7.2
+======
+
+Changes:
+
+* Stop setting ``tel_max_history`` when creating `lsst.ts.salobj.Remote`\ s.
+  I recommend not running this version with ts_salobj 5; it may work, but is risky.
+
+Requirements:
+
+* ts_salobj 6
+* ts_idl 2
+* ts_xml 4.7
+* IDL files for Script and ScriptQueue, e.g. built with ``make_idl_files.py``
+* asynctest
+
 v2.7.1
 ======
 

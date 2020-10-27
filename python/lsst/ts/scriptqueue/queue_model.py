@@ -179,7 +179,7 @@ class QueueModel:
         self._scripts_being_stopped = set()
         # use index=0 so we get messages for all scripts
         self.remote = salobj.Remote(
-            domain=domain, name="Script", index=0, evt_max_history=0, tel_max_history=0
+            domain=domain, name="Script", index=0, evt_max_history=0
         )
         self.remote.evt_metadata.callback = self._script_metadata_callback
         self.remote.evt_state.callback = self._script_state_callback

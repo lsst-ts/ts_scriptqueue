@@ -162,11 +162,7 @@ async def run_one_script(index, script, config, loglevel=None):
         # make a remote to communicate with the script; set max_history=0
         # because it needs no late joiner data
         remote = salobj.Remote(
-            domain=domain,
-            name="Script",
-            index=index,
-            evt_max_history=0,
-            tel_max_history=0,
+            domain=domain, name="Script", index=index, evt_max_history=0,
         )
         await remote.start_task
 

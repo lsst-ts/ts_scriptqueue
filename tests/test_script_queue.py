@@ -103,7 +103,7 @@ class MakeAddKwargs(MakeKWargs):
 
 class ScriptQueueConstructorTestCase(asynctest.TestCase):
     def setUp(self):
-        salobj.set_random_lsst_dds_domain()
+        salobj.set_random_lsst_dds_partition_prefix()
         try:
             self.default_standardpath = scriptqueue.get_default_scripts_dir(
                 is_standard=True
@@ -1460,7 +1460,7 @@ class ScriptQueueTestCase(asynctest.TestCase):
 
 class CmdLineTestCase(asynctest.TestCase):
     def setUp(self):
-        salobj.set_random_lsst_dds_domain()
+        salobj.set_random_lsst_dds_partition_prefix()
         self.index = 1
         try:
             self.default_standardpath = scriptqueue.get_default_scripts_dir(

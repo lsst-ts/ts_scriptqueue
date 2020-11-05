@@ -793,6 +793,26 @@ class ScriptQueueTestCase(salobj.BaseCscTestCase, asynctest.TestCase):
 
             await self.assert_next_queue(running=True, past_sal_indices=[I0])
 
+    async def test_bin_script_state(self):
+        """Test the --state argument of run_script_queue.py
+
+        Note that other bin script tests are in a separate class below,
+        but this test relies on salobj.BaseCscTestCase.
+        """
+        for initial_state, index in (
+            (None, 1),
+            (salobj.State.STANDBY, 2),
+            (salobj.State.DISABLED, 1),
+            (salobj.State.ENABLED, 2),
+        ):
+            with self.subTest(initial_state=initial_state, index=index):
+                await self.check_bin_script(
+                    name="ScriptQueue",
+                    index=index,
+                    exe_name="run_script_queue.py",
+                    initial_state=initial_state,
+                )
+
     async def test_process_state(self):
         """Test the processState value of the queue event.
         """

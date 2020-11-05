@@ -69,6 +69,7 @@ class ScriptQueue(salobj.BaseCsc):
     """
 
     valid_simulation_modes = [0]
+    enable_cmdline_state = True
 
     def __init__(
         self,

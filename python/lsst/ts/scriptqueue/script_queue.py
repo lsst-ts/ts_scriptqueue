@@ -50,6 +50,8 @@ class ScriptQueue(salobj.BaseCsc):
         * 1 for the Main telescope.
         * 2 for AuxTel.
         * Any allowed value (see ``Raises``) for unit tests.
+    initial_state : `lsst.ts.salobj.State` or `int`, optional
+        The initial state of the CSC.
     standardpath : `str`, `bytes` or `os.PathLike` (optional)
         Path to standard SAL scripts. If None then use
         ``lsst.ts.standardscripts.get_scripts_dir()``.
@@ -67,8 +69,16 @@ class ScriptQueue(salobj.BaseCsc):
     """
 
     valid_simulation_modes = [0]
+    enable_cmdline_state = True
 
-    def __init__(self, index, standardpath=None, externalpath=None, verbose=False):
+    def __init__(
+        self,
+        index,
+        initial_state=salobj.State.STANDBY,
+        standardpath=None,
+        externalpath=None,
+        verbose=False,
+    ):
         if index < 0 or index > _MAX_SCRIPTQUEUE_INDEX:
             raise ValueError(
                 f"index {index} must be >= 0 and <= {_MAX_SCRIPTQUEUE_INDEX}"
@@ -82,7 +92,7 @@ class ScriptQueue(salobj.BaseCsc):
         if max_sal_index > salobj.MAX_SAL_INDEX:
             raise ValueError(f"index {index} too large and a bug let this slip through")
 
-        super().__init__("ScriptQueue", index)
+        super().__init__(name="ScriptQueue", index=index, initial_state=initial_state)
 
         self.model = QueueModel(
             domain=self.domain,
@@ -133,7 +143,6 @@ class ScriptQueue(salobj.BaseCsc):
 
     async def start(self):
         """Finish creating the script queue."""
-        await super().start()
         await self.model.start_task
         self.evt_rootDirectories.set_put(
             standard=self.model.standardpath,
@@ -141,6 +150,7 @@ class ScriptQueue(salobj.BaseCsc):
             force_output=True,
         )
         self.put_queue()
+        await super().start()
 
     async def close_tasks(self):
         """Shut down the queue, terminate all scripts and free resources."""

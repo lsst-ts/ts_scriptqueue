@@ -11,14 +11,15 @@ v2.8.0
 
 Changes:
 
-* Updated for ts_salobj 6.1, which is required.
-* Added support for the ``--state`` command-line argument in ``run_script_queue.py``.
+* Update for ts_salobj 6.1, which is required.
+* Add support for the ``--state`` command-line argument in ``run_script_queue.py``.
   This requires ts_salobj 6.1.
-* Added ``initial_state`` constructor argument to `ScriptQueue`.
+* Add ``initial_state`` constructor argument to `ScriptQueue`.
 * Use `lsst.ts.salobj.set_random_lsst_dds_partition_prefix` instead of `lsst.ts.salobj.set_random_lsst_dds_domain`.
   This requires ts_salobj 6.
 * Update ``Jenkinsfile`` to use Docker image ``lsstts/develop-env:develop`` instead of ``lsstts/salobj:develop``.
   This allows tests to use the ts_standardscripts and ts_externalscripts packages.
+* Update to use ``pre-commit`` to maintain ``flake8`` and ``black`` compliance.
 
 Requirements:
 

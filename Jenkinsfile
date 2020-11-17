@@ -15,7 +15,7 @@ pipeline {
             steps {
                 script {
                     sh """
-                    docker pull lsstts/salobj:develop
+                    docker pull lsstts/develop-env:develop
                     """
                 }
             }
@@ -26,7 +26,7 @@ pipeline {
                     sh """
                     docker network create \${network_name}
                     chmod -R a+rw \${WORKSPACE}
-                    container=\$(docker run -v \${WORKSPACE}:/home/saluser/repo/ -td --rm --net \${network_name} -e LTD_USERNAME=\${LSST_IO_CREDS_USR} -e LTD_PASSWORD=\${LSST_IO_CREDS_PSW} --name \${container_name} lsstts/salobj:develop)
+                    container=\$(docker run -v \${WORKSPACE}:/home/saluser/repo/ -td --rm --net \${network_name} -e LTD_USERNAME=\${LSST_IO_CREDS_USR} -e LTD_PASSWORD=\${LSST_IO_CREDS_PSW} --name \${container_name} lsstts/develop-env:develop)
                     """
                 }
             }

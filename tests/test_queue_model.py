@@ -64,7 +64,7 @@ class QueueModelTestCase(asynctest.TestCase):
     async def setUp(self):
         self.t0 = time.monotonic()
         self.min_sal_index = next(make_min_sal_index)
-        salobj.set_random_lsst_dds_domain()
+        salobj.set_random_lsst_dds_partition_prefix()
         self.datadir = os.path.abspath(os.path.join(os.path.dirname(__file__), "data"))
         self.standardpath = os.path.join(self.datadir, "standard")
         self.externalpath = os.path.join(self.datadir, "external")

@@ -286,16 +286,7 @@ class ScriptQueue(salobj.BaseCsc):
             location_sal_index=data.locationSalIndex,
         )
 
-        # Backward compatibility between salobj 5 and 6.
-        # TODO: (DM-26134) Remove this when salobj 6 is released and 5 is
-        # retired.
-        make_ackcmd = (
-            self.salinfo.make_ackcmd
-            if hasattr(self.salinfo, "make_ackcmd")
-            else self.salinfo.makeAckCmd
-        )
-
-        return make_ackcmd(
+        return self.salinfo.make_ackcmd(
             private_seqNum=data.private_seqNum,
             ack=salobj.SalRetCode.CMD_COMPLETE,
             result=str(script_info.index),

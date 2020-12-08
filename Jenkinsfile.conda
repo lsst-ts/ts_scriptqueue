@@ -1,0 +1,2 @@
+@Library('JenkinsShared')_
+CondaPipeline([], "ts-scriptqueue", "lsst.ts.scriptqueue")

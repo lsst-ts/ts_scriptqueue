@@ -817,6 +817,12 @@ class ScriptQueueTestCase(salobj.BaseCscTestCase, asynctest.TestCase):
         """Test the processState value of the queue event.
         """
         async with self.make_csc(initial_state=salobj.State.DISABLED):
+            await self.assert_next_sample(
+                topic=self.remote.evt_softwareVersions,
+                cscVersion=scriptqueue.__version__,
+                subsystemVersions="",
+            )
+
             make_add_kwargs = MakeAddKwargs(descr="test_process_state")
 
             await self.assert_next_queue(enabled=False, running=True)

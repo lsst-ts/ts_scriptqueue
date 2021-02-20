@@ -19,13 +19,13 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+try:
+    from .version import *
+except ImportError:
+    __version__ = "?"
+
 from .queue_model import *
 from .script_info import *
 from .script_queue import *
 from .utils import *
 from . import ui
-
-try:
-    from .version import *
-except ImportError:
-    __version__ = "?"

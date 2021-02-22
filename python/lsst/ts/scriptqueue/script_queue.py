@@ -28,6 +28,7 @@ import subprocess
 import numpy as np
 
 from lsst.ts import salobj
+from . import __version__
 from . import utils
 from .script_info import ScriptInfo
 from .queue_model import QueueModel
@@ -69,6 +70,7 @@ class ScriptQueue(salobj.BaseCsc):
     """
 
     valid_simulation_modes = [0]
+    version = __version__
     enable_cmdline_state = True
 
     def __init__(

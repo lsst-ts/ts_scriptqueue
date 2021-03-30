@@ -495,8 +495,7 @@ class QueueModelTestCase(asynctest.TestCase):
         self.assertTrue(self.next_visit_canceled_queue.empty())
 
     async def test_add_bad_config(self):
-        """Test adding a script with invalid configuration.
-        """
+        """Test adding a script with invalid configuration."""
         await self.assert_next_queue(enabled=True, running=True)
 
         # Add script i0 with invalid config.
@@ -506,7 +505,10 @@ class QueueModelTestCase(asynctest.TestCase):
         await asyncio.wait_for(self.model.add(**add_kwargs), timeout=STD_TIMEOUT)
         await self.assert_next_queue(running=True, sal_indices=[i0])
         await self.assert_next_queue(
-            running=True, current_sal_index=0, sal_indices=[], past_sal_indices=[i0],
+            running=True,
+            current_sal_index=0,
+            sal_indices=[],
+            past_sal_indices=[i0],
         )
         await script0.process_task
         self.assertTrue(script0.configure_failed)
@@ -515,8 +517,7 @@ class QueueModelTestCase(asynctest.TestCase):
         self.assertEqual(script0.process_state, ScriptProcessState.CONFIGUREFAILED)
 
     async def check_add_then_stop_script(self, terminate):
-        """Test adding a script immediately followed by stoppping it.
-        """
+        """Test adding a script immediately followed by stoppping it."""
         await self.assert_next_queue(enabled=True, running=True)
 
         # Add script i0.
@@ -673,8 +674,7 @@ class QueueModelTestCase(asynctest.TestCase):
                 self.assertTrue(fullpath.samefile(expected_fullpath))
 
     async def test_move(self):
-        """Test move, pause and showQueue
-        """
+        """Test move, pause and showQueue"""
         await self.assert_next_queue(enabled=True, running=True)
 
         # Pause the queue so we know what to expect of queue state.
@@ -865,8 +865,7 @@ class QueueModelTestCase(asynctest.TestCase):
         )
 
     async def test_pause_on_failure(self):
-        """Test that a failed script pauses the queue.
-        """
+        """Test that a failed script pauses the queue."""
         await self.assert_next_queue(enabled=True, running=True)
 
         # Pause the queue so we know what to expect of queue state.
@@ -941,8 +940,7 @@ class QueueModelTestCase(asynctest.TestCase):
         self.assertEqual(script_info.script_state, ScriptState.DONE)
 
     async def test_requeue(self):
-        """Test requeue
-        """
+        """Test requeue"""
         await self.assert_next_queue(enabled=True, running=True)
 
         # Pause the queue so we know what to expect of queue state.
@@ -1114,7 +1112,10 @@ class QueueModelTestCase(asynctest.TestCase):
 
         self.model.running = True
         await self.assert_next_queue(
-            running=True, current_sal_index=i0, sal_indices=[], past_sal_indices=[],
+            running=True,
+            current_sal_index=i0,
+            sal_indices=[],
+            past_sal_indices=[],
         )
         await self.assert_next_queue(
             running=True, current_sal_index=0, sal_indices=[], past_sal_indices=[i0]
@@ -1135,7 +1136,10 @@ class QueueModelTestCase(asynctest.TestCase):
         )
 
         await self.assert_next_queue(
-            running=True, current_sal_index=i0, sal_indices=[], past_sal_indices=[],
+            running=True,
+            current_sal_index=i0,
+            sal_indices=[],
+            past_sal_indices=[],
         )
         await self.assert_next_queue(
             running=True, current_sal_index=0, sal_indices=[], past_sal_indices=[i0]

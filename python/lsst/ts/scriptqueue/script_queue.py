@@ -295,8 +295,7 @@ class ScriptQueue(salobj.BaseCsc):
         )
 
     def do_move(self, data):
-        """Move a script within the queue.
-        """
+        """Move a script within the queue."""
         self.assert_enabled("move")
         try:
             self.model.move(
@@ -308,8 +307,7 @@ class ScriptQueue(salobj.BaseCsc):
             raise salobj.ExpectedError(str(e))
 
     async def do_requeue(self, data):
-        """Put a script back on the queue with the same configuration.
-        """
+        """Put a script back on the queue with the same configuration."""
         self.assert_enabled("requeue")
         try:
             await self.model.requeue(
@@ -346,8 +344,7 @@ class ScriptQueue(salobj.BaseCsc):
             self.do_showAvailableScripts()
 
     def put_next_visit(self, script_info):
-        """Output the ``nextVisit`` event.
-        """
+        """Output the ``nextVisit`` event."""
         if self.verbose:
             print(
                 f"put_next_visit: index={script_info.index}, "
@@ -371,8 +368,7 @@ class ScriptQueue(salobj.BaseCsc):
         )
 
     def put_next_visit_canceled(self, script_info):
-        """Output the ``nextVisitCanceled`` event.
-        """
+        """Output the ``nextVisitCanceled`` event."""
         if self.verbose:
             print(
                 f"put_next_visit_canceled: index={script_info.index}, "

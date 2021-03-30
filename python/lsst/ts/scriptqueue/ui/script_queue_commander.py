@@ -102,8 +102,7 @@ class ScriptQueueCommander(salobj.CscCommander):
         await self.script_remote.start_task
 
     def get_is_standard(self, script_type):
-        """Convert a script type argument to isStandard bool.
-        """
+        """Convert a script type argument to isStandard bool."""
         try:
             return self.script_type_dict[script_type]
         except KeyError:
@@ -186,8 +185,7 @@ class ScriptQueueCommander(salobj.CscCommander):
         )
 
     async def do_add(self, args):
-        """Overrride the standard add command to simplify the interface.
-        """
+        """Overrride the standard add command to simplify the interface."""
         if len(args) < 2:
             raise ValueError("Need at least 2 arguments")
         is_standard = self.get_is_standard(args[0])
@@ -257,19 +255,18 @@ class ScriptQueueCommander(salobj.CscCommander):
         )
 
     async def do_showSchema(self, args):
-        """Overrride the standard showSchema command for named script type.
-        """
+        """Overrride the standard showSchema command for named script type."""
         if len(args) != 2:
             raise ValueError("Need 2 arguments: type path")
         is_standard = self.get_is_standard(args[0])
         path = args[1]
         await self.remote.cmd_showSchema.set_start(
-            isStandard=is_standard, path=path,
+            isStandard=is_standard,
+            path=path,
         )
 
     async def do_stopScripts(self, args):
-        """Handle the stopScript command, which takes a list of script indices.
-        """
+        """Handle the stopScript command, which takes a list of script indices."""
         if len(args) < 2:
             raise ValueError("Need at least 2 arguments; sal_index terminate")
         terminate_str = args[-1]

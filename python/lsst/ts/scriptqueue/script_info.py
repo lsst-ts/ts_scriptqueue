@@ -188,8 +188,7 @@ class ScriptInfo:
 
     @property
     def started(self):
-        """True if the script was commanded to run or terminate.
-        """
+        """True if the script was commanded to run or terminate."""
         self.timestamp_run_start > 0 or self.terminated or self.process_done
 
     @property
@@ -280,8 +279,7 @@ class ScriptInfo:
 
     @property
     def setting_group_id(self):
-        """Return True if the group ID is being set.
-        """
+        """Return True if the group ID is being set."""
         return self.set_group_id_task and not self.set_group_id_task.done()
 
     @property

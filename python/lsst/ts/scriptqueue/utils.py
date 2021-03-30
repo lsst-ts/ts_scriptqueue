@@ -100,8 +100,7 @@ def configure_logging(verbose=0, console_format=None, filename=None):
 
 
 def generate_logfile(basename="scriptqueue"):
-    """Generate a log file name based on current time.
-    """
+    """Generate a log file name based on current time."""
     timestr = time.strftime("%Y-%m-%d_%H:%M:%S")
     log_path = os.path.expanduser("~/.{}/log".format(basename))
     if not os.path.exists(log_path):

@@ -26,7 +26,6 @@ import os
 import shutil
 import unittest
 
-import asynctest
 import yaml
 
 from lsst.ts import salobj
@@ -100,7 +99,7 @@ class MakeAddKwargs(MakeKWargs):
         )
 
 
-class ScriptQueueConstructorTestCase(asynctest.TestCase):
+class ScriptQueueConstructorTestCase(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         salobj.set_random_lsst_dds_partition_prefix()
         try:
@@ -175,7 +174,8 @@ class ScriptQueueConstructorTestCase(asynctest.TestCase):
             )
 
     @unittest.skipIf(
-        standardscripts is None, "Could not import ts_standardscripts.",
+        standardscripts is None,
+        "Could not import ts_standardscripts.",
     )
     async def test_default_standard_path(self):
         async with scriptqueue.ScriptQueue(
@@ -200,7 +200,8 @@ class ScriptQueueConstructorTestCase(asynctest.TestCase):
             )
 
     @unittest.skipIf(
-        externalscripts is None, "Could not import ts_externalscripts.",
+        externalscripts is None,
+        "Could not import ts_externalscripts.",
     )
     async def test_default_external_path(self):
         async with scriptqueue.ScriptQueue(
@@ -243,7 +244,7 @@ class ScriptQueueConstructorTestCase(asynctest.TestCase):
             )
 
 
-class ScriptQueueTestCase(salobj.BaseCscTestCase, asynctest.TestCase):
+class ScriptQueueTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
     def basic_make_csc(self, initial_state, config_dir=None, simulation_mode=0):
         datadir = os.path.abspath(os.path.join(os.path.dirname(__file__), "data"))
         standardpath = os.path.join(datadir, "standard")
@@ -330,7 +331,9 @@ class ScriptQueueTestCase(salobj.BaseCscTestCase, asynctest.TestCase):
                 f"past_sal_indices={past_sal_indices}"
             )
         queue_data = await self.assert_next_sample(
-            self.remote.evt_queue, enabled=enabled, running=running,
+            self.remote.evt_queue,
+            enabled=enabled,
+            running=running,
         )
         if verbose:
             print(
@@ -410,7 +413,8 @@ class ScriptQueueTestCase(salobj.BaseCscTestCase, asynctest.TestCase):
             SAL index of script.
         """
         data = await self.assert_next_sample(
-            self.remote.evt_nextVisitCanceled, salIndex=sal_index,
+            self.remote.evt_nextVisitCanceled,
+            salIndex=sal_index,
         )
         self.assertNotEqual(data.groupId, "")
 
@@ -707,8 +711,7 @@ class ScriptQueueTestCase(salobj.BaseCscTestCase, asynctest.TestCase):
         await self.check_add_log_level(log_level=0)
 
     async def test_add_and_pause(self):
-        """Test adding a script with a pause checkpoint.
-        """
+        """Test adding a script with a pause checkpoint."""
         async with self.make_csc(initial_state=salobj.State.DISABLED), salobj.Remote(
             domain=self.csc.domain, name="Script", index=I0
         ) as script_remote:
@@ -751,8 +754,7 @@ class ScriptQueueTestCase(salobj.BaseCscTestCase, asynctest.TestCase):
             await self.assert_next_queue(running=True, past_sal_indices=[I0])
 
     async def test_add_and_stop(self):
-        """Test adding a script with a stop checkpoint.
-        """
+        """Test adding a script with a stop checkpoint."""
         async with self.make_csc(initial_state=salobj.State.DISABLED), salobj.Remote(
             domain=self.csc.domain, name="Script", index=I0
         ) as script_remote:
@@ -814,8 +816,7 @@ class ScriptQueueTestCase(salobj.BaseCscTestCase, asynctest.TestCase):
                 )
 
     async def test_process_state(self):
-        """Test the processState value of the queue event.
-        """
+        """Test the processState value of the queue event."""
         async with self.make_csc(initial_state=salobj.State.DISABLED):
             await self.assert_next_sample(
                 topic=self.remote.evt_softwareVersions,
@@ -921,8 +922,7 @@ class ScriptQueueTestCase(salobj.BaseCscTestCase, asynctest.TestCase):
             self.assertEqual(script_data2.scriptState, ScriptState.DONE)
 
     async def test_unloadable_script(self):
-        """Test adding a script that fails while loading.
-        """
+        """Test adding a script that fails while loading."""
         async with self.make_csc(initial_state=salobj.State.DISABLED):
             await self.assert_next_queue(enabled=False, running=True)
 
@@ -955,8 +955,7 @@ class ScriptQueueTestCase(salobj.BaseCscTestCase, asynctest.TestCase):
             )
 
     async def test_move(self):
-        """Test move, pause and showQueue
-        """
+        """Test move, pause and showQueue"""
         async with self.make_csc(initial_state=salobj.State.DISABLED):
             await self.assert_next_queue(enabled=False, running=True)
 
@@ -1123,8 +1122,7 @@ class ScriptQueueTestCase(salobj.BaseCscTestCase, asynctest.TestCase):
             self.assertEqual(queue_data.length, 0)
 
     async def test_requeue(self):
-        """Test requeue, move and terminate
-        """
+        """Test requeue, move and terminate"""
         async with self.make_csc(initial_state=salobj.State.DISABLED):
             await self.assert_next_queue(enabled=False, running=True)
 
@@ -1318,8 +1316,7 @@ class ScriptQueueTestCase(salobj.BaseCscTestCase, asynctest.TestCase):
             )
 
     async def test_next_visit_canceled(self):
-        """Test the nextVisitCanceled event.
-        """
+        """Test the nextVisitCanceled event."""
         async with self.make_csc(initial_state=salobj.State.DISABLED):
             make_add_kwargs = MakeAddKwargs(descr="test_next_visit_canceled")
             await self.assert_next_queue(enabled=False, running=True)
@@ -1389,8 +1386,7 @@ class ScriptQueueTestCase(salobj.BaseCscTestCase, asynctest.TestCase):
             )
 
     async def test_show_available_scripts(self):
-        """Test the showAvailableScripts command.
-        """
+        """Test the showAvailableScripts command."""
         async with self.make_csc(initial_state=salobj.State.DISABLED):
             # Make sure showAvailableScripts fails when not enabled.
             with self.assertRaises(salobj.AckError):
@@ -1437,8 +1433,7 @@ class ScriptQueueTestCase(salobj.BaseCscTestCase, asynctest.TestCase):
                 await self.remote.cmd_showAvailableScripts.start(timeout=STD_TIMEOUT)
 
     async def test_show_schema(self):
-        """Test the showSchema command.
-        """
+        """Test the showSchema command."""
         async with self.make_csc(initial_state=salobj.State.DISABLED):
             is_standard = False
             path = "script1"
@@ -1462,8 +1457,7 @@ class ScriptQueueTestCase(salobj.BaseCscTestCase, asynctest.TestCase):
             self.assertEqual(schema, salobj.TestScript.get_schema())
 
     async def test_show_queue(self):
-        """Test the showQueue command.
-        """
+        """Test the showQueue command."""
         async with self.make_csc(initial_state=salobj.State.DISABLED):
             await self.assert_next_queue(enabled=False, running=True)
 
@@ -1508,7 +1502,7 @@ class ScriptQueueTestCase(salobj.BaseCscTestCase, asynctest.TestCase):
             await asyncio.wait_for(script_info.config_task, STD_TIMEOUT)
 
 
-class CmdLineTestCase(asynctest.TestCase):
+class CmdLineTestCase(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         salobj.set_random_lsst_dds_partition_prefix()
         self.index = 1

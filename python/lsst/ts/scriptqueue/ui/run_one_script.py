@@ -36,8 +36,7 @@ STD_TIMEOUT = 5  # timeout for fast commands
 
 
 class ConfigAction(argparse.Action):
-    """Read config from a file.
-    """
+    """Read config from a file."""
 
     def __call__(self, parser, namespace, value, option_string=None):
         """Read config from a file.
@@ -62,8 +61,7 @@ class ConfigAction(argparse.Action):
 
 
 class ParameterAction(argparse.Action):
-    """Parse name=value pairs as config.
-    """
+    """Parse name=value pairs as config."""
 
     def __call__(self, parser, namespace, values, option_string):
         """Parse name=value pairs as config.
@@ -92,8 +90,7 @@ class ParameterAction(argparse.Action):
 
 
 def parse_run_one_script_cmd(args=None):
-    """Parse command-line arguments for run_one_script.
-    """
+    """Parse command-line arguments for run_one_script."""
     description = "Run one SAL script."
 
     parser = argparse.ArgumentParser(
@@ -162,7 +159,10 @@ async def run_one_script(index, script, config, loglevel=None):
         # make a remote to communicate with the script; set max_history=0
         # because it needs no late joiner data
         remote = salobj.Remote(
-            domain=domain, name="Script", index=index, evt_max_history=0,
+            domain=domain,
+            name="Script",
+            index=index,
+            evt_max_history=0,
         )
         await remote.start_task
 

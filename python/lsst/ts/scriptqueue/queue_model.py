@@ -386,8 +386,7 @@ class QueueModel:
 
     @property
     def next_sal_index(self):
-        """Get the next available SAL Script index.
-        """
+        """Get the next available SAL Script index."""
         return next(self._index_generator)
 
     def pop_script_info(self, sal_index):

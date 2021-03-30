@@ -20,7 +20,7 @@ build:
 
 test:
   requires:
-    - ts-conda-build
+    - ts-conda-build =0.3
     - ts-externalscripts
     - ts-standardscripts
     - ts-idl {{ idl_version }}

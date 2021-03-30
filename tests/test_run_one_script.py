@@ -25,7 +25,6 @@ import shutil
 import time
 import unittest
 
-import asynctest
 import yaml
 
 from lsst.ts.idl.enums.Script import ScriptState
@@ -39,7 +38,7 @@ STD_TIMEOUT = 60
 DATA_DIR = pathlib.Path(__file__).resolve().parent / "data"
 
 
-class ParseRunOneScriptTestCase(unittest.TestCase):
+class ParseRunOneScriptTestCase(unittest.IsolatedAsyncioTestCase):
     def test_basics(self):
         script = DATA_DIR / "standard" / "subdir" / "script3"
         cmd = ui.parse_run_one_script_cmd(args=[str(script)])
@@ -142,7 +141,7 @@ class ParseRunOneScriptTestCase(unittest.TestCase):
             )
 
 
-class RunOneScriptTestCase(asynctest.TestCase):
+class RunOneScriptTestCase(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         salobj.set_random_lsst_dds_partition_prefix()
 

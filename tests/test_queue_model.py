@@ -27,8 +27,6 @@ import time
 import unittest
 import warnings
 
-import asynctest
-
 from lsst.ts import salobj
 from lsst.ts.idl.enums.ScriptQueue import Location, ScriptProcessState
 from lsst.ts.idl.enums.Script import ScriptState
@@ -60,8 +58,8 @@ class QueueInfo:
         self.history = copy.copy(model.history)
 
 
-class QueueModelTestCase(asynctest.TestCase):
-    async def setUp(self):
+class QueueModelTestCase(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
         self.t0 = time.monotonic()
         self.min_sal_index = next(make_min_sal_index)
         salobj.set_random_lsst_dds_partition_prefix()
@@ -96,7 +94,7 @@ class QueueModelTestCase(asynctest.TestCase):
         self.model.enabled = True
         await self.model.start_task
 
-    async def tearDown(self):
+    async def asyncTearDown(self):
         nkilled = len(await self.model.wait_terminate_all())
         if nkilled > 0:
             warnings.warn(f"Killed {nkilled} subprocesses")

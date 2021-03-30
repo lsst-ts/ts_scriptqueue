@@ -26,7 +26,6 @@ import os
 import shutil
 import unittest
 
-import asynctest
 import yaml
 
 from lsst.ts import salobj
@@ -100,7 +99,7 @@ class MakeAddKwargs(MakeKWargs):
         )
 
 
-class ScriptQueueConstructorTestCase(asynctest.TestCase):
+class ScriptQueueConstructorTestCase(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         salobj.set_random_lsst_dds_partition_prefix()
         try:
@@ -245,7 +244,7 @@ class ScriptQueueConstructorTestCase(asynctest.TestCase):
             )
 
 
-class ScriptQueueTestCase(salobj.BaseCscTestCase, asynctest.TestCase):
+class ScriptQueueTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
     def basic_make_csc(self, initial_state, config_dir=None, simulation_mode=0):
         datadir = os.path.abspath(os.path.join(os.path.dirname(__file__), "data"))
         standardpath = os.path.join(datadir, "standard")
@@ -1503,7 +1502,7 @@ class ScriptQueueTestCase(salobj.BaseCscTestCase, asynctest.TestCase):
             await asyncio.wait_for(script_info.config_task, STD_TIMEOUT)
 
 
-class CmdLineTestCase(asynctest.TestCase):
+class CmdLineTestCase(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         salobj.set_random_lsst_dds_partition_prefix()
         self.index = 1

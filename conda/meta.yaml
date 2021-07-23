@@ -8,28 +8,16 @@ source:
 
 build:
   script: python -m pip install --no-deps --ignore-installed .
-  script_env:
-    - PATH
-    - PYTHONPATH
-    - LD_LIBRARY_PATH
-    - OSPL_HOME
-    - PYTHON_BUILD_VERSION
-    - PYTHON_BUILD_LOCATION
-    - TS_CONFIG_ATTCS_DIR
-    - LSST_DDS_DOMAIN
 
 test:
   requires:
     - ts-conda-build =0.3
-    - ts-externalscripts
-    - ts-standardscripts
     - ts-idl {{ idl_version }}
     - ts-salobj {{ salobj_version }}
   source_files:
     - python
     - bin
     - tests
-    - schema
     - setup.cfg
   commands:
     - py.test
@@ -45,7 +33,5 @@ requirements:
     - python
     - setuptools
     - setuptools_scm
-    - ts-externalscripts
-    - ts-standardscripts
     - ts-idl {{ idl_version }}
     - ts-salobj {{ salobj_version }}

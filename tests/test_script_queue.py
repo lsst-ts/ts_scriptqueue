@@ -245,15 +245,17 @@ class ScriptQueueConstructorTestCase(unittest.IsolatedAsyncioTestCase):
 
 
 class ScriptQueueTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
-    def basic_make_csc(self, initial_state, config_dir=None, simulation_mode=0):
+    def setUp(self):
         datadir = os.path.abspath(os.path.join(os.path.dirname(__file__), "data"))
-        standardpath = os.path.join(datadir, "standard")
-        externalpath = os.path.join(datadir, "external")
+        self.standardpath = os.path.join(datadir, "standard")
+        self.externalpath = os.path.join(datadir, "external")
+
+    def basic_make_csc(self, initial_state, config_dir=None, simulation_mode=0):
         csc = scriptqueue.ScriptQueue(
             index=1,
             initial_state=initial_state,
-            standardpath=standardpath,
-            externalpath=externalpath,
+            standardpath=self.standardpath,
+            externalpath=self.externalpath,
             verbose=True,
         )
         return csc
@@ -699,6 +701,23 @@ class ScriptQueueTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCa
                 enabled=True, running=True, past_sal_indices=[I0]
             )
 
+    async def check_bin_script_initial_state(self, cmdline_args):
+
+        for initial_state, index in (
+            (None, 1),
+            (salobj.State.STANDBY, 2),
+            (salobj.State.DISABLED, 1),
+            (salobj.State.ENABLED, 2),
+        ):
+            with self.subTest(initial_state=initial_state, index=index):
+                await self.check_bin_script(
+                    name="ScriptQueue",
+                    index=index,
+                    exe_name="run_script_queue.py",
+                    initial_state=initial_state,
+                    cmdline_args=cmdline_args,
+                )
+
     async def test_add_nonzero_log_level(self):
         """Test addding a script with a non-zero log level."""
         # pick a level that does not match the default
@@ -795,25 +814,36 @@ class ScriptQueueTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCa
 
             await self.assert_next_queue(running=True, past_sal_indices=[I0])
 
-    async def test_bin_script_state(self):
+    async def test_bin_script_state_with_test_scripts(self):
         """Test the --state argument of run_script_queue.py
 
         Note that other bin script tests are in a separate class below,
         but this test relies on salobj.BaseCscTestCase.
         """
-        for initial_state, index in (
-            (None, 1),
-            (salobj.State.STANDBY, 2),
-            (salobj.State.DISABLED, 1),
-            (salobj.State.ENABLED, 2),
-        ):
-            with self.subTest(initial_state=initial_state, index=index):
-                await self.check_bin_script(
-                    name="ScriptQueue",
-                    index=index,
-                    exe_name="run_script_queue.py",
-                    initial_state=initial_state,
-                )
+
+        await self.check_bin_script_initial_state(
+            cmdline_args=(
+                "--standard",
+                self.standardpath,
+                "--external",
+                self.externalpath,
+            )
+        )
+
+    @unittest.skipIf(
+        standardscripts is None or externalscripts is None,
+        "Could not import ts_standardscripts and/or ts_externalscripts.",
+    )
+    async def test_bin_script_state(self):
+        """Test the --state argument of run_script_queue.py
+
+        Note that other bin script tests are in a separate class below,
+        but this test relies on salobj.BaseCscTestCase.
+
+        This test is skipped if either ts_standardscripts/ts_externalscripts
+        fails to import.
+        """
+        await self.check_bin_script_initial_state(cmdline_args=())
 
     async def test_process_state(self):
         """Test the processState value of the queue event."""

@@ -95,7 +95,9 @@ class QueueModelTestCase(unittest.IsolatedAsyncioTestCase):
         await self.model.start_task
 
     async def asyncTearDown(self):
-        nkilled = len(await self.model.wait_terminate_all())
+        nkilled = len(
+            await asyncio.wait_for(self.model.terminate_all(), timeout=STD_TIMEOUT)
+        )
         if nkilled > 0:
             warnings.warn(f"Killed {nkilled} subprocesses")
 

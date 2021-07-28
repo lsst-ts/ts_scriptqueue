@@ -26,8 +26,10 @@ import collections
 import copy
 import os
 import pathlib
+import signal
 
 import astropy.time
+import psutil
 
 from lsst.ts import salobj
 from lsst.ts.idl.enums.Script import ScriptState
@@ -242,7 +244,7 @@ class QueueModel:
 
     async def close(self):
         """Shut down the queue, terminate all scripts and free resources."""
-        await self.wait_terminate_all()
+        await self.terminate_all()
 
     def find_available_scripts(self):
         """Find available scripts.
@@ -567,13 +569,10 @@ class QueueModel:
         ):
             self.clear_group_id(script_info=script_info, command_script=False)
 
-        # Kill the script
-        did_terminate = script_info.terminate()
-        if did_terminate:
-            if script_info.process is not None:
-                await script_info.process.wait()
-            # let the script be removed or moved
-            await asyncio.sleep(0)
+        await script_info.terminate()
+
+        # let the script be removed or moved
+        await asyncio.sleep(0)
 
     @property
     def enabled(self):
@@ -616,48 +615,39 @@ class QueueModel:
         """
         return astropy.time.Time.now().tai.isot
 
-    def terminate_all(self):
+    async def terminate_all(self):
         """Terminate all scripts and return info for the ones terminated.
-
-        Does not wait for termination to actually finish.
-        See also `wait_terminate_all`.
 
         Returns
         -------
         info_list : `list` [`ScriptInfo`]
-            List of all scripts that were terminated.
+            ScriptInfo for each terminated script.
+            Excludes zombie script processes (which should be rare),
+            because ScriptInfo is not available for those.
         """
         info_list = []
-        for script_info in self.queue:
-            did_terminate = script_info.terminate()
+        for script_info in self.queue.copy():
+            did_terminate = await script_info.terminate()
             if did_terminate:
                 info_list.append(script_info)
         if self.current_script:
-            did_terminate = self.current_script.terminate()
+            did_terminate = await self.current_script.terminate()
             if did_terminate:
                 info_list.append(self.current_script)
-        return info_list
 
-    async def wait_terminate_all(self, timeout=10):
-        """Awaitable version of terminate_all.
+        # Handle zombie script processes. These should be rare,
+        # but it is possible for `ScriptInfo.terminate` to time out
+        # before it actually terminates the process.
+        main_process = psutil.Process(os.getpid())
+        child_processes = main_process.children(recursive=True)
 
-        Parameters
-        ----------
-        timeout : `float`
-            Timeout waiting for the process tasks to terminate.
+        for process in child_processes:
+            self.log.info(f"Killing zombie script process {process.pid}.")
+            try:
+                process.send_signal(signal.SIGTERM)
+            except psutil.NoSuchProcess:
+                pass
 
-        Returns
-        -------
-        info_list : `list` [`ScriptInfo`]
-            List of all scripts that were terminated.
-        """
-        info_list = self.terminate_all()
-        await asyncio.wait_for(
-            asyncio.gather(
-                *[info.process_task for info in info_list if not info.process_done]
-            ),
-            timeout,
-        )
         return info_list
 
     def _insert_script(self, script_info, location, location_sal_index):

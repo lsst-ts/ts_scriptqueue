@@ -33,5 +33,6 @@ requirements:
     - python
     - setuptools
     - setuptools_scm
+    - psutil
     - ts-idl {{ idl_version }}
     - ts-salobj {{ salobj_version }}

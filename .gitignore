@@ -7,3 +7,4 @@ pytest_session.txt
 __pycache__
 version.py
 tests/.tests
+.vscode

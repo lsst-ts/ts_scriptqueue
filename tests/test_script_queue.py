@@ -1144,7 +1144,7 @@ class ScriptQueueTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCa
             await self.remote.cmd_showQueue.start(timeout=STD_TIMEOUT)
             await self.assert_next_queue(sal_indices=[I0 + 2, I0 + 1, I0])
 
-            await self.csc.model.wait_terminate_all(timeout=STD_TIMEOUT)
+            await asyncio.wait_for(self.csc.model.terminate_all(), timeout=STD_TIMEOUT)
             for i in range(len(sal_indices)):
                 queue_data = await self.remote.evt_queue.next(
                     flush=False, timeout=STD_TIMEOUT

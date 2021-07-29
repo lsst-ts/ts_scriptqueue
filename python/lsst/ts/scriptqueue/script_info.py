@@ -28,8 +28,9 @@ import time
 from lsst.ts.idl.enums.Script import ScriptState
 from lsst.ts.idl.enums.ScriptQueue import ScriptProcessState
 
-_SET_GROUP_ID_TIMEOUT = 5  # Time limit for setGroupId command (seconds)
 _CONFIGURE_TIMEOUT = 60  # Time limit for the configure command (seconds)
+_SET_GROUP_ID_TIMEOUT = 5  # Time limit for setGroupId command (seconds)
+_TERMINATE_TIMEOUT = 2  # Time limit for terminating script (seconds)
 
 
 class ScriptInfo:
@@ -382,6 +383,9 @@ class ScriptInfo:
                 asyncio.create_subprocess_exec(scriptname, str(self.index))
             )
             self.process = await self.create_process_task
+            if self._terminated:
+                # Terminated before fully loaded
+                return
             self.process_task = asyncio.create_task(self.process.wait())
             self.timestamp_process_start = time.time()
             self._run_callback()
@@ -401,13 +405,11 @@ class ScriptInfo:
             if not self.timestamp_process_start == 0:
                 self._run_callback()
 
-    def terminate(self):
-        """Terminate the script.
+    async def terminate(self):
+        """Terminate the script and wait for the process to terminate.
 
-        Does not wait for termination to finish; to do that use::
-
-            if script_info.process is not None:
-                await script_info.process.wait()
+        If terminating the script process takes longer than _TERMINATE_TIMEOUT,
+        log a warning and stop waiting.
 
         Returns
         -------
@@ -418,25 +420,44 @@ class ScriptInfo:
 
         Notes
         -----
-        If the process has finished then do nothing.
+        If the process has finished, do nothing.
         Otherwise set self._terminate to True and:
 
-        * If the process is running then terminate it by sending SIGTERM.
-        * If the process is being started then cancel that.
+        * If the process is starting, wait for it to start.
+        * If the process is running, terminate it by sending SIGTERM.
+        * Call the callback function, if any.
         """
         self.log.debug("Terminate")
         if not self.process_done:
             self._terminated = True
-            if (
-                self.create_process_task is not None
-                and not self.create_process_task.done()
-            ):
-                # cancel creating the process
-                self.create_process_task.cancel()
-            if self.process is not None:
-                self.process.terminate()
+            try:
+                await asyncio.wait_for(
+                    self._terminate_process(), timeout=_TERMINATE_TIMEOUT
+                )
+            except asyncio.TimeoutError:
+                if self.process is None:
+                    self.log.warning(
+                        "Did not terminate the script process, because it did not "
+                        "start in time. You may have a zombie process."
+                    )
+                else:
+                    self.log.warning("Timed out waiting for script process to exit")
             self._run_callback()
         return self._terminated
+
+    async def _terminate_process(self):
+        """Terminate the script process and wait for it to terminate.
+
+        If necessary, first wait for the process to finish being created.
+
+        Designed to be called by `terminate`.
+        """
+        if self.create_process_task is not None and not self.create_process_task.done():
+            await self.create_process_task
+
+        if self.process is not None and self.process.returncode is None:
+            self.process.terminate()
+            await self.process.wait()
 
     def __eq__(self, other):
         return self.index == other.index
@@ -506,18 +527,15 @@ class ScriptInfo:
             )
         except asyncio.CancelledError:
             self.log.info("Configuration cancelled")
-            asyncio.create_task(self._start_terminate())
+            asyncio.create_task(self.terminate())
             raise
         except Exception:
             # terminate the script but first let the configure_task fail
             self.log.exception("Configuration failed")
-            asyncio.create_task(self._start_terminate())
+            asyncio.create_task(self.terminate())
             raise
         finally:
             self.timestamp_configure_end = time.time()
-
-    async def _start_terminate(self):
-        self.terminate()
 
     @property
     def _configure_run(self):

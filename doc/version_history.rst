@@ -6,6 +6,22 @@
 Version History
 ###############
 
+v2.8.6
+------
+
+Changes:
+
+* In `tests/test_queue_model`, stop adding stream handlers to the test class logger. 
+  This was causing duplicated messages to appear in the unit tests as more stream handlers were added at every test. 
+  If debugging unit tests, add the option `--log-cli-level 10` to `pytest` command.
+  
+Requirements:
+
+* ts_idl >2
+* ts_salobj >6.1
+* ts_xml >6.1 (older versions might work but have not been tested)
+* IDL files for ScriptQueue and Script generated with ts_sal >5
+
 v2.8.5
 ------
 

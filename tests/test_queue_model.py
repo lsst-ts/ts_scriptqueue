@@ -68,8 +68,6 @@ class QueueModelTestCase(unittest.IsolatedAsyncioTestCase):
         self.externalpath = os.path.join(self.datadir, "external")
         self.domain = salobj.Domain()
         self.log = logging.getLogger()
-        self.log.addHandler(logging.StreamHandler())
-        self.log.setLevel(logging.DEBUG)
         # Queue of (sal_index, group_id) set by next_visit_callback
         # and used by assert_next_next_visit
         self.next_visit_queue = asyncio.Queue()

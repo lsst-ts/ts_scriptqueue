@@ -29,7 +29,7 @@ import unittest
 import yaml
 
 from lsst.ts import salobj
-from lsst.ts.idl.enums.ScriptQueue import Location, ScriptProcessState
+from lsst.ts.idl.enums.ScriptQueue import Location, SalIndex, ScriptProcessState
 from lsst.ts.idl.enums.Script import ScriptState
 from lsst.ts import scriptqueue
 
@@ -126,8 +126,10 @@ class ScriptQueueConstructorTestCase(unittest.IsolatedAsyncioTestCase):
         "Could not import ts_standardscripts and/or ts_externalscripts.",
     )
     async def test_default_paths(self):
-        async with scriptqueue.ScriptQueue(index=1) as queue, salobj.Remote(
-            domain=queue.domain, name="ScriptQueue", index=1
+        async with scriptqueue.ScriptQueue(
+            index=SalIndex.MAIN_TEL
+        ) as queue, salobj.Remote(
+            domain=queue.domain, name="ScriptQueue", index=SalIndex.MAIN_TEL
         ) as remote:
             self.assertTrue(
                 os.path.samefile(queue.model.standardpath, self.default_standardpath)
@@ -151,11 +153,11 @@ class ScriptQueueConstructorTestCase(unittest.IsolatedAsyncioTestCase):
 
     async def test_explicit_paths(self):
         async with scriptqueue.ScriptQueue(
-            index=1,
+            index=SalIndex.MAIN_TEL,
             standardpath=self.testdata_standardpath,
             externalpath=self.testdata_externalpath,
         ) as queue, salobj.Remote(
-            domain=queue.domain, name="ScriptQueue", index=1
+            domain=queue.domain, name="ScriptQueue", index=SalIndex.MAIN_TEL
         ) as remote:
             self.assertTrue(
                 os.path.samefile(queue.model.standardpath, self.testdata_standardpath)
@@ -179,9 +181,9 @@ class ScriptQueueConstructorTestCase(unittest.IsolatedAsyncioTestCase):
     )
     async def test_default_standard_path(self):
         async with scriptqueue.ScriptQueue(
-            index=1, externalpath=self.testdata_externalpath
+            index=SalIndex.MAIN_TEL, externalpath=self.testdata_externalpath
         ) as queue, salobj.Remote(
-            domain=queue.domain, name="ScriptQueue", index=1
+            domain=queue.domain, name="ScriptQueue", index=SalIndex.MAIN_TEL
         ) as remote:
             self.assertTrue(
                 os.path.samefile(queue.model.standardpath, self.default_standardpath)
@@ -205,9 +207,9 @@ class ScriptQueueConstructorTestCase(unittest.IsolatedAsyncioTestCase):
     )
     async def test_default_external_path(self):
         async with scriptqueue.ScriptQueue(
-            index=1, standardpath=self.testdata_standardpath
+            index=SalIndex.MAIN_TEL, standardpath=self.testdata_standardpath
         ) as queue, salobj.Remote(
-            domain=queue.domain, name="ScriptQueue", index=1
+            domain=queue.domain, name="ScriptQueue", index=SalIndex.MAIN_TEL
         ) as remote:
             self.assertTrue(
                 os.path.samefile(queue.model.standardpath, self.testdata_standardpath)
@@ -228,19 +230,21 @@ class ScriptQueueConstructorTestCase(unittest.IsolatedAsyncioTestCase):
     def test_invalid_paths(self):
         with self.assertRaises(ValueError):
             scriptqueue.ScriptQueue(
-                index=1,
+                index=SalIndex.MAIN_TEL,
                 standardpath=self.badpath,
                 externalpath=self.testdata_externalpath,
             )
         with self.assertRaises(ValueError):
             scriptqueue.ScriptQueue(
-                index=1,
+                index=SalIndex.MAIN_TEL,
                 standardpath=self.testdata_standardpath,
                 externalpath=self.badpath,
             )
         with self.assertRaises(ValueError):
             scriptqueue.ScriptQueue(
-                index=1, standardpath=self.badpath, externalpath=self.badpath
+                index=SalIndex.MAIN_TEL,
+                standardpath=self.badpath,
+                externalpath=self.badpath,
             )
 
 
@@ -252,7 +256,7 @@ class ScriptQueueTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCa
 
     def basic_make_csc(self, initial_state, config_dir=None, simulation_mode=0):
         csc = scriptqueue.ScriptQueue(
-            index=1,
+            index=SalIndex.MAIN_TEL,
             initial_state=initial_state,
             standardpath=self.standardpath,
             externalpath=self.externalpath,
@@ -710,15 +714,15 @@ class ScriptQueueTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCa
     async def check_bin_script_initial_state(self, cmdline_args):
 
         for initial_state, index in (
-            (None, 1),
-            (salobj.State.STANDBY, 2),
-            (salobj.State.DISABLED, 1),
-            (salobj.State.ENABLED, 2),
+            (None, SalIndex.MAIN_TEL),
+            (salobj.State.STANDBY, SalIndex.AUX_TEL),
+            (salobj.State.DISABLED, SalIndex.MAIN_TEL),
+            (salobj.State.ENABLED, SalIndex.AUX_TEL),
         ):
             with self.subTest(initial_state=initial_state, index=index):
                 await self.check_bin_script(
                     name="ScriptQueue",
-                    index=index,
+                    index=int(index),
                     exe_name="run_script_queue.py",
                     initial_state=initial_state,
                     cmdline_args=cmdline_args,

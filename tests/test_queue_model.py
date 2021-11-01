@@ -27,6 +27,8 @@ import time
 import unittest
 import warnings
 
+import pytest
+
 from lsst.ts import salobj
 from lsst.ts.idl.enums.ScriptQueue import Location, ScriptProcessState
 from lsst.ts.idl.enums.Script import ScriptState
@@ -112,8 +114,8 @@ class QueueModelTestCase(unittest.IsolatedAsyncioTestCase):
         next_sal_index, next_group_id = await asyncio.wait_for(
             self.next_visit_queue.get(), timeout=STD_TIMEOUT
         )
-        self.assertEqual(next_sal_index, sal_index)
-        self.assertNotEqual(next_group_id, "")
+        assert next_sal_index == sal_index
+        assert next_group_id != ""
 
     async def assert_next_next_visit_canceled(self, sal_index):
         """Assert that the next next_visit_canceled callback
@@ -127,8 +129,8 @@ class QueueModelTestCase(unittest.IsolatedAsyncioTestCase):
         next_sal_index, next_group_id = await asyncio.wait_for(
             self.next_visit_canceled_queue.get(), timeout=STD_TIMEOUT
         )
-        self.assertEqual(next_sal_index, sal_index)
-        self.assertNotEqual(next_group_id, "")
+        assert next_sal_index == sal_index
+        assert next_group_id != ""
 
     async def assert_next_queue(
         self,
@@ -186,8 +188,8 @@ class QueueModelTestCase(unittest.IsolatedAsyncioTestCase):
             )
         else:
             queue_info = QueueInfo(self.model)
-        self.assertEqual(self.model.enabled, enabled)
-        self.assertEqual(self.model.running, running)
+        assert self.model.enabled == enabled
+        assert self.model.running == running
         if (
             enabled
             and running
@@ -200,13 +202,13 @@ class QueueModelTestCase(unittest.IsolatedAsyncioTestCase):
             queue_info = await asyncio.wait_for(
                 self.queue_info_queue.get(), timeout=STD_TIMEOUT
             )
-        self.assertEqual(queue_info.current_index, current_sal_index)
-        self.assertEqual([info.index for info in queue_info.queue], list(sal_indices))
+        assert queue_info.current_index == current_sal_index
+        assert [info.index for info in queue_info.queue] == list(sal_indices)
         actual_past_sal_indices = [info.index for info in queue_info.history]
         if isinstance(past_sal_indices, set):
-            self.assertEqual(set(actual_past_sal_indices), past_sal_indices)
+            assert set(actual_past_sal_indices) == past_sal_indices
         else:
-            self.assertEqual(actual_past_sal_indices, list(past_sal_indices))
+            assert actual_past_sal_indices == list(past_sal_indices)
         return queue_info
 
     def assert_script_info_equal(self, info1, info2, is_requeue=False):
@@ -217,15 +219,15 @@ class QueueModelTestCase(unittest.IsolatedAsyncioTestCase):
         must differ between the two scripts.
         """
         if is_requeue:
-            self.assertNotEqual(info1.index, info2.index)
-            self.assertNotEqual(info1.seq_num, info2.seq_num)
+            assert info1.index != info2.index
+            assert info1.seq_num != info2.seq_num
         else:
-            self.assertEqual(info1.index, info2.index)
-            self.assertEqual(info1.seq_num, info2.seq_num)
-        self.assertEqual(info1.is_standard, info2.is_standard)
-        self.assertEqual(info1.path, info2.path)
-        self.assertEqual(info1.config, info2.config)
-        self.assertEqual(info1.descr, info2.descr)
+            assert info1.index == info2.index
+            assert info1.seq_num == info2.seq_num
+        assert info1.is_standard == info2.is_standard
+        assert info1.path == info2.path
+        assert info1.config == info2.config
+        assert info1.descr == info2.descr
 
     def make_add_kwargs(
         self,
@@ -398,7 +400,7 @@ class QueueModelTestCase(unittest.IsolatedAsyncioTestCase):
         # Fail add due to incorrect path
         add_kwargs = self.make_add_kwargs(location=Location.FIRST)
         add_kwargs["script_info"].path = "bogus_script_name"
-        with self.assertRaises(ValueError):
+        with pytest.raises(ValueError):
             await asyncio.wait_for(self.model.add(**add_kwargs), timeout=STD_TIMEOUT)
         await self.assert_next_queue(
             sal_indices=[i0 + 5, i0 + 2, i0 + 4, i0 + 6, i0, i0 + 1, i0 + 3], wait=False
@@ -406,7 +408,7 @@ class QueueModelTestCase(unittest.IsolatedAsyncioTestCase):
 
         # Fail add due to incorrect location.
         add_kwargs = self.make_add_kwargs(location=25)
-        with self.assertRaises(ValueError):
+        with pytest.raises(ValueError):
             await asyncio.wait_for(self.model.add(**add_kwargs), timeout=STD_TIMEOUT)
         await self.assert_next_queue(
             sal_indices=[i0 + 5, i0 + 2, i0 + 4, i0 + 6, i0, i0 + 1, i0 + 3], wait=False
@@ -416,7 +418,7 @@ class QueueModelTestCase(unittest.IsolatedAsyncioTestCase):
         add_kwargs = self.make_add_kwargs(
             location=Location.AFTER, location_sal_index=4321
         )
-        with self.assertRaises(ValueError):
+        with pytest.raises(ValueError):
             await asyncio.wait_for(self.model.add(**add_kwargs), timeout=STD_TIMEOUT)
         await self.assert_next_queue(
             sal_indices=[i0 + 5, i0 + 2, i0 + 4, i0 + 6, i0, i0 + 1, i0 + 3], wait=False
@@ -490,7 +492,7 @@ class QueueModelTestCase(unittest.IsolatedAsyncioTestCase):
         )
 
         # Make sure that next_visit_canceled_callback was not called
-        self.assertTrue(self.next_visit_canceled_queue.empty())
+        assert self.next_visit_canceled_queue.empty()
 
     async def test_add_bad_config(self):
         """Test adding a script with invalid configuration."""
@@ -509,10 +511,10 @@ class QueueModelTestCase(unittest.IsolatedAsyncioTestCase):
             past_sal_indices=[i0],
         )
         await script0.process_task
-        self.assertTrue(script0.configure_failed)
-        self.assertFalse(script0.configured)
-        self.assertEqual(script0.process_done, True)
-        self.assertEqual(script0.process_state, ScriptProcessState.CONFIGUREFAILED)
+        assert script0.configure_failed
+        assert not (script0.configured)
+        assert script0.process_done
+        assert script0.process_state == ScriptProcessState.CONFIGUREFAILED
 
     async def check_add_then_stop_script(self, terminate):
         """Test adding a script immediately followed by stoppping it."""
@@ -534,13 +536,13 @@ class QueueModelTestCase(unittest.IsolatedAsyncioTestCase):
             sal_indices=[], running=True, past_sal_indices=[i0]
         )
         if not add_task.done():
-            with self.assertRaises(asyncio.CancelledError):
+            with pytest.raises(asyncio.CancelledError):
                 await add_task
-        self.assertFalse(script0.process_done)
-        self.assertTrue(script0.terminated)
-        self.assertFalse(script0.configure_failed)
-        self.assertFalse(script0.configured)
-        self.assertEqual(script0.process_state, ScriptProcessState.TERMINATED)
+        assert not (script0.process_done)
+        assert script0.terminated
+        assert not (script0.configure_failed)
+        assert not (script0.configured)
+        assert script0.process_state == ScriptProcessState.TERMINATED
 
     async def test_add_then_stop_script(self):
         await self.check_add_then_stop_script(terminate=False)
@@ -550,21 +552,21 @@ class QueueModelTestCase(unittest.IsolatedAsyncioTestCase):
 
     def test_constructor_errors(self):
         nonexistentpath = os.path.join(self.datadir, "garbage")
-        with self.assertRaises(ValueError):
+        with pytest.raises(ValueError):
             scriptqueue.QueueModel(
                 domain=self.domain,
                 log=self.log,
                 standardpath=self.standardpath,
                 externalpath=nonexistentpath,
             )
-        with self.assertRaises(ValueError):
+        with pytest.raises(ValueError):
             scriptqueue.QueueModel(
                 domain=self.domain,
                 log=self.log,
                 standardpath=nonexistentpath,
                 externalpath=self.externalpath,
             )
-        with self.assertRaises(ValueError):
+        with pytest.raises(ValueError):
             scriptqueue.QueueModel(
                 domain=self.domain,
                 log=self.log,
@@ -624,7 +626,7 @@ class QueueModelTestCase(unittest.IsolatedAsyncioTestCase):
 
         info2 = self.model.get_script_info(sal_index=i0 + 2, search_history=False)
         self.assert_script_info_equal(info2, info_dict[i0 + 2])
-        with self.assertRaises(ValueError):
+        with pytest.raises(ValueError):
             self.model.get_script_info(sal_index=i0, search_history=False)
         for sal_index, expected_script_info in info_dict.items():
             script_info = self.model.get_script_info(
@@ -655,7 +657,7 @@ class QueueModelTestCase(unittest.IsolatedAsyncioTestCase):
             (False, "subdir"),  # not a file
         ):
             with self.subTest(is_standard=is_standard, badpath=badpath):
-                with self.assertRaises(ValueError):
+                with pytest.raises(ValueError):
                     self.model.make_full_path(is_standard=is_standard, path=badpath)
 
         for is_standard, goodpath in (
@@ -669,7 +671,7 @@ class QueueModelTestCase(unittest.IsolatedAsyncioTestCase):
                     is_standard=is_standard, path=goodpath
                 )
                 expected_fullpath = os.path.join(root, goodpath)
-                self.assertTrue(fullpath.samefile(expected_fullpath))
+                assert fullpath.samefile(expected_fullpath)
 
     async def test_move(self):
         """Test move, pause and showQueue"""
@@ -752,7 +754,7 @@ class QueueModelTestCase(unittest.IsolatedAsyncioTestCase):
         await self.assert_next_queue(sal_indices=[i0 + 2, i0 + 1, i0])
 
         # Try some incorrect moves.
-        with self.assertRaises(ValueError):
+        with pytest.raises(ValueError):
             self.model.move(
                 sal_index=1234,  # no such script
                 location=Location.LAST,
@@ -760,27 +762,27 @@ class QueueModelTestCase(unittest.IsolatedAsyncioTestCase):
             )
         await self.assert_next_queue(sal_indices=[i0 + 2, i0 + 1, i0], wait=False)
 
-        with self.assertRaises(ValueError):
+        with pytest.raises(ValueError):
             self.model.move(
                 sal_index=i0 + 1, location=21, location_sal_index=0  # no such location
             )
         await self.assert_next_queue(sal_indices=[i0 + 2, i0 + 1, i0], wait=False)
 
-        with self.assertRaises(ValueError):
+        with pytest.raises(ValueError):
             self.model.move(
                 sal_index=i0 + 1, location=Location.BEFORE, location_sal_index=1234
             )  # no such script)
         await self.assert_next_queue(sal_indices=[i0 + 2, i0 + 1, i0], wait=False)
 
         # Incorrect index and the same "before" locationSalIndex.
-        with self.assertRaises(ValueError):
+        with pytest.raises(ValueError):
             self.model.move(
                 sal_index=1234, location=Location.BEFORE, location_sal_index=1234
             )
         await self.assert_next_queue(sal_indices=[i0 + 2, i0 + 1, i0], wait=False)
 
         # Incorrect index and the same "after" locationSalIndex.
-        with self.assertRaises(ValueError):
+        with pytest.raises(ValueError):
             self.model.move(
                 sal_index=1234, location=Location.AFTER, location_sal_index=1234
             )
@@ -911,9 +913,9 @@ class QueueModelTestCase(unittest.IsolatedAsyncioTestCase):
         # Assert that the process return code is positive for failure
         # and that the final script state Failed is sent and recorded.
         script_info = self.model.get_script_info(i0 + 1, search_history=False)
-        self.assertTrue(script_info.process_done)
-        self.assertGreater(script_info.process.returncode, 0)
-        self.assertEqual(script_info.script_state, ScriptState.FAILED)
+        assert script_info.process_done
+        assert script_info.process.returncode > 0
+        assert script_info.script_state == ScriptState.FAILED
 
         # Resume the queue; this should move i0+1 to history and keep going.
         self.model.running = True
@@ -933,9 +935,9 @@ class QueueModelTestCase(unittest.IsolatedAsyncioTestCase):
         # Assert that the process return code is 0 for success
         # and that the final script state Done is sent and recorded.
         script_info = self.model.get_script_info(i0 + 2, search_history=True)
-        self.assertTrue(script_info.process_done)
-        self.assertEqual(script_info.process.returncode, 0)
-        self.assertEqual(script_info.script_state, ScriptState.DONE)
+        assert script_info.process_done
+        assert script_info.process.returncode == 0
+        assert script_info.script_state == ScriptState.DONE
 
     async def test_requeue(self):
         """Test requeue"""
@@ -1244,32 +1246,32 @@ class QueueModelTestCase(unittest.IsolatedAsyncioTestCase):
 
         # script i0+1 was running, so it was stopped gently
         # if terminate False, else terminated abruptly
-        self.assertTrue(script_info1.process_done)
-        self.assertFalse(script_info1.failed)
-        self.assertFalse(script_info1.running)
+        assert script_info1.process_done
+        assert not (script_info1.failed)
+        assert not (script_info1.running)
         if terminate:
-            self.assertTrue(script_info1.terminated)
+            assert script_info1.terminated
         else:
-            self.assertFalse(script_info1.terminated)
-            self.assertEqual(script_info1.script_state, ScriptState.STOPPED)
-            self.assertEqual(script_info1.process_state, ScriptProcessState.DONE)
+            assert not (script_info1.terminated)
+            assert script_info1.script_state == ScriptState.STOPPED
+            assert script_info1.process_state == ScriptProcessState.DONE
 
         # script i0+2 ran normally
-        self.assertTrue(script_info2.process_done)
-        self.assertFalse(script_info2.failed)
-        self.assertFalse(script_info2.running)
-        self.assertFalse(script_info2.terminated)
-        self.assertEqual(script_info2.process_state, ScriptProcessState.DONE)
-        self.assertEqual(script_info2.script_state, ScriptState.DONE)
+        assert script_info2.process_done
+        assert not (script_info2.failed)
+        assert not (script_info2.running)
+        assert not (script_info2.terminated)
+        assert script_info2.process_state == ScriptProcessState.DONE
+        assert script_info2.script_state == ScriptState.DONE
 
         # script i0+3 was stopped while queued, so it was terminated,
         # regardless of the `terminate` argument
-        self.assertTrue(script_info3.process_done)
-        self.assertFalse(script_info3.failed)
-        self.assertFalse(script_info3.running)
-        self.assertTrue(script_info3.terminated)
-        self.assertEqual(script_info3.process_state, ScriptProcessState.TERMINATED)
-        self.assertEqual(script_info3.script_state, ScriptState.CONFIGURED)
+        assert script_info3.process_done
+        assert not (script_info3.failed)
+        assert not (script_info3.running)
+        assert script_info3.terminated
+        assert script_info3.process_state == ScriptProcessState.TERMINATED
+        assert script_info3.script_state == ScriptState.CONFIGURED
         await self.assert_next_queue(
             running=True,
             current_sal_index=0,
@@ -1367,7 +1369,3 @@ class QueueModelTestCase(unittest.IsolatedAsyncioTestCase):
             raise asyncio.TimeoutError(
                 f"Timed out waiting for script {script_info.index} to start running"
             )
-
-
-if __name__ == "__main__":
-    unittest.main()

@@ -6,6 +6,25 @@
 Version History
 ###############
 
+v2.9.0
+------
+
+Changes:
+
+* Use new `lsst.ts.idl.enums.ScriptQueue.SalIndex` enum.
+  This requires ts_idl 3.5, which is required.
+  As a result, the ``run_script_queue.py`` and ``command_script_queue.py`` bin scripts now require the index to be 1 or 2.
+  However, it is still possible to construct a `ScriptQueue` CSC instance with any other valid SAL index, and this is done by some unit tests.
+* Test black formatting with pytest-black, instead of a dedicated unit test.
+* Made timeouts in unit tests more uniform.
+  
+Requirements:
+
+* ts_idl >2
+* ts_salobj >6.1
+* ts_xml >6.1 (older versions might work but have not been tested)
+* IDL files for ScriptQueue and Script generated with ts_sal >5
+
 v2.8.6
 ------
 

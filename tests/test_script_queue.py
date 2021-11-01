@@ -43,7 +43,7 @@ try:
 except ImportError:
     externalscripts = None
 
-# Long enough to perform any reasonable operation
+# Standard timeout (seconds). Long enough to perform any reasonable operation,
 # including starting a CSC or loading a script (seconds)
 STD_TIMEOUT = 60
 
@@ -458,7 +458,9 @@ class ScriptQueueTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCa
             ackcmd = await self.remote.cmd_showScript.set_start(
                 salIndex=I0, timeout=STD_TIMEOUT
             )
-            script_data = await self.remote.evt_script.next(flush=False, timeout=2)
+            script_data = await self.remote.evt_script.next(
+                flush=False, timeout=STD_TIMEOUT
+            )
             self.assertEqual(script_data.cmdId, seq_num_0)
             self.assertEqual(script_data.salIndex, I0)
             self.assertEqual(script_data.isStandard, is_standard)
@@ -569,7 +571,9 @@ class ScriptQueueTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCa
                 salIndex=I0 + 3, timeout=STD_TIMEOUT
             )
             while True:
-                script_data = await self.remote.evt_script.next(flush=False, timeout=2)
+                script_data = await self.remote.evt_script.next(
+                    flush=False, timeout=STD_TIMEOUT
+                )
                 if script_data.salIndex == I0 + 3:
                     break
             self.assertEqual(script_data.salIndex, I0 + 3)
@@ -620,7 +624,9 @@ class ScriptQueueTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCa
                 salIndex=I0 + 1, timeout=STD_TIMEOUT
             )
             while True:
-                script_data = await self.remote.evt_script.next(flush=False, timeout=2)
+                script_data = await self.remote.evt_script.next(
+                    flush=False, timeout=STD_TIMEOUT
+                )
                 if script_data.salIndex == I0 + 1:
                     break
             self.assertEqual(script_data.salIndex, I0 + 1)

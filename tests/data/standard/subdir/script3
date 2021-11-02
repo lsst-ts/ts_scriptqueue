@@ -25,5 +25,4 @@ import asyncio
 from lsst.ts.salobj import TestScript
 
 
-if __name__ == "__main__":
-    asyncio.run(TestScript.amain(descr="standard subdir/script3"))
+asyncio.run(TestScript.amain(descr="standard subdir/script3"))

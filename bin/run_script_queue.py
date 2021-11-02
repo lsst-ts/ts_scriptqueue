@@ -22,6 +22,7 @@
 
 import asyncio
 
-from lsst.ts import scriptqueue
+from lsst.ts.idl.enums.ScriptQueue import SalIndex
+from lsst.ts.scriptqueue import ScriptQueue
 
-asyncio.run(scriptqueue.ScriptQueue.amain(index=True))
+asyncio.run(ScriptQueue.amain(index=SalIndex))

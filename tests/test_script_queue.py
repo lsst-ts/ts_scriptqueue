@@ -26,10 +26,11 @@ import os
 import shutil
 import unittest
 
+import pytest
 import yaml
 
 from lsst.ts import salobj
-from lsst.ts.idl.enums.ScriptQueue import Location, ScriptProcessState
+from lsst.ts.idl.enums.ScriptQueue import Location, SalIndex, ScriptProcessState
 from lsst.ts.idl.enums.Script import ScriptState
 from lsst.ts import scriptqueue
 
@@ -43,7 +44,7 @@ try:
 except ImportError:
     externalscripts = None
 
-# Long enough to perform any reasonable operation
+# Standard timeout (seconds). Long enough to perform any reasonable operation,
 # including starting a CSC or loading a script (seconds)
 STD_TIMEOUT = 60
 
@@ -126,52 +127,42 @@ class ScriptQueueConstructorTestCase(unittest.IsolatedAsyncioTestCase):
         "Could not import ts_standardscripts and/or ts_externalscripts.",
     )
     async def test_default_paths(self):
-        async with scriptqueue.ScriptQueue(index=1) as queue, salobj.Remote(
-            domain=queue.domain, name="ScriptQueue", index=1
+        async with scriptqueue.ScriptQueue(
+            index=SalIndex.MAIN_TEL
+        ) as queue, salobj.Remote(
+            domain=queue.domain, name="ScriptQueue", index=SalIndex.MAIN_TEL
         ) as remote:
-            self.assertTrue(
-                os.path.samefile(queue.model.standardpath, self.default_standardpath)
-            )
-            self.assertTrue(
-                os.path.samefile(queue.model.externalpath, self.default_externalpath)
-            )
+            assert os.path.samefile(queue.model.standardpath, self.default_standardpath)
+            assert os.path.samefile(queue.model.externalpath, self.default_externalpath)
             rootDir_data = await remote.evt_rootDirectories.next(
                 flush=False, timeout=STD_TIMEOUT
             )
-            self.assertTrue(
-                os.path.samefile(rootDir_data.standard, self.default_standardpath)
-            )
-            self.assertTrue(
-                os.path.samefile(rootDir_data.external, self.default_externalpath)
-            )
+            assert os.path.samefile(rootDir_data.standard, self.default_standardpath)
+            assert os.path.samefile(rootDir_data.external, self.default_externalpath)
 
             # some tests rely on these being different, so verify that
-            self.assertNotEqual(self.testdata_standardpath, self.default_standardpath)
-            self.assertNotEqual(self.testdata_externalpath, self.default_externalpath)
+            assert self.testdata_standardpath != self.default_standardpath
+            assert self.testdata_externalpath != self.default_externalpath
 
     async def test_explicit_paths(self):
         async with scriptqueue.ScriptQueue(
-            index=1,
+            index=SalIndex.MAIN_TEL,
             standardpath=self.testdata_standardpath,
             externalpath=self.testdata_externalpath,
         ) as queue, salobj.Remote(
-            domain=queue.domain, name="ScriptQueue", index=1
+            domain=queue.domain, name="ScriptQueue", index=SalIndex.MAIN_TEL
         ) as remote:
-            self.assertTrue(
-                os.path.samefile(queue.model.standardpath, self.testdata_standardpath)
+            assert os.path.samefile(
+                queue.model.standardpath, self.testdata_standardpath
             )
-            self.assertTrue(
-                os.path.samefile(queue.model.externalpath, self.testdata_externalpath)
+            assert os.path.samefile(
+                queue.model.externalpath, self.testdata_externalpath
             )
             rootDir_data = await remote.evt_rootDirectories.next(
                 flush=False, timeout=STD_TIMEOUT
             )
-            self.assertTrue(
-                os.path.samefile(rootDir_data.standard, self.testdata_standardpath)
-            )
-            self.assertTrue(
-                os.path.samefile(rootDir_data.external, self.testdata_externalpath)
-            )
+            assert os.path.samefile(rootDir_data.standard, self.testdata_standardpath)
+            assert os.path.samefile(rootDir_data.external, self.testdata_externalpath)
 
     @unittest.skipIf(
         standardscripts is None,
@@ -179,25 +170,19 @@ class ScriptQueueConstructorTestCase(unittest.IsolatedAsyncioTestCase):
     )
     async def test_default_standard_path(self):
         async with scriptqueue.ScriptQueue(
-            index=1, externalpath=self.testdata_externalpath
+            index=SalIndex.MAIN_TEL, externalpath=self.testdata_externalpath
         ) as queue, salobj.Remote(
-            domain=queue.domain, name="ScriptQueue", index=1
+            domain=queue.domain, name="ScriptQueue", index=SalIndex.MAIN_TEL
         ) as remote:
-            self.assertTrue(
-                os.path.samefile(queue.model.standardpath, self.default_standardpath)
-            )
-            self.assertTrue(
-                os.path.samefile(queue.model.externalpath, self.testdata_externalpath)
+            assert os.path.samefile(queue.model.standardpath, self.default_standardpath)
+            assert os.path.samefile(
+                queue.model.externalpath, self.testdata_externalpath
             )
             rootDir_data = await remote.evt_rootDirectories.next(
                 flush=False, timeout=STD_TIMEOUT
             )
-            self.assertTrue(
-                os.path.samefile(rootDir_data.standard, self.default_standardpath)
-            )
-            self.assertTrue(
-                os.path.samefile(rootDir_data.external, self.testdata_externalpath)
-            )
+            assert os.path.samefile(rootDir_data.standard, self.default_standardpath)
+            assert os.path.samefile(rootDir_data.external, self.testdata_externalpath)
 
     @unittest.skipIf(
         externalscripts is None,
@@ -205,42 +190,38 @@ class ScriptQueueConstructorTestCase(unittest.IsolatedAsyncioTestCase):
     )
     async def test_default_external_path(self):
         async with scriptqueue.ScriptQueue(
-            index=1, standardpath=self.testdata_standardpath
+            index=SalIndex.MAIN_TEL, standardpath=self.testdata_standardpath
         ) as queue, salobj.Remote(
-            domain=queue.domain, name="ScriptQueue", index=1
+            domain=queue.domain, name="ScriptQueue", index=SalIndex.MAIN_TEL
         ) as remote:
-            self.assertTrue(
-                os.path.samefile(queue.model.standardpath, self.testdata_standardpath)
+            assert os.path.samefile(
+                queue.model.standardpath, self.testdata_standardpath
             )
-            self.assertTrue(
-                os.path.samefile(queue.model.externalpath, self.default_externalpath)
-            )
+            assert os.path.samefile(queue.model.externalpath, self.default_externalpath)
             rootDir_data = await remote.evt_rootDirectories.next(
                 flush=False, timeout=STD_TIMEOUT
             )
-            self.assertTrue(
-                os.path.samefile(rootDir_data.standard, self.testdata_standardpath)
-            )
-            self.assertTrue(
-                os.path.samefile(rootDir_data.external, self.default_externalpath)
-            )
+            assert os.path.samefile(rootDir_data.standard, self.testdata_standardpath)
+            assert os.path.samefile(rootDir_data.external, self.default_externalpath)
 
     def test_invalid_paths(self):
-        with self.assertRaises(ValueError):
+        with pytest.raises(ValueError):
             scriptqueue.ScriptQueue(
-                index=1,
+                index=SalIndex.MAIN_TEL,
                 standardpath=self.badpath,
                 externalpath=self.testdata_externalpath,
             )
-        with self.assertRaises(ValueError):
+        with pytest.raises(ValueError):
             scriptqueue.ScriptQueue(
-                index=1,
+                index=SalIndex.MAIN_TEL,
                 standardpath=self.testdata_standardpath,
                 externalpath=self.badpath,
             )
-        with self.assertRaises(ValueError):
+        with pytest.raises(ValueError):
             scriptqueue.ScriptQueue(
-                index=1, standardpath=self.badpath, externalpath=self.badpath
+                index=SalIndex.MAIN_TEL,
+                standardpath=self.badpath,
+                externalpath=self.badpath,
             )
 
 
@@ -252,7 +233,7 @@ class ScriptQueueTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCa
 
     def basic_make_csc(self, initial_state, config_dir=None, simulation_mode=0):
         csc = scriptqueue.ScriptQueue(
-            index=1,
+            index=SalIndex.MAIN_TEL,
             initial_state=initial_state,
             standardpath=self.standardpath,
             externalpath=self.externalpath,
@@ -371,17 +352,14 @@ class ScriptQueueTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCa
                     f"sal_indices={sal_indices}; "
                     f"past_sal_indices={past_sal_indices}"
                 )
-        self.assertEqual(queue_data.currentSalIndex, current_sal_index)
-        self.assertEqual(
-            list(queue_data.salIndices[0 : queue_data.length]), list(sal_indices)
-        )
+        assert queue_data.currentSalIndex == current_sal_index
+        assert list(queue_data.salIndices[0 : queue_data.length]) == list(sal_indices)
         if isinstance(past_sal_indices, set):
             set(queue_data.pastSalIndices[0 : queue_data.pastLength]),
             past_sal_indices,
         else:
-            self.assertEqual(
-                list(queue_data.pastSalIndices[0 : queue_data.pastLength]),
-                list(past_sal_indices),
+            assert list(queue_data.pastSalIndices[0 : queue_data.pastLength]) == list(
+                past_sal_indices
             )
         return queue_data
 
@@ -402,7 +380,7 @@ class ScriptQueueTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCa
         data = await self.assert_next_sample(
             self.remote.evt_nextVisit, salIndex=sal_index
         )
-        self.assertNotEqual(data.groupId, "")
+        assert data.groupId != ""
         return data
 
     async def assert_next_next_visit_canceled(self, sal_index):
@@ -418,7 +396,7 @@ class ScriptQueueTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCa
             self.remote.evt_nextVisitCanceled,
             salIndex=sal_index,
         )
-        self.assertNotEqual(data.groupId, "")
+        assert data.groupId != ""
 
     async def test_add_remove(self):
         """Test add, remove and showScript."""
@@ -433,7 +411,7 @@ class ScriptQueueTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCa
             await self.remote.cmd_start.start(timeout=STD_TIMEOUT)
 
             # Check that add fails when the queue is not enabled.
-            with self.assertRaises(salobj.AckError):
+            with pytest.raises(salobj.AckError):
                 add_kwargs = make_add_kwargs()
                 await self.remote.cmd_add.set_start(**add_kwargs, timeout=STD_TIMEOUT)
 
@@ -450,7 +428,7 @@ class ScriptQueueTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCa
                 **add_kwargs, timeout=STD_TIMEOUT
             )
             seq_num_0 = ackcmd.private_seqNum
-            self.assertEqual(int(ackcmd.result), I0)
+            assert int(ackcmd.result) == I0
             await self.assert_next_queue(sal_indices=[I0])
 
             # Run showScript for a script that has not been configured.
@@ -458,14 +436,16 @@ class ScriptQueueTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCa
             ackcmd = await self.remote.cmd_showScript.set_start(
                 salIndex=I0, timeout=STD_TIMEOUT
             )
-            script_data = await self.remote.evt_script.next(flush=False, timeout=2)
-            self.assertEqual(script_data.cmdId, seq_num_0)
-            self.assertEqual(script_data.salIndex, I0)
-            self.assertEqual(script_data.isStandard, is_standard)
-            self.assertEqual(script_data.path, path)
-            self.assertEqual(script_data.processState, ScriptProcessState.LOADING)
-            self.assertGreater(script_data.timestampProcessStart, 0)
-            self.assertEqual(script_data.timestampProcessEnd, 0)
+            script_data = await self.remote.evt_script.next(
+                flush=False, timeout=STD_TIMEOUT
+            )
+            assert script_data.cmdId == seq_num_0
+            assert script_data.salIndex == I0
+            assert script_data.isStandard == is_standard
+            assert script_data.path == path
+            assert script_data.processState == ScriptProcessState.LOADING
+            assert script_data.timestampProcessStart > 0
+            assert script_data.timestampProcessEnd == 0
 
             # Run showScript for a script that does not exist.
             with salobj.assertRaisesAckError():
@@ -479,7 +459,7 @@ class ScriptQueueTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCa
                 **add_kwargs, timeout=STD_TIMEOUT
             )
             seq_num1 = ackcmd.private_seqNum
-            self.assertEqual(int(ackcmd.result), I0 + 1)
+            assert int(ackcmd.result) == I0 + 1
             await self.assert_next_queue(sal_indices=[I0, I0 + 1])
 
             # Add script I0+2 first: test add first.
@@ -487,7 +467,7 @@ class ScriptQueueTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCa
             ackcmd = await self.remote.cmd_add.set_start(
                 **add_kwargs, timeout=STD_TIMEOUT
             )
-            self.assertEqual(int(ackcmd.result), I0 + 2)
+            assert int(ackcmd.result) == I0 + 2
             await self.assert_next_queue(sal_indices=[I0 + 2, I0, I0 + 1])
 
             # Add script I0+3 after I0+1: test add after last.
@@ -528,17 +508,17 @@ class ScriptQueueTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCa
             # Try some failed adds...
             # Incorrect path.
             add_kwargs = make_add_kwargs(path="bogus_script_name")
-            with self.assertRaises(salobj.AckError):
+            with pytest.raises(salobj.AckError):
                 await self.remote.cmd_add.set_start(**add_kwargs, timeout=STD_TIMEOUT)
 
             # Incorrect location.
             add_kwargs = make_add_kwargs(location=25)
-            with self.assertRaises(salobj.AckError):
+            with pytest.raises(salobj.AckError):
                 await self.remote.cmd_add.set_start(**add_kwargs, timeout=STD_TIMEOUT)
 
             # Incorrect locationSalIndex.
             add_kwargs = make_add_kwargs(location=Location.AFTER, locationSalIndex=4321)
-            with self.assertRaises(salobj.AckError):
+            with pytest.raises(salobj.AckError):
                 await self.remote.cmd_add.set_start(**add_kwargs, timeout=STD_TIMEOUT)
 
             # Make sure the incorrect add commands did not alter the queue.
@@ -569,16 +549,18 @@ class ScriptQueueTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCa
                 salIndex=I0 + 3, timeout=STD_TIMEOUT
             )
             while True:
-                script_data = await self.remote.evt_script.next(flush=False, timeout=2)
+                script_data = await self.remote.evt_script.next(
+                    flush=False, timeout=STD_TIMEOUT
+                )
                 if script_data.salIndex == I0 + 3:
                     break
-            self.assertEqual(script_data.salIndex, I0 + 3)
-            self.assertEqual(script_data.cmdId, seq_num3)
-            self.assertEqual(script_data.isStandard, is_standard)
-            self.assertEqual(script_data.path, path)
-            self.assertEqual(script_data.processState, ScriptProcessState.CONFIGURED)
-            self.assertGreater(script_data.timestampProcessStart, 0)
-            self.assertEqual(script_data.timestampProcessEnd, 0)
+            assert script_data.salIndex == I0 + 3
+            assert script_data.cmdId == seq_num3
+            assert script_data.isStandard == is_standard
+            assert script_data.path == path
+            assert script_data.processState == ScriptProcessState.CONFIGURED
+            assert script_data.timestampProcessStart > 0
+            assert script_data.timestampProcessEnd == 0
 
             await self.remote.cmd_resume.start(timeout=STD_TIMEOUT)
             await self.assert_next_next_visit(sal_index=I0 + 2)
@@ -612,7 +594,7 @@ class ScriptQueueTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCa
             )
 
             # Test that nextVisitCanceled was not output.
-            self.assertFalse(self.remote.evt_nextVisitCanceled.has_data)
+            assert not (self.remote.evt_nextVisitCanceled.has_data)
 
             # Get script state for a script that has been run.
             self.remote.evt_script.flush()
@@ -620,23 +602,25 @@ class ScriptQueueTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCa
                 salIndex=I0 + 1, timeout=STD_TIMEOUT
             )
             while True:
-                script_data = await self.remote.evt_script.next(flush=False, timeout=2)
+                script_data = await self.remote.evt_script.next(
+                    flush=False, timeout=STD_TIMEOUT
+                )
                 if script_data.salIndex == I0 + 1:
                     break
-            self.assertEqual(script_data.salIndex, I0 + 1)
-            self.assertEqual(script_data.cmdId, seq_num1)
-            self.assertEqual(script_data.isStandard, is_standard)
-            self.assertEqual(script_data.path, path)
-            self.assertEqual(script_data.processState, ScriptProcessState.DONE)
-            self.assertGreater(script_data.timestampProcessStart, 0)
-            self.assertGreater(script_data.timestampProcessEnd, 0)
+            assert script_data.salIndex == I0 + 1
+            assert script_data.cmdId == seq_num1
+            assert script_data.isStandard == is_standard
+            assert script_data.path == path
+            assert script_data.processState == ScriptProcessState.DONE
+            assert script_data.timestampProcessStart > 0
+            assert script_data.timestampProcessEnd > 0
             process_duration = (
                 script_data.timestampProcessEnd - script_data.timestampProcessStart
             )
-            self.assertGreater(process_duration, 0.9)  # wait time is 1
+            assert process_duration > 0.9  # wait time is 1
 
             # Try to get script state for a non-existent script.
-            with self.assertRaises(salobj.AckError):
+            with pytest.raises(salobj.AckError):
                 await self.remote.cmd_showScript.set_start(
                     salIndex=3579, timeout=STD_TIMEOUT
                 )
@@ -668,17 +652,17 @@ class ScriptQueueTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCa
             script_state = await script_remote.evt_state.next(
                 flush=False, timeout=STD_TIMEOUT
             )
-            self.assertEqual(script_state.state, ScriptState.UNCONFIGURED)
+            assert script_state.state == ScriptState.UNCONFIGURED
             script_state = await script_remote.evt_state.next(
                 flush=False, timeout=STD_TIMEOUT
             )
-            self.assertEqual(script_state.state, ScriptState.CONFIGURED)
+            assert script_state.state == ScriptState.CONFIGURED
 
             # Check initial log level.
             data = await script_remote.evt_logLevel.next(
                 flush=False, timeout=STD_TIMEOUT
             )
-            self.assertEqual(data.level, logging.INFO)
+            assert data.level == logging.INFO
 
             # If log_level != 0 check final log level,
             # else check that no second log level was output.
@@ -686,9 +670,9 @@ class ScriptQueueTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCa
                 data = await script_remote.evt_logLevel.next(
                     flush=False, timeout=STD_TIMEOUT
                 )
-                self.assertEqual(data.level, log_level)
+                assert data.level == log_level
             else:
-                with self.assertRaises(asyncio.TimeoutError):
+                with pytest.raises(asyncio.TimeoutError):
                     await script_remote.evt_logLevel.next(flush=False, timeout=0.01)
 
             # Wait for the scrip to be enabled, then run the queue.
@@ -704,15 +688,15 @@ class ScriptQueueTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCa
     async def check_bin_script_initial_state(self, cmdline_args):
 
         for initial_state, index in (
-            (None, 1),
-            (salobj.State.STANDBY, 2),
-            (salobj.State.DISABLED, 1),
-            (salobj.State.ENABLED, 2),
+            (None, SalIndex.MAIN_TEL),
+            (salobj.State.STANDBY, SalIndex.AUX_TEL),
+            (salobj.State.DISABLED, SalIndex.MAIN_TEL),
+            (salobj.State.ENABLED, SalIndex.AUX_TEL),
         ):
             with self.subTest(initial_state=initial_state, index=index):
                 await self.check_bin_script(
                     name="ScriptQueue",
-                    index=index,
+                    index=int(index),
                     exe_name="run_script_queue.py",
                     initial_state=initial_state,
                     cmdline_args=cmdline_args,
@@ -765,7 +749,7 @@ class ScriptQueueTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCa
                 script_state = await script_remote.evt_state.next(
                     flush=False, timeout=timeout
                 )
-                self.assertEqual(script_state.state, expected_script_state)
+                assert script_state.state == expected_script_state
                 timeout = STD_TIMEOUT
 
             # Resume the script and wait for the queue to report it done.
@@ -809,7 +793,7 @@ class ScriptQueueTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCa
                 script_state = await script_remote.evt_state.next(
                     flush=False, timeout=timeout
                 )
-                self.assertEqual(script_state.state, expected_script_state)
+                assert script_state.state == expected_script_state
                 timeout = STD_TIMEOUT
 
             await self.assert_next_queue(running=True, past_sal_indices=[I0])
@@ -909,10 +893,10 @@ class ScriptQueueTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCa
             )
 
             script_data0 = self.remote.evt_script.get()
-            self.assertEqual(script_data0.cmdId, seq_num0)
-            self.assertEqual(script_data0.salIndex, I0)
-            self.assertEqual(script_data0.processState, ScriptProcessState.DONE)
-            self.assertEqual(script_data0.scriptState, ScriptState.FAILED)
+            assert script_data0.cmdId == seq_num0
+            assert script_data0.salIndex == I0
+            assert script_data0.processState == ScriptProcessState.DONE
+            assert script_data0.scriptState == ScriptState.FAILED
 
             # Terminate the next script.
             stop_data = self.make_stop_data([I0 + 1], terminate=True)
@@ -925,10 +909,10 @@ class ScriptQueueTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCa
             )
 
             script_data1 = self.remote.evt_script.get()
-            self.assertEqual(script_data1.cmdId, seq_num1)
-            self.assertEqual(script_data1.salIndex, I0 + 1)
-            self.assertEqual(script_data1.processState, ScriptProcessState.TERMINATED)
-            self.assertEqual(script_data1.scriptState, ScriptState.CONFIGURED)
+            assert script_data1.cmdId == seq_num1
+            assert script_data1.salIndex == I0 + 1
+            assert script_data1.processState == ScriptProcessState.TERMINATED
+            assert script_data1.scriptState == ScriptState.CONFIGURED
 
             # Resume the queue and let I0+2 run.
             await self.remote.cmd_resume.start(timeout=STD_TIMEOUT)
@@ -946,10 +930,10 @@ class ScriptQueueTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCa
             )
 
             script_data2 = self.remote.evt_script.get()
-            self.assertEqual(script_data2.cmdId, seq_num2)
-            self.assertEqual(script_data2.salIndex, I0 + 2)
-            self.assertEqual(script_data2.processState, ScriptProcessState.DONE)
-            self.assertEqual(script_data2.scriptState, ScriptState.DONE)
+            assert script_data2.cmdId == seq_num2
+            assert script_data2.salIndex == I0 + 2
+            assert script_data2.processState == ScriptProcessState.DONE
+            assert script_data2.scriptState == ScriptState.DONE
 
     async def test_unloadable_script(self):
         """Test adding a script that fails while loading."""
@@ -974,11 +958,11 @@ class ScriptQueueTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCa
             script_data0 = await self.remote.evt_script.next(
                 flush=False, timeout=STD_TIMEOUT
             )
-            self.assertEqual(script_data0.processState, ScriptProcessState.LOADING)
+            assert script_data0.processState == ScriptProcessState.LOADING
             script_data0 = await self.remote.evt_script.next(
                 flush=False, timeout=STD_TIMEOUT
             )
-            self.assertEqual(script_data0.processState, ScriptProcessState.LOADFAILED)
+            assert script_data0.processState == ScriptProcessState.LOADFAILED
 
             await self.assert_next_queue(
                 enabled=True, running=True, past_sal_indices=[I0]
@@ -1099,19 +1083,19 @@ class ScriptQueueTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCa
             await self.assert_next_queue(sal_indices=[I0 + 2, I0 + 1, I0])
 
             # Try some incorrect moves.
-            with self.assertRaises(salobj.AckError):
+            with pytest.raises(salobj.AckError):
                 # no such script
                 await self.remote.cmd_move.set_start(
                     salIndex=1234, location=Location.LAST, timeout=STD_TIMEOUT
                 )
 
-            with self.assertRaises(salobj.AckError):
+            with pytest.raises(salobj.AckError):
                 # No such location.
                 await self.remote.cmd_move.set_start(
                     salIndex=I0 + 1, location=21, timeout=STD_TIMEOUT
                 )
 
-            with self.assertRaises(salobj.AckError):
+            with pytest.raises(salobj.AckError):
                 # No such locationSalIndex.
                 await self.remote.cmd_move.set_start(
                     salIndex=I0 + 1,
@@ -1121,7 +1105,7 @@ class ScriptQueueTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCa
                 )
 
             # Try incorrect index and the same "before" locationSalIndex.
-            with self.assertRaises(salobj.AckError):
+            with pytest.raises(salobj.AckError):
                 # No such salIndex; no such locationSalIndex.
                 await self.remote.cmd_move.set_start(
                     salIndex=1234,
@@ -1131,7 +1115,7 @@ class ScriptQueueTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCa
                 )
 
             # Try incorrect index and the same "after" locationSalIndex.
-            with self.assertRaises(salobj.AckError):
+            with pytest.raises(salobj.AckError):
                 # No such salIndex; no such locationSalIndex.
                 await self.remote.cmd_move.set_start(
                     salIndex=1234,
@@ -1149,7 +1133,7 @@ class ScriptQueueTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCa
                 queue_data = await self.remote.evt_queue.next(
                     flush=False, timeout=STD_TIMEOUT
                 )
-            self.assertEqual(queue_data.length, 0)
+            assert queue_data.length == 0
 
     async def test_requeue(self):
         """Test requeue, move and terminate"""
@@ -1184,17 +1168,17 @@ class ScriptQueueTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCa
                 enabled=False, running=False, sal_indices=sal_indices
             )
 
-            with self.assertRaises(salobj.AckError):
+            with pytest.raises(salobj.AckError):
                 await self.remote.cmd_requeue.set_start(
                     salIndex=I0, location=Location.LAST, timeout=STD_TIMEOUT
                 )
 
-            with self.assertRaises(salobj.AckError):
+            with pytest.raises(salobj.AckError):
                 await self.remote.cmd_move.set_start(
                     salIndex=I0 + 2, location=Location.FIRST, timeout=STD_TIMEOUT
                 )
 
-            with self.assertRaises(salobj.AckError):
+            with pytest.raises(salobj.AckError):
                 await self.remote.cmd_resume.start(timeout=STD_TIMEOUT)
 
             # Re-enable the queue and proceed with the rest of the test.
@@ -1419,7 +1403,7 @@ class ScriptQueueTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCa
         """Test the showAvailableScripts command."""
         async with self.make_csc(initial_state=salobj.State.DISABLED):
             # Make sure showAvailableScripts fails when not enabled.
-            with self.assertRaises(salobj.AckError):
+            with pytest.raises(salobj.AckError):
                 await self.remote.cmd_showAvailableScripts.start(timeout=STD_TIMEOUT)
 
             await self.remote.cmd_enable.start(timeout=STD_TIMEOUT)
@@ -1428,7 +1412,7 @@ class ScriptQueueTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCa
             available_scripts0 = await self.remote.evt_availableScripts.next(
                 flush=False, timeout=STD_TIMEOUT
             )
-            with self.assertRaises(asyncio.TimeoutError):
+            with pytest.raises(asyncio.TimeoutError):
                 await self.remote.evt_availableScripts.next(flush=False, timeout=0.1)
 
             # Ask for available scripts.
@@ -1453,13 +1437,13 @@ class ScriptQueueTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCa
             for available_scripts in (available_scripts0, available_scripts1):
                 standard_set = set(available_scripts.standard.split(":"))
                 external_set = set(available_scripts.external.split(":"))
-                self.assertEqual(standard_set, expected_std_set)
-                self.assertEqual(external_set, expected_ext_set)
+                assert standard_set == expected_std_set
+                assert external_set == expected_ext_set
 
             # Disable the queue and again make sure showAvailableScripts fails.
             await self.remote.cmd_disable.start(timeout=STD_TIMEOUT)
 
-            with self.assertRaises(salobj.AckError):
+            with pytest.raises(salobj.AckError):
                 await self.remote.cmd_showAvailableScripts.start(timeout=STD_TIMEOUT)
 
     async def test_show_schema(self):
@@ -1471,7 +1455,7 @@ class ScriptQueueTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCa
             self.remote.cmd_showSchema.set(isStandard=is_standard, path=path)
 
             # Make sure showSchema fails when not enabled.
-            with self.assertRaises(salobj.AckError):
+            with pytest.raises(salobj.AckError):
                 await self.remote.cmd_showSchema.start(timeout=STD_TIMEOUT)
 
             await self.remote.cmd_enable.start(timeout=STD_TIMEOUT)
@@ -1481,10 +1465,10 @@ class ScriptQueueTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCa
             data = await self.remote.evt_configSchema.next(
                 flush=False, timeout=STD_TIMEOUT
             )
-            self.assertEqual(data.isStandard, is_standard)
-            self.assertEqual(data.path, path)
+            assert data.isStandard == is_standard
+            assert data.path == path
             schema = yaml.safe_load(data.configSchema)
-            self.assertEqual(schema, salobj.TestScript.get_schema())
+            assert schema == salobj.TestScript.get_schema()
 
     async def test_show_queue(self):
         """Test the showQueue command."""
@@ -1492,14 +1476,14 @@ class ScriptQueueTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCa
             await self.assert_next_queue(enabled=False, running=True)
 
             # Make sure showQueue fails when not enabled.
-            with self.assertRaises(salobj.AckError):
+            with pytest.raises(salobj.AckError):
                 await self.remote.cmd_showQueue.start(timeout=STD_TIMEOUT)
 
             await self.remote.cmd_enable.start(timeout=STD_TIMEOUT)
             await self.assert_next_queue(enabled=True, running=True)
 
             # Make sure we have no more queue events.
-            with self.assertRaises(asyncio.TimeoutError):
+            with pytest.raises(asyncio.TimeoutError):
                 await self.remote.evt_queue.next(flush=False, timeout=0.1)
 
             await self.remote.cmd_showQueue.start(timeout=STD_TIMEOUT)
@@ -1509,9 +1493,9 @@ class ScriptQueueTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCa
             # with runnable False, and disables the showQueue command.
             await self.remote.cmd_disable.start(timeout=STD_TIMEOUT)
             await self.assert_next_queue(enabled=False, running=True)
-            with self.assertRaises(asyncio.TimeoutError):
+            with pytest.raises(asyncio.TimeoutError):
                 await self.remote.evt_queue.next(flush=False, timeout=0.1)
-            with self.assertRaises(salobj.AckError):
+            with pytest.raises(salobj.AckError):
                 await self.remote.cmd_showQueue.start(timeout=STD_TIMEOUT)
 
     async def wait_configured(self, *sal_indices):
@@ -1580,24 +1564,24 @@ class CmdLineTestCase(unittest.IsolatedAsyncioTestCase):
                 summaryState_data = await remote.evt_summaryState.next(
                     flush=False, timeout=STD_TIMEOUT
                 )
-                self.assertEqual(summaryState_data.summaryState, salobj.State.STANDBY)
+                assert summaryState_data.summaryState == salobj.State.STANDBY
 
                 rootDir_data = await remote.evt_rootDirectories.next(
                     flush=False, timeout=STD_TIMEOUT
                 )
-                self.assertTrue(
-                    os.path.samefile(rootDir_data.standard, self.testdata_standardpath)
+                assert os.path.samefile(
+                    rootDir_data.standard, self.testdata_standardpath
                 )
-                self.assertTrue(
-                    os.path.samefile(rootDir_data.external, self.testdata_externalpath)
+                assert os.path.samefile(
+                    rootDir_data.external, self.testdata_externalpath
                 )
 
                 ackcmd = await remote.cmd_exitControl.start(timeout=STD_TIMEOUT)
-                self.assertEqual(ackcmd.ack, salobj.SalRetCode.CMD_COMPLETE)
+                assert ackcmd.ack == salobj.SalRetCode.CMD_COMPLETE
                 summaryState_data = await remote.evt_summaryState.next(
                     flush=False, timeout=STD_TIMEOUT
                 )
-                self.assertEqual(summaryState_data.summaryState, salobj.State.OFFLINE)
+                assert summaryState_data.summaryState == salobj.State.OFFLINE
 
                 await asyncio.wait_for(process.wait(), timeout=STD_TIMEOUT)
             except Exception:
@@ -1628,31 +1612,27 @@ class CmdLineTestCase(unittest.IsolatedAsyncioTestCase):
                 summaryState_data = await remote.evt_summaryState.next(
                     flush=False, timeout=STD_TIMEOUT
                 )
-                self.assertEqual(summaryState_data.summaryState, salobj.State.STANDBY)
+                assert summaryState_data.summaryState == salobj.State.STANDBY
 
                 rootDir_data = await remote.evt_rootDirectories.next(
                     flush=False, timeout=STD_TIMEOUT
                 )
-                self.assertTrue(
-                    os.path.samefile(rootDir_data.standard, self.default_standardpath)
+                assert os.path.samefile(
+                    rootDir_data.standard, self.default_standardpath
                 )
-                self.assertTrue(
-                    os.path.samefile(rootDir_data.external, self.default_externalpath)
+                assert os.path.samefile(
+                    rootDir_data.external, self.default_externalpath
                 )
 
                 ackcmd = await remote.cmd_exitControl.start(timeout=STD_TIMEOUT)
-                self.assertEqual(ackcmd.ack, salobj.SalRetCode.CMD_COMPLETE)
+                assert ackcmd.ack == salobj.SalRetCode.CMD_COMPLETE
                 summaryState_data = await remote.evt_summaryState.next(
                     flush=False, timeout=STD_TIMEOUT
                 )
-                self.assertEqual(summaryState_data.summaryState, salobj.State.OFFLINE)
+                assert summaryState_data.summaryState == salobj.State.OFFLINE
 
                 await asyncio.wait_for(process.wait(), timeout=STD_TIMEOUT)
             except Exception:
                 if process.returncode is None:
                     process.terminate()
                 raise
-
-
-if __name__ == "__main__":
-    unittest.main()

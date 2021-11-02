@@ -37,7 +37,9 @@ from lsst.ts.idl.enums.ScriptQueue import Location
 from . import utils
 from .script_info import ScriptInfo
 
-_LOAD_TIMEOUT = 60  # seconds
+# Standard timeout (seconds). Long enough to perform any reasonable operation,
+# including starting a CSC or loading a script (seconds)
+STD_TIMEOUT = 60
 
 MIN_SAL_INDEX = 1000
 MAX_HISTORY = 400
@@ -225,7 +227,7 @@ class QueueModel:
         )
 
         coro = script_info.start_loading(fullpath=fullpath)
-        await asyncio.wait_for(coro, _LOAD_TIMEOUT)
+        await asyncio.wait_for(coro, timeout=STD_TIMEOUT)
 
     @property
     def current_index(self):
@@ -526,10 +528,10 @@ class QueueModel:
             # process is running, so send the "stop" command
             try:
                 await script_info.remote.cmd_stop.set_start(
-                    ScriptID=script_info.index, timeout=2
+                    ScriptID=script_info.index, timeout=STD_TIMEOUT
                 )
                 # give the process time to terminate
-                await asyncio.wait_for(script_info.process.wait(), timeout=5)
+                await asyncio.wait_for(script_info.process.wait(), timeout=STD_TIMEOUT)
                 # let the script be removed or moved
                 await asyncio.sleep(0)
                 return

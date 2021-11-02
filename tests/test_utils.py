@@ -48,22 +48,18 @@ class UtilsTestCase(unittest.TestCase):
                 "subdir/subsubdir/script4",
             )
         )
-        self.assertEqual(set(scripts), expectedscripts)
+        assert set(scripts) == expectedscripts
 
     @unittest.skipIf(standardscripts is None, "Could not import ts_standardscripts")
     def test_get_default_standard_scripts_dir(self):
         standard_dir = scriptqueue.get_default_scripts_dir(is_standard=True)
-        self.assertIsInstance(standard_dir, pathlib.Path)
-        self.assertTrue(standard_dir.samefile(standardscripts.get_scripts_dir()))
-        self.assertEqual(standard_dir.name, "scripts")
+        assert isinstance(standard_dir, pathlib.Path)
+        assert standard_dir.samefile(standardscripts.get_scripts_dir())
+        assert standard_dir.name == "scripts"
 
     @unittest.skipIf(externalscripts is None, "Could not import ts_externalscripts")
     def test_get_default_external_scripts_dir(self):
         external_dir = scriptqueue.get_default_scripts_dir(is_standard=False)
-        self.assertIsInstance(external_dir, pathlib.Path)
-        self.assertTrue(external_dir.samefile(externalscripts.get_scripts_dir()))
-        self.assertEqual(external_dir.name, "scripts")
-
-
-if __name__ == "__main__":
-    unittest.main()
+        assert isinstance(external_dir, pathlib.Path)
+        assert external_dir.samefile(externalscripts.get_scripts_dir())
+        assert external_dir.name == "scripts"

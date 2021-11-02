@@ -25,6 +25,7 @@ import shutil
 import time
 import unittest
 
+import pytest
 import yaml
 
 from lsst.ts.idl.enums.Script import ScriptState
@@ -42,8 +43,8 @@ class ParseRunOneScriptTestCase(unittest.IsolatedAsyncioTestCase):
     def test_basics(self):
         script = DATA_DIR / "standard" / "subdir" / "script3"
         cmd = ui.parse_run_one_script_cmd(args=[str(script)])
-        self.assertTrue(script.samefile(cmd.script))
-        self.assertEqual(cmd.config, "")
+        assert script.samefile(cmd.script)
+        assert cmd.config == ""
 
     def test_config_arg(self):
         script = DATA_DIR / "external" / "script1"
@@ -53,8 +54,8 @@ class ParseRunOneScriptTestCase(unittest.IsolatedAsyncioTestCase):
         cmd = ui.parse_run_one_script_cmd(
             args=[str(script), "--config", config_path.as_posix()]
         )
-        self.assertTrue(script.samefile(cmd.script))
-        self.assertEqual(cmd.config, expected_config)
+        assert script.samefile(cmd.script)
+        assert cmd.config == expected_config
 
     def test_parameters_arg(self):
         script = DATA_DIR / "external" / "script1"
@@ -63,72 +64,72 @@ class ParseRunOneScriptTestCase(unittest.IsolatedAsyncioTestCase):
         cmd = ui.parse_run_one_script_cmd(
             args=[str(script), "--parameters"] + config_arg_list
         )
-        self.assertTrue(script.samefile(cmd.script))
+        assert script.samefile(cmd.script)
         config_dict_from_parser = yaml.safe_load(cmd.config)
-        self.assertEqual(config_dict_from_parser, config_dict)
+        assert config_dict_from_parser == config_dict
 
     def test_loglevel(self):
         script = DATA_DIR / "external" / "script1"
         cmd = ui.parse_run_one_script_cmd(args=[str(script)])
-        self.assertIsNone(cmd.loglevel)
+        assert cmd.loglevel is None
 
         loglevel = 15
         cmd = ui.parse_run_one_script_cmd(
             args=[str(script), "--loglevel", str(loglevel)]
         )
-        self.assertTrue(cmd.loglevel, loglevel)
+        assert cmd.loglevel == loglevel
 
         loglevel = 21
         cmd = ui.parse_run_one_script_cmd(args=[str(script), "-l", str(loglevel)])
-        self.assertTrue(cmd.loglevel, loglevel)
+        assert cmd.loglevel == loglevel
 
     def test_invalid_arguments(self):
         script = DATA_DIR / "external" / "script1"
         config_path = DATA_DIR / "config1.yaml"
 
-        with self.assertRaises(SystemExit):
+        with pytest.raises(SystemExit):
             # need type and path
             ui.parse_run_one_script_cmd(args=[])
-        with self.assertRaises(SystemExit):
+        with pytest.raises(SystemExit):
             # there is only one allowed positional arguments
             ui.parse_run_one_script_cmd(args=[str(script), "extra_argument"])
-        with self.assertRaises(SystemExit):
+        with pytest.raises(SystemExit):
             # invalid option
             ui.parse_run_one_script_cmd(args=[str(script), "--invalid"])
-        with self.assertRaises(SystemExit):
+        with pytest.raises(SystemExit):
             # nonexistent config file
             ui.parse_run_one_script_cmd(
                 args=[str(script), "--config", "nonexistent_config_file.yaml"]
             )
-        with self.assertRaises(SystemExit):
+        with pytest.raises(SystemExit):
             # --index must have a value if specified
             ui.parse_run_one_script_cmd(args=[str(script), "--index"])
-        with self.assertRaises(SystemExit):
+        with pytest.raises(SystemExit):
             # --index must be > 0
             ui.parse_run_one_script_cmd(args=[str(script), "--index", "0"])
-        with self.assertRaises(SystemExit):
+        with pytest.raises(SystemExit):
             # --index must be <= salobj.MAX_SAL_INDEX
             too_large_index = salobj.MAX_SAL_INDEX + 1
             ui.parse_run_one_script_cmd(
                 args=[str(script), "--index", str(too_large_index)]
             )
-        with self.assertRaises(SystemExit):
+        with pytest.raises(SystemExit):
             # --index must be an integer
             ui.parse_run_one_script_cmd(args=[str(script), "--index", "not_an_integer"])
-        with self.assertRaises(SystemExit):
+        with pytest.raises(SystemExit):
             # --parameters requires data
             ui.parse_run_one_script_cmd(args=[str(script), "--parameters"])
-        with self.assertRaises(SystemExit):
+        with pytest.raises(SystemExit):
             # invalid data for --parameters; no =
             ui.parse_run_one_script_cmd(
                 args=[str(script), "--parameters", "invalid_parameter"]
             )
-        with self.assertRaises(SystemExit):
+        with pytest.raises(SystemExit):
             # invalid data for --parameters; space
             ui.parse_run_one_script_cmd(
                 args=[str(script), "--parameters", "wait_time", "=", "0.1"]
             )
-        with self.assertRaises(SystemExit):
+        with pytest.raises(SystemExit):
             # cannot specify both --config and --parameters
             ui.parse_run_one_script_cmd(
                 args=[
@@ -186,8 +187,4 @@ class RunOneScriptTestCase(unittest.IsolatedAsyncioTestCase):
                     process.terminate()
                 raise
             final_state = remote.evt_state.get()
-            self.assertEqual(final_state.state, ScriptState.DONE)
-
-
-if __name__ == "__main__":
-    unittest.main()
+            assert final_state.state == ScriptState.DONE

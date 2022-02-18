@@ -24,6 +24,7 @@ __all__ = ["QueueModel"]
 import asyncio
 import collections
 import copy
+import inspect
 import os
 import pathlib
 import signal
@@ -101,19 +102,19 @@ class QueueModel:
         Path to standard SAL scripts.
     externalpath : `str`, `bytes` or `os.PathLike`
         Path to external SAL scripts.
-    next_visit_callback : ``callable`` (optional)
-        Function to call when a script gets a new group ID.
+    next_visit_callback : ``coroutine`` (optional)
+        Coroutine to call when a script gets a new group ID.
         It receives one argument: a `ScriptInfo`.
         This is separate from script_callback to make it easier
         to output the ``nextVisit`` event.
-    next_visit_canceled_callback : ``callable`` (optional)
-        Function to call when a script loses its group ID.
+    next_visit_canceled_callback : ``coroutine`` (optional)
+        Coroutine to call when a script loses its group ID.
         It receives one argument: a `ScriptInfo` with group_id not yet cleared.
-    queue_callback : ``callable`` (optional)
-        Function to call when the queue state changes.
+    queue_callback : ``coroutine`` (optional)
+        Coroutine to call when the queue state changes.
         It receives no arguments.
-    script_callback : ``callable`` (optional)
-        Function to call when information about a script changes.
+    script_callback : ``coroutine`` (optional)
+        Coroutine to call when information about a script changes.
         It receives one argument: a `ScriptInfo`.
         This is not called if the only change is to the group ID; see
         ``next_visit_callback`` and ``next_visit_canceled_callback`` for that.
@@ -148,18 +149,15 @@ class QueueModel:
             raise ValueError(f"No such dir standardpath={standardpath}")
         if not os.path.isdir(externalpath):
             raise ValueError(f"No such dir externalpath={externalpath}")
-        if next_visit_callback and not callable(next_visit_callback):
-            raise TypeError(
-                f"next_visit_callback={next_visit_callback} is not callable"
-            )
-        if next_visit_canceled_callback and not callable(next_visit_canceled_callback):
-            raise TypeError(
-                f"next_visit_canceled_callback={next_visit_canceled_callback} is not callable"
-            )
-        if queue_callback and not callable(queue_callback):
-            raise TypeError(f"queue_callback={queue_callback} is not callable")
-        if script_callback and not callable(script_callback):
-            raise TypeError(f"script_callback={script_callback} is not callable")
+
+        for arg, arg_name in (
+            (next_visit_callback, "next_visit_callback"),
+            (next_visit_canceled_callback, "next_visit_canceled_callback"),
+            (queue_callback, "queue_callback"),
+            (script_callback, "script_callback"),
+        ):
+            if arg is not None and not inspect.iscoroutinefunction(arg):
+                raise TypeError(f"{arg_name}={arg} must be a coroutine or None")
 
         self.domain = domain
         self.log = log.getChild("QueueModel")
@@ -219,7 +217,7 @@ class QueueModel:
         # do this first to make sure the path exists
         fullpath = self.make_full_path(script_info.is_standard, script_info.path)
 
-        self._insert_script(
+        await self._insert_script(
             script_info=script_info,
             location=location,
             location_sal_index=location_sal_index,
@@ -343,7 +341,7 @@ class QueueModel:
             raise ValueError(f"Script {fullpath} is not executable.")
         return fullpath
 
-    def move(self, sal_index, location, location_sal_index):
+    async def move(self, sal_index, location, location_sal_index):
         """Move a script within the queue.
 
         Parameters
@@ -372,13 +370,13 @@ class QueueModel:
             # this is a no-op, and is not properly handled by _insert_script,
             # but first make sure the script is on the queue
             self.get_queue_index(sal_index)
-            self._update_queue()
+            await self._update_queue()
             return
 
         old_queue = copy.copy(self.queue)
         script_info = self.pop_script_info(sal_index)
         try:
-            self._insert_script(
+            await self._insert_script(
                 script_info=script_info,
                 location=location,
                 location_sal_index=location_sal_index,
@@ -568,7 +566,7 @@ class QueueModel:
             and script_info.group_id
             or script_info.setting_group_id
         ):
-            self.clear_group_id(script_info=script_info, command_script=False)
+            await self.clear_group_id(script_info=script_info, command_script=False)
 
         await script_info.terminate()
 
@@ -577,18 +575,18 @@ class QueueModel:
 
     @property
     def enabled(self):
-        """Get or set enabled state.
+        """Get enabled state.
 
         True if ScriptQueue is in the enabled state, False otherwise.
         """
         return self._enabled
 
-    @enabled.setter
-    def enabled(self, enabled):
+    async def set_enable(self, enabled):
+        """Set enabled state."""
         was_enabled = self._enabled
         self._enabled = bool(enabled)
         if self.enabled != was_enabled:
-            self._update_queue()
+            await self._update_queue()
 
     @property
     def running(self):
@@ -598,12 +596,12 @@ class QueueModel:
         """
         return self._running
 
-    @running.setter
-    def running(self, run):
+    async def set_running(self, run):
+        """Set running state."""
         was_running = self._running
         self._running = bool(run)
         if self._running != was_running:
-            self._update_queue(pause_on_failure=False)
+            await self._update_queue(pause_on_failure=False)
 
     @staticmethod
     def next_group_id():
@@ -651,7 +649,7 @@ class QueueModel:
 
         return info_list
 
-    def _insert_script(self, script_info, location, location_sal_index):
+    async def _insert_script(self, script_info, location, location_sal_index):
         """Insert a script info into the queue.
 
         Parameters
@@ -687,7 +685,7 @@ class QueueModel:
             raise ValueError(f"Unknown location {location}")
 
         script_info.callback = self._script_info_callback
-        self._update_queue()
+        await self._update_queue()
 
     async def _remove_script(self, sal_index):
         """Remove a script from the queue."""
@@ -696,12 +694,12 @@ class QueueModel:
             if sal_index in self._scripts_being_stopped:
                 self._scripts_being_stopped.remove(sal_index)
                 if not self._scripts_being_stopped:
-                    self._update_queue()
+                    await self._update_queue()
                 # else let removal finish before starting the next job,
                 # because it messes up the queue state callbacks otherwise
             else:
                 # removal is handled by _update_queue
-                self._update_queue()
+                await self._update_queue()
         elif key in self.queue:
             script_info = self.pop_script_info(sal_index)
             self.history.appendleft(script_info)
@@ -710,9 +708,9 @@ class QueueModel:
                 if not self._scripts_being_stopped:
                     # that was the last script to stop;
                     # now show the queue state
-                    self._update_queue()
+                    await self._update_queue()
             else:
-                self._update_queue()
+                await self._update_queue()
 
     def _log_message_callback(self, data):
         """Print Script logMessage data to stdout.
@@ -730,7 +728,7 @@ class QueueModel:
             f"level={data.level}; traceback={data.traceback!r}"
         )
 
-    def clear_group_id(self, script_info, command_script):
+    async def clear_group_id(self, script_info, command_script):
         """Clear the group ID of the specified script, if appropriate.
 
         Clear the group ID of the specified script if the group ID
@@ -751,7 +749,7 @@ class QueueModel:
         )
         if self.next_visit_canceled_callback:
             try:
-                self.next_visit_canceled_callback(script_info)
+                await self.next_visit_canceled_callback(script_info)
             except Exception:
                 self.log.exception("next_visit_canceled_callback failed; continuing")
         script_info.clear_group_id(command_script=command_script)
@@ -774,7 +772,7 @@ class QueueModel:
         await script_info.set_group_id(group_id)
         if self.next_visit_callback:
             try:
-                self.next_visit_callback(script_info)
+                await self.next_visit_callback(script_info)
             except Exception:
                 self.log.exception("next_visit_callback failed; continuing")
 
@@ -814,16 +812,16 @@ class QueueModel:
         if script_info:
             script_info.metadata = data
 
-    def _script_state_callback(self, data):
+    async def _script_state_callback(self, data):
         script_info = self._script_info_from_data(event_name="state", data=data)
         if script_info:
-            script_info._script_state_callback(data)
+            await script_info._script_state_callback(data)
 
-    def _script_info_callback(self, script_info):
+    async def _script_info_callback(self, script_info):
         """ScriptInfo callback."""
         if self.script_callback:
             try:
-                self.script_callback(script_info)
+                await self.script_callback(script_info)
             except Exception:
                 self.log.exception("script_callback failed; continuing")
 
@@ -838,9 +836,9 @@ class QueueModel:
         ):
             # This script is next in line and may need its group ID set
             # or be ready to be run.
-            self._update_queue(force_callback=False)
+            await self._update_queue(force_callback=False)
 
-    def _update_queue(self, force_callback=True, pause_on_failure=True):
+    async def _update_queue(self, force_callback=True, pause_on_failure=True):
         """Call whenever the queue changes state.
 
         If the current script is done, move it to the history queue.
@@ -906,16 +904,15 @@ class QueueModel:
                     is_top = False
                 else:
                     if script_info.group_id or script_info.setting_group_id:
-                        self.clear_group_id(script_info, command_script=True)
+                        await self.clear_group_id(script_info, command_script=True)
 
-        if (
-            self.queue_callback
-            and force_callback
+        if self.queue_callback is not None and (
+            force_callback
             or self.current_index != initial_current_index
             or self.queue_indices != initial_queue_indices
             or self.history_indices != initial_history_indices
         ):
             try:
-                self.queue_callback()
+                await self.queue_callback()
             except Exception:
                 self.log.exception("queue_callback failed; continuing")

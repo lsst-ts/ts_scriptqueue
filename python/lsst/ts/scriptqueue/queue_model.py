@@ -34,6 +34,7 @@ import psutil
 from lsst.ts import salobj
 from lsst.ts.idl.enums.Script import ScriptState
 from lsst.ts.idl.enums.ScriptQueue import Location
+from lsst.ts.utils import index_generator
 from . import utils
 from .script_info import ScriptInfo
 
@@ -177,9 +178,7 @@ class QueueModel:
         self.current_script = None
         self._running = True
         self._enabled = False
-        self._index_generator = salobj.index_generator(
-            imin=min_sal_index, imax=max_sal_index
-        )
+        self._index_generator = index_generator(imin=min_sal_index, imax=max_sal_index)
         self._scripts_being_stopped = set()
         # use index=0 so we get messages for all scripts
         self.remote = salobj.Remote(

@@ -204,5 +204,5 @@ async def run_one_script(index, script, config, loglevel=None):
             print("script succeeded")
         except BaseException:
             # make sure the background process is terminated
-            script_info.terminate()
+            await script_info.terminate()
             raise

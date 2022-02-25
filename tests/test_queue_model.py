@@ -91,7 +91,7 @@ class QueueModelTestCase(unittest.IsolatedAsyncioTestCase):
             min_sal_index=self.min_sal_index,
             verbose=True,
         )
-        self.model.enabled = True
+        await self.model.set_enable(True)
         await self.model.start_task
 
     async def asyncTearDown(self):
@@ -289,31 +289,27 @@ class QueueModelTestCase(unittest.IsolatedAsyncioTestCase):
             verbose=True,
         )
 
-    def next_visit_callback(self, script_info):
+    async def next_visit_callback(self, script_info):
         dt = time.monotonic() - self.t0
         print(
             f"next_visit_callback() for {script_info.index}: "
             f"group_id={script_info.group_id}; "
             f"elapsed time={dt:0.1f}; "
         )
-        asyncio.create_task(
-            self.next_visit_queue.put((script_info.index, script_info.group_id))
-        )
+        await self.next_visit_queue.put((script_info.index, script_info.group_id))
 
-    def next_visit_canceled_callback(self, script_info):
+    async def next_visit_canceled_callback(self, script_info):
         dt = time.monotonic() - self.t0
         print(
             f"next_visit_canceled_callback() for {script_info.index}: "
             f"group_id={script_info.group_id}; "
             f"elapsed time={dt:0.1f}; "
         )
-        asyncio.create_task(
-            self.next_visit_canceled_queue.put(
-                (script_info.index, script_info.group_id)
-            )
+        await self.next_visit_canceled_queue.put(
+            (script_info.index, script_info.group_id)
         )
 
-    def queue_callback(self):
+    async def queue_callback(self):
         dt = time.monotonic() - self.t0
         print(
             f"queue_callback(): enabled={self.model.enabled}; "
@@ -323,9 +319,9 @@ class QueueModelTestCase(unittest.IsolatedAsyncioTestCase):
             f"history={[info.index for info in self.model.history]}; "
             f"elapsed time={dt:0.1f}"
         )
-        asyncio.create_task(self.queue_info_queue.put(QueueInfo(self.model)))
+        await self.queue_info_queue.put(QueueInfo(self.model))
 
-    def script_callback(self, script_info):
+    async def script_callback(self, script_info):
         curr_time = time.monotonic()
         dt = curr_time - self.t0
         print(
@@ -345,7 +341,7 @@ class QueueModelTestCase(unittest.IsolatedAsyncioTestCase):
         await self.assert_next_queue(enabled=True, running=True)
 
         # Pause the queue so we know what to expect of queue state.
-        self.model.running = False
+        await self.model.set_running(False)
         await self.assert_next_queue(running=False)
 
         # Add script i0; queue is empty, so location is irrelevant.
@@ -446,7 +442,7 @@ class QueueModelTestCase(unittest.IsolatedAsyncioTestCase):
 
         # Disable the queue, then set running True and check that
         # the queue does not start running until we enable it again.
-        self.model.enabled = False
+        await self.model.set_enable(False)
         await self.assert_next_queue(
             enabled=False,
             running=False,
@@ -454,7 +450,7 @@ class QueueModelTestCase(unittest.IsolatedAsyncioTestCase):
             past_sal_indices=stopped_scripts,
         )
 
-        self.model.running = True
+        await self.model.set_running(True)
         await self.assert_next_queue(
             enabled=False,
             running=True,
@@ -462,7 +458,7 @@ class QueueModelTestCase(unittest.IsolatedAsyncioTestCase):
             past_sal_indices=stopped_scripts,
         )
 
-        self.model.enabled = True
+        await self.model.set_enable(True)
         await self.assert_next_next_visit(sal_index=i0 + 2)
         await self.assert_next_queue(
             running=True,
@@ -503,7 +499,9 @@ class QueueModelTestCase(unittest.IsolatedAsyncioTestCase):
         script0 = add_kwargs["script_info"]
         i0 = script0.index
         await asyncio.wait_for(self.model.add(**add_kwargs), timeout=STD_TIMEOUT)
+        print("wait for next_queue showing script added")
         await self.assert_next_queue(running=True, sal_indices=[i0])
+        print("wait for next_queue after script is gone")
         await self.assert_next_queue(
             running=True,
             current_sal_index=0,
@@ -578,7 +576,7 @@ class QueueModelTestCase(unittest.IsolatedAsyncioTestCase):
         await self.assert_next_queue(enabled=True, running=True)
 
         # Pause the queue so we know what to expect of queue state.
-        self.model.running = False
+        await self.model.set_running(False)
         await self.assert_next_queue(running=False)
 
         info_dict = dict()
@@ -605,12 +603,13 @@ class QueueModelTestCase(unittest.IsolatedAsyncioTestCase):
                 sal_indices=[info.index for info in info_dict.values()]
             )
 
+        assert i0 is not None
         await self.wait_configured(i0, i0 + 1, i0 + 2)
 
         # Resume the queue and wait for the second script to start
         # running. At that point we have one running script, one in
         # history and one on the queue. Run get_script_info on each.
-        self.model.running = True
+        await self.model.set_running(True)
         await self.assert_next_queue(
             running=True,
             current_sal_index=i0,
@@ -678,7 +677,7 @@ class QueueModelTestCase(unittest.IsolatedAsyncioTestCase):
         await self.assert_next_queue(enabled=True, running=True)
 
         # Pause the queue so we know what to expect of queue state.
-        self.model.running = False
+        await self.model.set_running(False)
         await self.assert_next_queue(running=False)
 
         # Queue scripts i0, i0+1 and i0+2.
@@ -700,62 +699,72 @@ class QueueModelTestCase(unittest.IsolatedAsyncioTestCase):
         i0 = sal_indices[0]
 
         # Move i0+2 first.
-        self.model.move(sal_index=i0 + 2, location=Location.FIRST, location_sal_index=0)
+        await self.model.move(
+            sal_index=i0 + 2, location=Location.FIRST, location_sal_index=0
+        )
         await self.assert_next_queue(sal_indices=[i0 + 2, i0, i0 + 1])
 
         # Move i0+2 first again. This should be a no-op, but should still
         # trigger a queue event.
-        self.model.move(sal_index=i0 + 2, location=Location.FIRST, location_sal_index=0)
+        await self.model.move(
+            sal_index=i0 + 2, location=Location.FIRST, location_sal_index=0
+        )
         await self.assert_next_queue(sal_indices=[i0 + 2, i0, i0 + 1])
 
         # Move i0 last.
-        self.model.move(sal_index=i0, location=Location.LAST, location_sal_index=0)
+        await self.model.move(
+            sal_index=i0, location=Location.LAST, location_sal_index=0
+        )
         await self.assert_next_queue(sal_indices=[i0 + 2, i0 + 1, i0])
 
         # Move i0 last again. This should be a no-op, but should still
         # trigger a queue event.
-        self.model.move(sal_index=i0, location=Location.LAST, location_sal_index=0)
+        await self.model.move(
+            sal_index=i0, location=Location.LAST, location_sal_index=0
+        )
         await self.assert_next_queue(sal_indices=[i0 + 2, i0 + 1, i0])
 
         # Move i0 before i0+2: before first.
-        self.model.move(
+        await self.model.move(
             sal_index=i0, location=Location.BEFORE, location_sal_index=i0 + 2
         )
         await self.assert_next_queue(sal_indices=[i0, i0 + 2, i0 + 1])
 
         # Move i0+1 before i0+2: before not-first.
-        self.model.move(
+        await self.model.move(
             sal_index=i0 + 1, location=Location.BEFORE, location_sal_index=i0 + 2
         )
         await self.assert_next_queue(sal_indices=[i0, i0 + 1, i0 + 2])
 
         # Move i0 after i0+2: after last.
-        self.model.move(
+        await self.model.move(
             sal_index=i0, location=Location.AFTER, location_sal_index=i0 + 2
         )
         await self.assert_next_queue(sal_indices=[i0 + 1, i0 + 2, i0])
 
         # Move i0+1 after i0+2: after not-last.
-        self.model.move(
+        await self.model.move(
             sal_index=i0 + 1, location=Location.AFTER, location_sal_index=i0 + 2
         )
         await self.assert_next_queue(sal_indices=[i0 + 2, i0 + 1, i0])
 
         # Move i0 after itself. This should be a no-op, but should still
         # trigger a queue event.
-        self.model.move(sal_index=i0, location=Location.AFTER, location_sal_index=i0)
+        await self.model.move(
+            sal_index=i0, location=Location.AFTER, location_sal_index=i0
+        )
         await self.assert_next_queue(sal_indices=[i0 + 2, i0 + 1, i0])
 
         # Move i0+1 before itself. This should be a no-op, but should still
         # trigger a queue event.
-        self.model.move(
+        await self.model.move(
             sal_index=i0 + 1, location=Location.AFTER, location_sal_index=i0 + 1
         )
         await self.assert_next_queue(sal_indices=[i0 + 2, i0 + 1, i0])
 
         # Try some incorrect moves.
         with pytest.raises(ValueError):
-            self.model.move(
+            await self.model.move(
                 sal_index=1234,  # no such script
                 location=Location.LAST,
                 location_sal_index=0,
@@ -763,27 +772,27 @@ class QueueModelTestCase(unittest.IsolatedAsyncioTestCase):
         await self.assert_next_queue(sal_indices=[i0 + 2, i0 + 1, i0], wait=False)
 
         with pytest.raises(ValueError):
-            self.model.move(
+            await self.model.move(
                 sal_index=i0 + 1, location=21, location_sal_index=0  # no such location
             )
         await self.assert_next_queue(sal_indices=[i0 + 2, i0 + 1, i0], wait=False)
 
         with pytest.raises(ValueError):
-            self.model.move(
+            await self.model.move(
                 sal_index=i0 + 1, location=Location.BEFORE, location_sal_index=1234
             )  # no such script)
         await self.assert_next_queue(sal_indices=[i0 + 2, i0 + 1, i0], wait=False)
 
         # Incorrect index and the same "before" locationSalIndex.
         with pytest.raises(ValueError):
-            self.model.move(
+            await self.model.move(
                 sal_index=1234, location=Location.BEFORE, location_sal_index=1234
             )
         await self.assert_next_queue(sal_indices=[i0 + 2, i0 + 1, i0], wait=False)
 
         # Incorrect index and the same "after" locationSalIndex.
         with pytest.raises(ValueError):
-            self.model.move(
+            await self.model.move(
                 sal_index=1234, location=Location.AFTER, location_sal_index=1234
             )
         await self.assert_next_queue(sal_indices=[i0 + 2, i0 + 1, i0], wait=False)
@@ -801,7 +810,7 @@ class QueueModelTestCase(unittest.IsolatedAsyncioTestCase):
         await self.assert_next_queue(enabled=True, running=True)
 
         # Pause the queue so we know what to expect of queue state.
-        self.model.running = False
+        await self.model.set_running(False)
         await self.assert_next_queue(running=False)
 
         # Queue scripts i0, i0+1 and i0+2.
@@ -829,7 +838,7 @@ class QueueModelTestCase(unittest.IsolatedAsyncioTestCase):
         # Start the queue and wait for i0+1's group ID to be set
         # then move i0+1 last and check that its group ID is cleared
         # and that i0+2's group ID is set.
-        self.model.running = True
+        await self.model.set_running(True)
         print(f"*** wait for i0={i0} group ID")
         await self.assert_next_next_visit(sal_index=i0)
         print(f"*** wait for i0={i0} to be running")
@@ -839,7 +848,9 @@ class QueueModelTestCase(unittest.IsolatedAsyncioTestCase):
         print(f"*** wait for i0+1={i0+1} group ID")
         await self.assert_next_next_visit(sal_index=i0 + 1)
         print(f"*** move i0+1={i0+1}")
-        self.model.move(sal_index=i0 + 1, location=Location.LAST, location_sal_index=0)
+        await self.model.move(
+            sal_index=i0 + 1, location=Location.LAST, location_sal_index=0
+        )
         await self.assert_next_queue(
             running=True, current_sal_index=i0, sal_indices=[i0 + 2, i0 + 1]
         )
@@ -869,7 +880,7 @@ class QueueModelTestCase(unittest.IsolatedAsyncioTestCase):
         await self.assert_next_queue(enabled=True, running=True)
 
         # Pause the queue so we know what to expect of queue state.
-        self.model.running = False
+        await self.model.set_running(False)
         await self.assert_next_queue(running=False)
 
         # Add scripts i0, i0+1, i0+2; i0+1 fails.
@@ -890,7 +901,7 @@ class QueueModelTestCase(unittest.IsolatedAsyncioTestCase):
         await self.wait_configured(i0, i0 + 1, i0 + 2)
 
         # Start the queue; it should pause when i0+1 fails.
-        self.model.running = True
+        await self.model.set_running(True)
         await self.assert_next_queue(
             running=True,
             current_sal_index=i0,
@@ -918,7 +929,7 @@ class QueueModelTestCase(unittest.IsolatedAsyncioTestCase):
         assert script_info.script_state == ScriptState.FAILED
 
         # Resume the queue; this should move i0+1 to history and keep going.
-        self.model.running = True
+        await self.model.set_running(True)
         await self.assert_next_queue(
             running=True,
             current_sal_index=i0 + 2,
@@ -944,7 +955,7 @@ class QueueModelTestCase(unittest.IsolatedAsyncioTestCase):
         await self.assert_next_queue(enabled=True, running=True)
 
         # Pause the queue so we know what to expect of queue state.
-        self.model.running = False
+        await self.model.set_running(False)
         await self.assert_next_queue(running=False)
 
         # Add the scripts to the end of the queue.
@@ -970,12 +981,13 @@ class QueueModelTestCase(unittest.IsolatedAsyncioTestCase):
             )
             await self.assert_next_queue(sal_indices=[info.index for info in info_list])
 
+        assert i0 is not None
         await self.wait_configured(i0, i0 + 1)
 
         # Resume the queue and wait for the second script to start
         # running. At that point we have one running script,
         # one in history and one on the queue; requeue each.
-        self.model.running = True
+        await self.model.set_running(True)
         await self.assert_next_queue(
             running=True,
             current_sal_index=i0,
@@ -1039,7 +1051,7 @@ class QueueModelTestCase(unittest.IsolatedAsyncioTestCase):
 
         # Now pause the queue and wait for the current script to finish
         # and all remaining scripts to be runnable, then resume.
-        self.model.running = False
+        await self.model.set_running(False)
         await self.assert_next_queue(
             running=False,
             current_sal_index=i0 + 1,
@@ -1053,7 +1065,7 @@ class QueueModelTestCase(unittest.IsolatedAsyncioTestCase):
             past_sal_indices=[i0 + 1, i0],
         )
         await self.wait_configured(i0 + 2, i0 + 3, i0 + 4, i0 + 5)
-        self.model.running = True
+        await self.model.set_running(True)
         await self.assert_next_queue(
             running=True,
             current_sal_index=i0 + 5,
@@ -1093,7 +1105,7 @@ class QueueModelTestCase(unittest.IsolatedAsyncioTestCase):
         await self.assert_next_queue(enabled=True, running=True)
 
         # pause the queue so we know what to expect of queue state
-        self.model.running = False
+        await self.model.set_running(False)
         await self.assert_next_queue(running=False)
 
         info0 = self.make_script_info(
@@ -1110,7 +1122,7 @@ class QueueModelTestCase(unittest.IsolatedAsyncioTestCase):
         )
         await self.assert_next_queue(sal_indices=[i0])
 
-        self.model.running = True
+        await self.model.set_running(True)
         await self.assert_next_queue(
             running=True,
             current_sal_index=i0,
@@ -1149,7 +1161,7 @@ class QueueModelTestCase(unittest.IsolatedAsyncioTestCase):
         await self.assert_next_queue(enabled=True, running=True)
 
         # pause the queue so we know what to expect of queue state
-        self.model.running = False
+        await self.model.set_running(False)
         await self.assert_next_queue(running=False)
 
         info_dict = dict()
@@ -1175,12 +1187,13 @@ class QueueModelTestCase(unittest.IsolatedAsyncioTestCase):
                 sal_indices=[info.index for info in info_dict.values()]
             )
 
+        assert i0 is not None
         await self.wait_configured(i0, i0 + 1, i0 + 2, i0 + 3)
 
         # Resume the queue and wait for the second script to start running.
         # At that point we have one script running, one in history,
         # and two on the queue.
-        self.model.running = True
+        await self.model.set_running(True)
         await self.assert_next_queue(
             running=True,
             current_sal_index=i0,

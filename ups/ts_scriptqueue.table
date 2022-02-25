@@ -1,4 +1,5 @@
 setupRequired(ts_salobj)
+setupRequired(ts_utils)
 setupOptional(ts_standardscripts)
 setupOptional(ts_externalscripts)
 

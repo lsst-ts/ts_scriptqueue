@@ -25,4 +25,4 @@ import asyncio
 from lsst.ts.idl.enums.ScriptQueue import SalIndex
 from lsst.ts.scriptqueue.ui import ScriptQueueCommander
 
-asyncio.run(scriptqueue.ui.ScriptQueueCommander.amain(index=SalIndex))
+asyncio.run(ScriptQueueCommander.amain(index=SalIndex))

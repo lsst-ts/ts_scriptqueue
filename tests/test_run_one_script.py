@@ -178,9 +178,9 @@ class RunOneScriptTestCase(unittest.IsolatedAsyncioTestCase):
                 "10",
             )
             try:
-                t0 = time.time()
+                t0 = time.monotonic()
                 await asyncio.wait_for(process.wait(), timeout=STD_TIMEOUT)
-                dt = time.time() - t0
+                dt = time.monotonic() - t0
                 print(f"It took {dt:0.2f} seconds to run the script")
             except Exception:
                 if process.returncode is None:

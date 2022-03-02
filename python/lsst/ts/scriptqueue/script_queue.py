@@ -146,12 +146,12 @@ class ScriptQueue(salobj.BaseCsc):
     async def start(self):
         """Finish creating the script queue."""
         await self.model.start_task
-        self.evt_rootDirectories.set_put(
+        await self.evt_rootDirectories.set_write(
             standard=self.model.standardpath,
             external=self.model.externalpath,
             force_output=True,
         )
-        self.put_queue()
+        await self.put_queue()
         await super().start()
 
     async def close_tasks(self):
@@ -159,7 +159,7 @@ class ScriptQueue(salobj.BaseCsc):
         await self.model.close()
         await super().close_tasks()
 
-    def do_showAvailableScripts(self, data=None):
+    async def do_showAvailableScripts(self, data=None):
         """Output a list of available scripts.
 
         Parameters
@@ -169,7 +169,7 @@ class ScriptQueue(salobj.BaseCsc):
         """
         self.assert_enabled("showAvailableScripts")
         scripts = self.model.find_available_scripts()
-        self.evt_availableScripts.set_put(
+        await self.evt_availableScripts.set_write(
             standard=":".join(scripts.standard),
             external=":".join(scripts.external),
             force_output=True,
@@ -193,7 +193,7 @@ class ScriptQueue(salobj.BaseCsc):
         )
         try:
             stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=20)
-            self.evt_configSchema.set_put(
+            await self.evt_configSchema.set_write(
                 isStandard=data.isStandard,
                 path=data.path,
                 configSchema=stdout,
@@ -209,7 +209,7 @@ class ScriptQueue(salobj.BaseCsc):
         finally:
             os.environ["PATH"] = initialpath
 
-    def do_showQueue(self, data):
+    async def do_showQueue(self, data):
         """Output the queue event.
 
         Parameters
@@ -218,9 +218,9 @@ class ScriptQueue(salobj.BaseCsc):
             Command data. Ignored.
         """
         self.assert_enabled("showQueue")
-        self.put_queue()
+        await self.put_queue()
 
-    def do_showScript(self, data):
+    async def do_showScript(self, data):
         """Output the script event for one script.
 
         Parameters
@@ -233,9 +233,9 @@ class ScriptQueue(salobj.BaseCsc):
             script_info = self.model.get_script_info(data.salIndex, search_history=True)
         except ValueError:
             raise salobj.ExpectedError(f"Unknown script {data.salIndex}")
-        self.put_script(script_info, force_output=True)
+        await self.put_script(script_info, force_output=True)
 
-    def do_pause(self, data):
+    async def do_pause(self, data):
         """Pause the queue. A no-op if already paused.
 
         Unlike most commands, this can be issued in any state.
@@ -245,9 +245,9 @@ class ScriptQueue(salobj.BaseCsc):
         data : ``cmd_pause.DataType`` (optional)
             Command data. Ignored.
         """
-        self.model.running = False
+        await self.model.set_running(False)
 
-    def do_resume(self, data):
+    async def do_resume(self, data):
         """Run the queue. A no-op if already running.
 
         Parameters
@@ -256,7 +256,7 @@ class ScriptQueue(salobj.BaseCsc):
             Command data. Ignored.
         """
         self.assert_enabled("resume")
-        self.model.running = True
+        await self.model.set_running(True)
 
     async def do_add(self, data):
         """Add a script to the queue.
@@ -294,11 +294,11 @@ class ScriptQueue(salobj.BaseCsc):
             result=str(script_info.index),
         )
 
-    def do_move(self, data):
+    async def do_move(self, data):
         """Move a script within the queue."""
         self.assert_enabled("move")
         try:
-            self.model.move(
+            await self.model.move(
                 sal_index=data.salIndex,
                 location=data.location,
                 location_sal_index=data.locationSalIndex,
@@ -336,14 +336,14 @@ class ScriptQueue(salobj.BaseCsc):
             timeout,
         )
 
-    def report_summary_state(self):
-        super().report_summary_state()
+    async def handle_summary_state(self):
+        await super().handle_summary_state()
         enabled = self.summary_state == salobj.State.ENABLED
-        self.model.enabled = enabled
+        await self.model.set_enable(enabled)
         if enabled:
-            self.do_showAvailableScripts()
+            await self.do_showAvailableScripts()
 
-    def put_next_visit(self, script_info):
+    async def put_next_visit(self, script_info):
         """Output the ``nextVisit`` event."""
         if self.verbose:
             print(
@@ -360,14 +360,14 @@ class ScriptQueue(salobj.BaseCsc):
             if not key.startswith("private_")
         }
         del metadata_dict["ScriptID"]
-        self.evt_nextVisit.set_put(
+        await self.evt_nextVisit.set_write(
             salIndex=script_info.index,
             groupId=script_info.group_id,
             **metadata_dict,
             force_output=True,
         )
 
-    def put_next_visit_canceled(self, script_info):
+    async def put_next_visit_canceled(self, script_info):
         """Output the ``nextVisitCanceled`` event."""
         if self.verbose:
             print(
@@ -376,11 +376,11 @@ class ScriptQueue(salobj.BaseCsc):
             )
         if not script_info.group_id:
             raise RuntimeError("script_info has no group_id")
-        self.evt_nextVisitCanceled.set_put(
+        await self.evt_nextVisitCanceled.set_write(
             salIndex=script_info.index, groupId=script_info.group_id, force_output=True
         )
 
-    def put_queue(self):
+    async def put_queue(self):
         """Output the queued scripts as a ``queue`` event.
 
         The data is put even if the queue has not changed. That way commands
@@ -404,7 +404,7 @@ class ScriptQueue(salobj.BaseCsc):
                 f"salIndices={output_sal_indices[0:indlen]}, "
                 f"pastSalIndices={output_past_sal_indices[0:pastlen]}"
             )
-        self.evt_queue.set_put(
+        await self.evt_queue.set_write(
             enabled=self.model.enabled,
             running=self.model.running,
             currentSalIndex=self.model.current_index,
@@ -415,7 +415,7 @@ class ScriptQueue(salobj.BaseCsc):
             force_output=True,
         )
 
-    def put_script(self, script_info, force_output=False):
+    async def put_script(self, script_info, force_output=False):
         """Output information about a script as a ``script`` event.
 
         Designed to be used as a QueueModel script_callback.
@@ -436,7 +436,7 @@ class ScriptQueue(salobj.BaseCsc):
                 f"process_state={script_info.process_state}, "
                 f"script_state={script_info.script_state}"
             )
-        self.evt_script.set_put(
+        await self.evt_script.set_write(
             cmdId=script_info.seq_num,
             salIndex=script_info.index,
             path=script_info.path,

@@ -6,6 +6,22 @@
 Version History
 ###############
 
+v2.10.0
+-------
+
+Changes:
+
+* Update for ts_salobj v7, which is required.
+  This also requires ts_xml 11.
+* Use ts_utils and pytest-black.
+* Fix bin/command_script_queue.py
+
+Requirements:
+
+* ts_idl 3.5
+* ts_salobj 7
+* IDL files for ScriptQueue and Script built from ts_xml 11
+
 v2.9.0
 ------
 
@@ -19,7 +35,7 @@ Changes:
 * Make timeouts in unit tests more uniform.
 * Test black formatting with pytest-black, instead of a dedicated unit test.
 * Remove ``if __name__ == "__main__":`` from bin scripts in tests/data; it was never needed.
-  
+
 Requirements:
 
 * ts_idl 3.5

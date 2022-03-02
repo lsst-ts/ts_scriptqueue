@@ -26,9 +26,10 @@ import logging
 import pathlib
 import string
 
+from lsst.ts import salobj
 from lsst.ts.idl.enums.ScriptQueue import Location
 from lsst.ts.idl.enums.Script import ScriptState
-from lsst.ts import salobj
+from lsst.ts.utils import make_done_future
 
 ADD_TIMEOUT = 5  # Timeout for the add command (seconds).
 # How long to wait before warning that a script heartbeat is late (seconds).
@@ -95,7 +96,7 @@ class ScriptQueueCommander(salobj.CscCommander):
         # SAL index of script whose heartbeat is being monitored;
         # this should be the currently executing script.
         self._script_to_monitor = 0
-        self.script_heartbeat_monitor_task = salobj.make_done_future()
+        self.script_heartbeat_monitor_task = make_done_future()
 
     async def start(self):
         await super().start()
@@ -266,7 +267,9 @@ class ScriptQueueCommander(salobj.CscCommander):
         )
 
     async def do_stopScripts(self, args):
-        """Handle the stopScript command, which takes a list of script indices."""
+        """Handle the stopScript command, which takes a list of script
+        indices.
+        """
         if len(args) < 2:
             raise ValueError("Need at least 2 arguments; sal_index terminate")
         terminate_str = args[-1]

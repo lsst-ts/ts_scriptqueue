@@ -227,6 +227,7 @@ class ScriptQueueConstructorTestCase(unittest.IsolatedAsyncioTestCase):
 
 class ScriptQueueTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
     def setUp(self):
+        super().setUp()
         datadir = os.path.abspath(os.path.join(os.path.dirname(__file__), "data"))
         self.standardpath = os.path.join(datadir, "standard")
         self.externalpath = os.path.join(datadir, "external")
@@ -1218,7 +1219,7 @@ class ScriptQueueTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCa
                 sal_indices=[I0 + 5, I0 + 4, I0, I0 + 1, I0 + 2, I0 + 3]
             )
 
-            # Requeue I0+3 to before itself (which is not first), creating I0+6.
+            # Requeue I0+3 to before itself (which is not first), creating I0+6
             await self.remote.cmd_requeue.set_start(
                 salIndex=I0 + 3,
                 location=Location.BEFORE,

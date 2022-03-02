@@ -22,9 +22,10 @@
 __all__ = ["ScriptInfo"]
 
 import asyncio
+import inspect
 import os
-import time
 
+from lsst.ts.utils import current_tai
 from lsst.ts.idl.enums.Script import ScriptState
 from lsst.ts.idl.enums.ScriptQueue import ScriptProcessState
 
@@ -153,18 +154,23 @@ class ScriptInfo:
 
     @property
     def callback(self):
-        """Set, clear or get a function to call whenever the script
-        state changes.
+        """Set, clear or get a callback coroutine (async function) to call
+        whenever the script state changes.
 
         It receives one argument: this ScriptInfo.
         Set to None to clear the callback.
+
+        Raises
+        ------
+        TypeError
+            If ``callback`` is not a coroutine
         """
         return self._callback
 
     @callback.setter
     def callback(self, callback):
-        if not callable(callback):
-            raise TypeError(f"callback={callback} is not callable")
+        if callback is not None and not inspect.iscoroutinefunction(callback):
+            raise TypeError(f"callback={callback} must be a coroutine or None")
         self._callback = callback
 
     @property
@@ -267,7 +273,7 @@ class ScriptInfo:
         if not self.runnable:
             raise RuntimeError("Script is not runnable")
         asyncio.create_task(self.remote.cmd_run.set_start(ScriptID=self.index))
-        self.timestamp_run_start = time.time()
+        self.timestamp_run_start = current_tai()
 
     @property
     def runnable(self):
@@ -352,7 +358,7 @@ class ScriptInfo:
         )
         await self.set_group_id_task
         self.group_id = group_id
-        self._run_callback()
+        await self._run_callback()
 
     async def start_loading(self, fullpath):
         """Start the script process and start a task that will configure
@@ -387,8 +393,8 @@ class ScriptInfo:
                 # Terminated before fully loaded
                 return
             self.process_task = asyncio.create_task(self.process.wait())
-            self.timestamp_process_start = time.time()
-            self._run_callback()
+            self.timestamp_process_start = current_tai()
+            await self._run_callback()
             # note: process_task may already be done if the script cannot
             # be run, in which case the callback will be called immediately
             self.process_task.add_done_callback(self._cleanup)
@@ -403,7 +409,7 @@ class ScriptInfo:
         finally:
             os.environ["PATH"] = initialpath
             if not self.timestamp_process_start == 0:
-                self._run_callback()
+                await self._run_callback()
 
     async def terminate(self):
         """Terminate the script and wait for the process to terminate.
@@ -442,7 +448,7 @@ class ScriptInfo:
                     )
                 else:
                     self.log.warning("Timed out waiting for script process to exit")
-            self._run_callback()
+            await self._run_callback()
         return self._terminated
 
     async def _terminate_process(self):
@@ -491,13 +497,16 @@ class ScriptInfo:
         Set the timestamp_process_end, cancel the config task,
         delete the remote, run the callback and delete the callback.
         """
-        self.timestamp_process_end = time.time()
-        if self.config_task:
+        self.timestamp_process_end = current_tai()
+        if self.config_task is not None:
             self.config_task.cancel()
         self._cancel_set_clear_group_id()
+        asyncio.create_task(self._finish_cleanup())
+
+    async def _finish_cleanup(self):
+        await self._run_callback()
+        self.callback = None
         self.remote = None
-        self._run_callback()
-        self._callback = None
 
     async def _configure(self):
         """Configure the script.
@@ -535,23 +544,31 @@ class ScriptInfo:
             asyncio.create_task(self.terminate())
             raise
         finally:
-            self.timestamp_configure_end = time.time()
+            self.timestamp_configure_end = current_tai()
 
     @property
     def _configure_run(self):
         """Return True if the _configure method was run."""
         return self.config_task is not None and self.config_task.done()
 
-    def _run_callback(self, *args):
+    async def _run_callback(self, *args):
         if self.callback:
-            self.callback(self)
+            await self.callback(self)
 
-    def _script_state_callback(self, state):
+    def _trigger_callback(self, *args):
+        """Synchonous version of _run_callback.
+
+        Call _run_callback directly, if possible.
+        """
+        if self.callback:
+            asyncio.create_task(self._run_callback())
+
+    async def _script_state_callback(self, state):
         self.script_state = state.state
-        self.state_delay = time.time() - state.private_sndStamp
+        self.state_delay = current_tai() - state.private_sndStamp
         if self.script_state == ScriptState.UNCONFIGURED and self.config_task is None:
-            self.timestamp_configure_start = time.time()
+            self.timestamp_configure_start = current_tai()
             self.config_task = asyncio.create_task(self._configure())
-            self.config_task.add_done_callback(self._run_callback)
+            self.config_task.add_done_callback(self._trigger_callback)
             self.start_task.set_result(None)
-        self._run_callback()
+        await self._run_callback()

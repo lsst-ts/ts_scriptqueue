@@ -553,7 +553,10 @@ class ScriptQueueTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCa
                 script_data = await self.remote.evt_script.next(
                     flush=False, timeout=STD_TIMEOUT
                 )
-                if script_data.salIndex == I0 + 3:
+                if (
+                    script_data.salIndex == I0 + 3
+                    and script_data.processState == ScriptProcessState.CONFIGURED
+                ):
                     break
             assert script_data.salIndex == I0 + 3
             assert script_data.cmdId == seq_num3

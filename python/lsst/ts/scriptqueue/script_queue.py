@@ -145,6 +145,7 @@ class ScriptQueue(salobj.BaseCsc):
 
     async def start(self):
         """Finish creating the script queue."""
+        await super().start()
         await self.model.start_task
         await self.evt_rootDirectories.set_write(
             standard=self.model.standardpath,
@@ -152,7 +153,6 @@ class ScriptQueue(salobj.BaseCsc):
             force_output=True,
         )
         await self.put_queue()
-        await super().start()
 
     async def close_tasks(self):
         """Shut down the queue, terminate all scripts and free resources."""
@@ -196,7 +196,7 @@ class ScriptQueue(salobj.BaseCsc):
             await self.evt_configSchema.set_write(
                 isStandard=data.isStandard,
                 path=data.path,
-                configSchema=stdout,
+                configSchema=stdout.decode(),
                 force_output=True,
             )
         except Exception:
@@ -356,10 +356,9 @@ class ScriptQueue(salobj.BaseCsc):
             raise RuntimeError("script_info has no group_id")
         metadata_dict = {
             key: value
-            for key, value in script_info.metadata.get_vars().items()
+            for key, value in vars(script_info.metadata).items()
             if not key.startswith("private_")
         }
-        del metadata_dict["ScriptID"]
         await self.evt_nextVisit.set_write(
             salIndex=script_info.index,
             groupId=script_info.group_id,

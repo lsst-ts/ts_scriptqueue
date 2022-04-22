@@ -145,6 +145,7 @@ class ScriptQueue(salobj.BaseCsc):
 
     async def start(self):
         """Finish creating the script queue."""
+        await super().start()
         await self.model.start_task
         await self.evt_rootDirectories.set_write(
             standard=self.model.standardpath,
@@ -152,7 +153,6 @@ class ScriptQueue(salobj.BaseCsc):
             force_output=True,
         )
         await self.put_queue()
-        await super().start()
 
     async def close_tasks(self):
         """Shut down the queue, terminate all scripts and free resources."""

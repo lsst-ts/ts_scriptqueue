@@ -6,6 +6,22 @@
 Version History
 ###############
 
+v2.11.0
+-------
+
+Changes:
+
+* `ScriptQueue`: change start to call super().start() first.
+  This requires ts_salobj 7.1.
+* ``test_script_queue.py``: make a unit test more robust.
+* ``setup.cfg``: specify ``asyncio_mode = auto`` to eliminate a new pytest warning.
+
+Requirements:
+
+* ts_idl 3.5
+* ts_salobj 7.1
+* IDL files for ScriptQueue and Script built from ts_xml 11
+
 v2.10.0
 -------
 

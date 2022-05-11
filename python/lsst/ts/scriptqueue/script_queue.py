@@ -230,9 +230,11 @@ class ScriptQueue(salobj.BaseCsc):
         """
         self.assert_enabled("showScript")
         try:
-            script_info = self.model.get_script_info(data.salIndex, search_history=True)
+            script_info = self.model.get_script_info(
+                data.scriptSalIndex, search_history=True
+            )
         except ValueError:
-            raise salobj.ExpectedError(f"Unknown script {data.salIndex}")
+            raise salobj.ExpectedError(f"Unknown script {data.scriptSalIndex}")
         await self.put_script(script_info, force_output=True)
 
     async def do_pause(self, data):
@@ -299,7 +301,7 @@ class ScriptQueue(salobj.BaseCsc):
         self.assert_enabled("move")
         try:
             await self.model.move(
-                sal_index=data.salIndex,
+                sal_index=data.scriptSalIndex,
                 location=data.location,
                 location_sal_index=data.locationSalIndex,
             )
@@ -311,7 +313,7 @@ class ScriptQueue(salobj.BaseCsc):
         self.assert_enabled("requeue")
         try:
             await self.model.requeue(
-                sal_index=data.salIndex,
+                sal_index=data.scriptSalIndex,
                 seq_num=data.private_seqNum,
                 location=data.location,
                 location_sal_index=data.locationSalIndex,
@@ -361,7 +363,7 @@ class ScriptQueue(salobj.BaseCsc):
         }
         del metadata_dict["ScriptID"]
         await self.evt_nextVisit.set_write(
-            salIndex=script_info.index,
+            scriptSalIndex=script_info.index,
             groupId=script_info.group_id,
             **metadata_dict,
             force_output=True,
@@ -377,7 +379,9 @@ class ScriptQueue(salobj.BaseCsc):
         if not script_info.group_id:
             raise RuntimeError("script_info has no group_id")
         await self.evt_nextVisitCanceled.set_write(
-            salIndex=script_info.index, groupId=script_info.group_id, force_output=True
+            scriptSalIndex=script_info.index,
+            groupId=script_info.group_id,
+            force_output=True,
         )
 
     async def put_queue(self):
@@ -438,7 +442,7 @@ class ScriptQueue(salobj.BaseCsc):
             )
         await self.evt_script.set_write(
             cmdId=script_info.seq_num,
-            salIndex=script_info.index,
+            scriptSalIndex=script_info.index,
             path=script_info.path,
             isStandard=script_info.is_standard,
             timestampProcessStart=script_info.timestamp_process_start,

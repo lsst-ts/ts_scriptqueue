@@ -160,7 +160,7 @@ class ScriptQueueCommander(salobj.CscCommander):
             else ""
         )
         print(
-            f"{data.private_sndStamp:0.3f} Script:{data.ScriptID} "
+            f"{data.private_sndStamp:0.3f} Script:{data.salIndex} "
             f"logMessage level={logging.getLevelName(data.level)}, "
             f"message={data.message}{exception_str}"
         )
@@ -172,12 +172,12 @@ class ScriptQueueCommander(salobj.CscCommander):
             state = data.state
         reason = f", reason={data.reason}" if data.reason else ""
         print(
-            f"{data.private_sndStamp:0.3f} Script:{data.ScriptID} "
+            f"{data.private_sndStamp:0.3f} Script:{data.salIndex} "
             f"state={state.name}{reason}, lastCheckpoint={data.lastCheckpoint}"
         )
 
     def script_heartbeat(self, data):
-        if data.ScriptID != self._script_to_monitor:
+        if data.salIndex != self._script_to_monitor:
             # A heartbeat from the wrong script.
             return
         self.script_heartbeat_monitor_task.cancel()

@@ -361,7 +361,7 @@ class ScriptQueue(salobj.BaseCsc):
             for key, value in script_info.metadata.get_vars().items()
             if not key.startswith("private_")
         }
-        del metadata_dict["ScriptID"]
+        del metadata_dict["salIndex"]
         await self.evt_nextVisit.set_write(
             scriptSalIndex=script_info.index,
             groupId=script_info.group_id,

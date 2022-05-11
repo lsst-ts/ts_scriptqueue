@@ -196,7 +196,7 @@ class ScriptInfo:
     @property
     def started(self):
         """True if the script was commanded to run or terminate."""
-        self.timestamp_run_start > 0 or self.terminated or self.process_done
+        return self.timestamp_run_start > 0 or self.terminated or self.process_done
 
     @property
     def process_done(self):

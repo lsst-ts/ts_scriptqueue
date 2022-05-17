@@ -196,7 +196,7 @@ class ScriptInfo:
     @property
     def started(self):
         """True if the script was commanded to run or terminate."""
-        self.timestamp_run_start > 0 or self.terminated or self.process_done
+        return self.timestamp_run_start > 0 or self.terminated or self.process_done
 
     @property
     def process_done(self):
@@ -272,7 +272,7 @@ class ScriptInfo:
         """
         if not self.runnable:
             raise RuntimeError("Script is not runnable")
-        asyncio.create_task(self.remote.cmd_run.set_start(ScriptID=self.index))
+        asyncio.create_task(self.remote.cmd_run.set_start(salIndex=self.index))
         self.timestamp_run_start = current_tai()
 
     @property
@@ -319,7 +319,7 @@ class ScriptInfo:
         if command_script and self.configured and not self.started:
             self.clear_group_id_task = asyncio.create_task(
                 self.remote.cmd_setGroupId.set_start(
-                    ScriptID=self.index, groupId="", timeout=_SET_GROUP_ID_TIMEOUT
+                    salIndex=self.index, groupId="", timeout=_SET_GROUP_ID_TIMEOUT
                 )
             )
 
@@ -353,7 +353,7 @@ class ScriptInfo:
         self._cancel_set_clear_group_id()
         self.set_group_id_task = asyncio.create_task(
             self.remote.cmd_setGroupId.set_start(
-                ScriptID=self.index, groupId=group_id, timeout=_SET_GROUP_ID_TIMEOUT
+                salIndex=self.index, groupId=group_id, timeout=_SET_GROUP_ID_TIMEOUT
             )
         )
         await self.set_group_id_task
@@ -527,7 +527,7 @@ class ScriptInfo:
                 )
 
             await self.remote.cmd_configure.set_start(
-                ScriptID=self.index,
+                salIndex=self.index,
                 config=self.config,
                 logLevel=self.log_level,
                 pauseCheckpoint=self.pause_checkpoint,

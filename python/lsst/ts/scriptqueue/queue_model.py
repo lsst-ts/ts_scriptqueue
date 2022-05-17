@@ -525,7 +525,7 @@ class QueueModel:
             # process is running, so send the "stop" command
             try:
                 await script_info.remote.cmd_stop.set_start(
-                    ScriptID=script_info.index, timeout=STD_TIMEOUT
+                    salIndex=script_info.index, timeout=STD_TIMEOUT
                 )
                 # give the process time to terminate
                 await asyncio.wait_for(script_info.process.wait(), timeout=STD_TIMEOUT)
@@ -724,7 +724,7 @@ class QueueModel:
             Log message data.
         """
         print(
-            f"Script {data.ScriptID} log message={data.message!r}; "
+            f"Script {data.salIndex} log message={data.message!r}; "
             f"level={data.level}; traceback={data.traceback!r}"
         )
 
@@ -784,14 +784,14 @@ class QueueModel:
         event_name : `str`
             Name of event, for logging a warning.
         data : ``Script event data``
-            Data from a script event. The ScriptID field is read.
+            Data from a script event. The salIndex field is read.
 
         Returns
         -------
         script_info_or_None : `ScriptInfo` or `None`
             The script info, if found, else None.
         """
-        sal_index = data.ScriptID
+        sal_index = data.salIndex
         if sal_index < self.min_sal_index or sal_index > self.max_sal_index:
             # not a script for this QueueModel
             return None

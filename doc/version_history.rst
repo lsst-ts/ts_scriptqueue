@@ -11,7 +11,7 @@ v2.11.0
 
 Changes:
 
-* Update for ts_sal 6.2 and ts_xml 11.2, which are required:
+* Update for ts_sal 6.2 and ts_xml 12, both of which are required:
 
     * Rename existing "salIndex" fields to "scriptSalIndex".
     * Rename "{name}ID" fields to "salIndex" (RFC-849).
@@ -27,7 +27,7 @@ Requirements:
 
 * ts_idl 3.5
 * ts_salobj 7.1
-* IDL files for ScriptQueue and Script built from ts_xml 11.2 and ts_xml 6.2
+* IDL files for ScriptQueue and Script built from ts_xml 12 and ts_xml 6.2
 
 v2.10.0
 -------

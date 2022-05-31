@@ -19,7 +19,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-__all__ = ["ScriptQueue"]
+__all__ = ["ScriptQueue", "run_script_queue"]
 
 import asyncio
 import os
@@ -28,6 +28,7 @@ import subprocess
 import numpy as np
 
 from lsst.ts import salobj
+from lsst.ts.idl.enums.ScriptQueue import SalIndex
 from . import __version__
 from . import utils
 from .script_info import ScriptInfo
@@ -478,3 +479,8 @@ class ScriptQueue(salobj.BaseCsc):
         kwargs["standardpath"] = args.standard
         kwargs["externalpath"] = args.external
         kwargs["verbose"] = args.verbose
+
+
+def run_script_queue():
+    """Run the ScriptQueue CSC."""
+    asyncio.run(ScriptQueue.amain(index=SalIndex))

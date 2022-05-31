@@ -19,9 +19,10 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-__all__ = ["parse_run_one_script_cmd", "run_one_script"]
+__all__ = ["parse_run_one_script_cmd", "run_one_script", "run_one_script_cli"]
 
 import argparse
+import asyncio
 import datetime
 import logging
 import pathlib
@@ -206,3 +207,16 @@ async def run_one_script(index, script, config, loglevel=None):
             # make sure the background process is terminated
             await script_info.terminate()
             raise
+
+
+async def _run_one_script_cli_impl():
+    """Implementation for run_one_script_cli."""
+    cmd = parse_run_one_script_cmd()
+    await run_one_script(
+        index=cmd.index, script=cmd.script, config=cmd.config, loglevel=cmd.loglevel
+    )
+
+
+def run_one_script_cli():
+    """Use the command line to run one script."""
+    asyncio.run(_run_one_script_cli_impl())

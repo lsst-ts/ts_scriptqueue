@@ -27,7 +27,7 @@ import pathlib
 import string
 
 from lsst.ts import salobj
-from lsst.ts.idl.enums.ScriptQueue import Location
+from lsst.ts.idl.enums.ScriptQueue import Location, SalIndex
 from lsst.ts.idl.enums.Script import ScriptState
 from lsst.ts.utils import make_done_future
 
@@ -297,3 +297,11 @@ class ScriptQueueCommander(salobj.CscCommander):
     @classmethod
     def add_kwargs_from_args(cls, args, kwargs):
         kwargs["script_log_level"] = args.loglevel
+
+
+def command_script_queue():
+    """Run a command-line interface to command a ScriptQueue.
+
+    Intended for engineering use.
+    """
+    ScriptQueueCommander.amain(index=SalIndex)

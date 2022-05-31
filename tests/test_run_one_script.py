@@ -154,7 +154,7 @@ class RunOneScriptTestCase(unittest.IsolatedAsyncioTestCase):
         await ui.run_one_script(index=1, script=script, config=config, loglevel=10)
 
     async def test_run_command_line(self):
-        exe_name = "run_one_script.py"
+        exe_name = "run_one_script"
         exe_path = shutil.which(exe_name)
         if exe_path is None:
             self.fail(

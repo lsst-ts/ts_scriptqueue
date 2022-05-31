@@ -11,7 +11,8 @@ v2.11.0
 
 Changes:
 
-* Update for ts_sal 6.2 and ts_xml 12, both of which are required:
+* Rename command-line scripts to remove ".py" suffix.
+* Update for ts_sal 7 and ts_xml 12, both of which are required:
 
     * Rename existing "salIndex" fields to "scriptSalIndex".
     * Rename "{name}ID" fields to "salIndex" (RFC-849).
@@ -20,14 +21,13 @@ Changes:
   This requires ts_salobj 7.1.
 * `ScriptInfo`: fix the ``started`` property, which was always None.
 * ``test_script_queue.py``: make a unit test more robust.
-* ``setup.cfg``: specify ``asyncio_mode = auto`` to eliminate a new pytest warning.
-* git ignore ``.hypothesis``.
+* Build with pyproject.toml.
 
 Requirements:
 
 * ts_idl 3.5
 * ts_salobj 7.1
-* IDL files for ScriptQueue and Script built from ts_xml 12 and ts_xml 6.2
+* IDL files for ScriptQueue and Script built from ts_xml 12 and ts_xml 7
 
 v2.10.0
 -------

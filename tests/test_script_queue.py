@@ -701,7 +701,7 @@ class ScriptQueueTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCa
                 await self.check_bin_script(
                     name="ScriptQueue",
                     index=int(index),
-                    exe_name="run_script_queue.py",
+                    exe_name="run_script_queue",
                     initial_state=initial_state,
                     cmdline_args=cmdline_args,
                 )
@@ -803,7 +803,7 @@ class ScriptQueueTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCa
             await self.assert_next_queue(running=True, past_sal_indices=[I0])
 
     async def test_bin_script_state_with_test_scripts(self):
-        """Test the --state argument of run_script_queue.py
+        """Test the --state argument of run_script_queue
 
         Note that other bin script tests are in a separate class below,
         but this test relies on salobj.BaseCscTestCase.
@@ -823,7 +823,7 @@ class ScriptQueueTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCa
         "Could not import ts_standardscripts and/or ts_externalscripts.",
     )
     async def test_bin_script_state(self):
-        """Test the --state argument of run_script_queue.py
+        """Test the --state argument of run_script_queue
 
         Note that other bin script tests are in a separate class below,
         but this test relies on salobj.BaseCscTestCase.
@@ -1544,7 +1544,7 @@ class CmdLineTestCase(unittest.IsolatedAsyncioTestCase):
         self.badpath = os.path.join(self.datadir, "not_a_directory")
 
     async def test_run_with_standard_and_external(self):
-        exe_name = "run_script_queue.py"
+        exe_name = "run_script_queue"
         exe_path = shutil.which(exe_name)
         if exe_path is None:
             self.fail(
@@ -1598,7 +1598,7 @@ class CmdLineTestCase(unittest.IsolatedAsyncioTestCase):
         "Could not import ts_standardscripts and/or ts_externalscripts.",
     )
     async def test_run_default_standard_external(self):
-        exe_name = "run_script_queue.py"
+        exe_name = "run_script_queue"
         exe_path = shutil.which(exe_name)
         if exe_path is None:
             self.fail(

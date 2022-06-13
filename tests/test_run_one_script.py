@@ -167,6 +167,18 @@ class RunOneScriptTestCase(unittest.IsolatedAsyncioTestCase):
         async with salobj.Domain() as domain, salobj.Remote(
             domain=domain, name="Script", index=index
         ) as remote:
+            # The script states seen, ignoring sequential duplicates
+            # (e.g. [1, 1, 2, 2, 1, 1] becomes [1, 2, 1]
+            states_seen = []
+
+            def state_callback(data):
+                nonlocal states_seen
+                state = ScriptState(data.state)
+                if not states_seen or state != states_seen[-1]:
+                    states_seen.append(state)
+
+            remote.evt_state.callback = state_callback
+
             process = await asyncio.create_subprocess_exec(
                 exe_name,
                 str(script),
@@ -186,5 +198,11 @@ class RunOneScriptTestCase(unittest.IsolatedAsyncioTestCase):
                 if process.returncode is None:
                     process.terminate()
                 raise
-            final_state = remote.evt_state.get()
-            assert final_state.state == ScriptState.DONE
+
+            assert states_seen == [
+                ScriptState.UNCONFIGURED,
+                ScriptState.CONFIGURED,
+                ScriptState.RUNNING,
+                ScriptState.ENDING,
+                ScriptState.DONE,
+            ]

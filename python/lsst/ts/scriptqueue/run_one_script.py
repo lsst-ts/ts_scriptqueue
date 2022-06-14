@@ -31,7 +31,7 @@ import random
 import astropy
 
 from lsst.ts import salobj
-from lsst.ts import scriptqueue
+from .script_queue import SCRIPT_INDEX_MULT, ScriptInfo
 
 STD_TIMEOUT = 5  # timeout for fast commands
 
@@ -126,7 +126,7 @@ def parse_run_one_script_cmd(args=None):
 
     cmd = parser.parse_args(args=args)
     if cmd.index is None:
-        cmd.index = random.randint(1, scriptqueue.script_queue.SCRIPT_INDEX_MULT - 1)
+        cmd.index = random.randint(1, SCRIPT_INDEX_MULT - 1)
     elif not 0 < cmd.index <= salobj.MAX_SAL_INDEX:
         parser.error(
             f"index={cmd.index} must be in the range [1, {salobj.MAX_SAL_INDEX}], inclusive"
@@ -174,7 +174,7 @@ async def run_one_script(index, script, config, loglevel=None):
         remote.evt_logMessage.callback = log_callback
 
         print("starting the script process")
-        script_info = scriptqueue.ScriptInfo(
+        script_info = ScriptInfo(
             log=remote.salinfo.log,
             remote=remote,
             index=index,

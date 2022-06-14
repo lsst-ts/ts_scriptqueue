@@ -19,7 +19,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-__all__ = ["ScriptQueue"]
+__all__ = ["ScriptQueue", "run_script_queue"]
 
 import asyncio
 import os
@@ -28,6 +28,7 @@ import subprocess
 import numpy as np
 
 from lsst.ts import salobj
+from lsst.ts.idl.enums.ScriptQueue import SalIndex
 from . import __version__
 from . import utils
 from .script_info import ScriptInfo
@@ -145,6 +146,7 @@ class ScriptQueue(salobj.BaseCsc):
 
     async def start(self):
         """Finish creating the script queue."""
+        await super().start()
         await self.model.start_task
         await self.evt_rootDirectories.set_write(
             standard=self.model.standardpath,
@@ -152,7 +154,6 @@ class ScriptQueue(salobj.BaseCsc):
             force_output=True,
         )
         await self.put_queue()
-        await super().start()
 
     async def close_tasks(self):
         """Shut down the queue, terminate all scripts and free resources."""
@@ -230,9 +231,11 @@ class ScriptQueue(salobj.BaseCsc):
         """
         self.assert_enabled("showScript")
         try:
-            script_info = self.model.get_script_info(data.salIndex, search_history=True)
+            script_info = self.model.get_script_info(
+                data.scriptSalIndex, search_history=True
+            )
         except ValueError:
-            raise salobj.ExpectedError(f"Unknown script {data.salIndex}")
+            raise salobj.ExpectedError(f"Unknown script {data.scriptSalIndex}")
         await self.put_script(script_info, force_output=True)
 
     async def do_pause(self, data):
@@ -299,7 +302,7 @@ class ScriptQueue(salobj.BaseCsc):
         self.assert_enabled("move")
         try:
             await self.model.move(
-                sal_index=data.salIndex,
+                sal_index=data.scriptSalIndex,
                 location=data.location,
                 location_sal_index=data.locationSalIndex,
             )
@@ -311,7 +314,7 @@ class ScriptQueue(salobj.BaseCsc):
         self.assert_enabled("requeue")
         try:
             await self.model.requeue(
-                sal_index=data.salIndex,
+                sal_index=data.scriptSalIndex,
                 seq_num=data.private_seqNum,
                 location=data.location,
                 location_sal_index=data.locationSalIndex,
@@ -359,9 +362,9 @@ class ScriptQueue(salobj.BaseCsc):
             for key, value in script_info.metadata.get_vars().items()
             if not key.startswith("private_")
         }
-        del metadata_dict["ScriptID"]
+        del metadata_dict["salIndex"]
         await self.evt_nextVisit.set_write(
-            salIndex=script_info.index,
+            scriptSalIndex=script_info.index,
             groupId=script_info.group_id,
             **metadata_dict,
             force_output=True,
@@ -377,7 +380,9 @@ class ScriptQueue(salobj.BaseCsc):
         if not script_info.group_id:
             raise RuntimeError("script_info has no group_id")
         await self.evt_nextVisitCanceled.set_write(
-            salIndex=script_info.index, groupId=script_info.group_id, force_output=True
+            scriptSalIndex=script_info.index,
+            groupId=script_info.group_id,
+            force_output=True,
         )
 
     async def put_queue(self):
@@ -438,7 +443,7 @@ class ScriptQueue(salobj.BaseCsc):
             )
         await self.evt_script.set_write(
             cmdId=script_info.seq_num,
-            salIndex=script_info.index,
+            scriptSalIndex=script_info.index,
             path=script_info.path,
             isStandard=script_info.is_standard,
             timestampProcessStart=script_info.timestamp_process_start,
@@ -474,3 +479,8 @@ class ScriptQueue(salobj.BaseCsc):
         kwargs["standardpath"] = args.standard
         kwargs["externalpath"] = args.external
         kwargs["verbose"] = args.verbose
+
+
+def run_script_queue():
+    """Run the ScriptQueue CSC."""
+    asyncio.run(ScriptQueue.amain(index=SalIndex))

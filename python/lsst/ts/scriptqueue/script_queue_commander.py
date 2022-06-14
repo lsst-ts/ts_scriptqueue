@@ -27,7 +27,7 @@ import pathlib
 import string
 
 from lsst.ts import salobj
-from lsst.ts.idl.enums.ScriptQueue import Location
+from lsst.ts.idl.enums.ScriptQueue import Location, SalIndex
 from lsst.ts.idl.enums.Script import ScriptState
 from lsst.ts.utils import make_done_future
 
@@ -160,7 +160,7 @@ class ScriptQueueCommander(salobj.CscCommander):
             else ""
         )
         print(
-            f"{data.private_sndStamp:0.3f} Script:{data.ScriptID} "
+            f"{data.private_sndStamp:0.3f} Script:{data.salIndex} "
             f"logMessage level={logging.getLevelName(data.level)}, "
             f"message={data.message}{exception_str}"
         )
@@ -172,12 +172,12 @@ class ScriptQueueCommander(salobj.CscCommander):
             state = data.state
         reason = f", reason={data.reason}" if data.reason else ""
         print(
-            f"{data.private_sndStamp:0.3f} Script:{data.ScriptID} "
+            f"{data.private_sndStamp:0.3f} Script:{data.salIndex} "
             f"state={state.name}{reason}, lastCheckpoint={data.lastCheckpoint}"
         )
 
     def script_heartbeat(self, data):
-        if data.ScriptID != self._script_to_monitor:
+        if data.salIndex != self._script_to_monitor:
             # A heartbeat from the wrong script.
             return
         self.script_heartbeat_monitor_task.cancel()
@@ -297,3 +297,11 @@ class ScriptQueueCommander(salobj.CscCommander):
     @classmethod
     def add_kwargs_from_args(cls, args, kwargs):
         kwargs["script_log_level"] = args.loglevel
+
+
+def command_script_queue():
+    """Run a command-line interface to command a ScriptQueue.
+
+    Intended for engineering use.
+    """
+    ScriptQueueCommander.amain(index=SalIndex)

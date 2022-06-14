@@ -1,4 +1,4 @@
-Code to run scripts as [Service Abstraction Layer (SAL) components](https://docushare.lsstcorp.org/docushare/dsweb/Get/Document-21527/).
+A CSC to run SAL scripts at Vera C. Rubin Observatory.
 
 `Documentation <https://ts-scriptqueue.lsst.io>`_
 

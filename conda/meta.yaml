@@ -7,7 +7,12 @@ source:
   path: ../
 
 build:
+  noarch: generic
   script: python -m pip install --no-deps --ignore-installed .
+  entry_points:
+    - command_script_queue = lsst.ts.scriptqueue:command_script_queue
+    - run_one_script = lsst.ts.scriptqueue:run_one_script_cli
+    - run_script_queue = lsst.ts.scriptqueue:run_script_queue
 
 test:
   requires:
@@ -19,6 +24,7 @@ test:
     - bin
     - tests
     - setup.cfg
+    - pyproject.toml
   commands:
     - py.test
 

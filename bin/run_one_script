@@ -20,16 +20,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-import asyncio
-
-from lsst.ts.scriptqueue import ui
+from lsst.ts.scriptqueue import run_one_script_cli
 
 
-async def main():
-    cmd = ui.parse_run_one_script_cmd()
-    await ui.run_one_script(
-        index=cmd.index, script=cmd.script, config=cmd.config, loglevel=cmd.loglevel
-    )
-
-
-asyncio.run(main())
+run_one_script_cli()

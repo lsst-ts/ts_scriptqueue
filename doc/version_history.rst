@@ -6,6 +6,15 @@
 Version History
 ###############
 
+v2.12.0
+-------
+
+Changes:
+
+* Use the new ``Script.ScriptState.CONFIGURE_FAILED`` enum value and rename ``ScriptQueue.ScriptProcessState.CONFIGUREFAILED`` to ``CONFIGURE_FAILED``.
+  This requires ts_idl 4.2.
+* Modernize the CI Jenkinsfile.
+
 v2.11.0
 -------
 

@@ -247,7 +247,7 @@ class ScriptInfo:
         if self.load_failed:
             return ScriptProcessState.LOADFAILED
         elif self.configure_failed:
-            return ScriptProcessState.CONFIGUREFAILED
+            return ScriptProcessState.CONFIGURE_FAILED
         elif self.terminated:
             return ScriptProcessState.TERMINATED
         elif self.process_done:

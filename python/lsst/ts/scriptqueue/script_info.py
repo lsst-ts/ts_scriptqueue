@@ -181,7 +181,9 @@ class ScriptInfo:
     @property
     def configure_failed(self):
         """True if the configure command failed."""
-        return self._configure_run and self.config_task.exception() is not None
+        return self.script_state == ScriptState.CONFIGURE_FAILED or (
+            self._configure_run and self.config_task.exception() is not None
+        )
 
     @property
     def load_failed(self):
@@ -518,14 +520,14 @@ class ScriptInfo:
         RuntimeError
             If the script state is not ScriptState.UNCONFIGURED
         """
-        try:
-            if self.script_state != ScriptState.UNCONFIGURED:
-                raise RuntimeError(
-                    f"Cannot configure script {self.index} "
-                    f"because it is in state {self.script_state} "
-                    f"instead of {ScriptState.UNCONFIGURED!r}"
-                )
+        if self.script_state != ScriptState.UNCONFIGURED:
+            raise RuntimeError(
+                f"Cannot configure script {self.index} "
+                f"because it is in state {self.script_state} "
+                f"instead of {ScriptState.UNCONFIGURED!r}"
+            )
 
+        try:
             await self.remote.cmd_configure.set_start(
                 salIndex=self.index,
                 config=self.config,
@@ -535,12 +537,9 @@ class ScriptInfo:
                 timeout=_CONFIGURE_TIMEOUT,
             )
         except asyncio.CancelledError:
+            # Terminate the script. Use asyncio.create_task,
+            # in order to let _configure exit before termination.
             self.log.info("Configuration cancelled")
-            asyncio.create_task(self.terminate())
-            raise
-        except Exception:
-            # terminate the script but first let the configure_task fail
-            self.log.exception("Configuration failed")
             asyncio.create_task(self.terminate())
             raise
         finally:

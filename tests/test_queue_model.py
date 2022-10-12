@@ -512,7 +512,7 @@ class QueueModelTestCase(unittest.IsolatedAsyncioTestCase):
         assert script0.configure_failed
         assert not (script0.configured)
         assert script0.process_done
-        assert script0.process_state == ScriptProcessState.CONFIGUREFAILED
+        assert script0.process_state == ScriptProcessState.CONFIGURE_FAILED
 
     async def check_add_then_stop_script(self, terminate):
         """Test adding a script immediately followed by stoppping it."""

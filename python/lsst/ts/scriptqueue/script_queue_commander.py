@@ -304,4 +304,4 @@ def command_script_queue():
 
     Intended for engineering use.
     """
-    ScriptQueueCommander.amain(index=SalIndex)
+    asyncio.run(ScriptQueueCommander.amain(index=SalIndex))

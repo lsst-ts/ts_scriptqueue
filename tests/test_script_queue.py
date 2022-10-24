@@ -356,8 +356,10 @@ class ScriptQueueTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCa
         assert queue_data.currentSalIndex == current_sal_index
         assert list(queue_data.salIndices[0 : queue_data.length]) == list(sal_indices)
         if isinstance(past_sal_indices, set):
-            set(queue_data.pastSalIndices[0 : queue_data.pastLength]),
-            past_sal_indices,
+            assert (
+                set(queue_data.pastSalIndices[0 : queue_data.pastLength])
+                == past_sal_indices
+            )
         else:
             assert list(queue_data.pastSalIndices[0 : queue_data.pastLength]) == list(
                 past_sal_indices

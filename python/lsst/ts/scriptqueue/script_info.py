@@ -25,9 +25,9 @@ import asyncio
 import inspect
 import os
 
-from lsst.ts.utils import current_tai
 from lsst.ts.idl.enums.Script import ScriptState
 from lsst.ts.idl.enums.ScriptQueue import ScriptProcessState
+from lsst.ts.utils import current_tai
 
 _CONFIGURE_TIMEOUT = 60  # Time limit for the configure command (seconds)
 _SET_GROUP_ID_TIMEOUT = 5  # Time limit for setGroupId command (seconds)

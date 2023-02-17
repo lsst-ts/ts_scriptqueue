@@ -26,13 +26,12 @@ import os
 import subprocess
 
 import numpy as np
-
 from lsst.ts import salobj
 from lsst.ts.idl.enums.ScriptQueue import SalIndex
-from . import __version__
-from . import utils
-from .script_info import ScriptInfo
+
+from . import __version__, utils
 from .queue_model import QueueModel
+from .script_info import ScriptInfo
 
 SCRIPT_INDEX_MULT = 100000
 """Minimum Script SAL index is ScriptQueue SAL index * SCRIPT_INDEX_MULT

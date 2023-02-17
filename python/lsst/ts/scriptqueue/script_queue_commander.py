@@ -27,8 +27,8 @@ import pathlib
 import string
 
 from lsst.ts import salobj
-from lsst.ts.idl.enums.ScriptQueue import Location, SalIndex
 from lsst.ts.idl.enums.Script import ScriptState
+from lsst.ts.idl.enums.ScriptQueue import Location, SalIndex
 from lsst.ts.utils import make_done_future
 
 ADD_TIMEOUT = 5  # Timeout for the add command (seconds).

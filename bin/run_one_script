@@ -22,5 +22,4 @@
 
 from lsst.ts.scriptqueue import run_one_script_cli
 
-
 run_one_script_cli()

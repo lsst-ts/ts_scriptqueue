@@ -26,8 +26,8 @@ __all__ = [
     "get_default_scripts_dir",
 ]
 
-import os
 import logging
+import os
 import time
 
 

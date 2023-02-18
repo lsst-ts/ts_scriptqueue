@@ -696,6 +696,7 @@ class ScriptQueueTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCa
             (salobj.State.DISABLED, SalIndex.MAIN_TEL),
             (salobj.State.ENABLED, SalIndex.AUX_TEL),
         ):
+            salobj.set_random_lsst_dds_partition_prefix()
             with self.subTest(initial_state=initial_state, index=index):
                 await self.check_bin_script(
                     name="ScriptQueue",

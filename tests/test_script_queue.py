@@ -19,6 +19,9 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+import sys
+import faulthandler
+
 import asyncio
 import copy
 import logging
@@ -100,6 +103,8 @@ class MakeAddKwargs(MakeKWargs):
 
 class ScriptQueueConstructorTestCase(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
+        print(f"Recursion limit: " + sys.getrecursionlimit())
+        faulthandler.enable()
         salobj.set_random_lsst_dds_partition_prefix()
         try:
             self.default_standardpath = scriptqueue.get_default_scripts_dir(

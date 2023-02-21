@@ -25,8 +25,8 @@ except ImportError:
     __version__ = "?"
 
 from .queue_model import *
+from .run_one_script import *
 from .script_info import *
 from .script_queue import *
-from .utils import *
-from .run_one_script import *
 from .script_queue_commander import *
+from .utils import *

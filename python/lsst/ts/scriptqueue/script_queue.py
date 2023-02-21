@@ -26,13 +26,12 @@ import os
 import subprocess
 
 import numpy as np
-
 from lsst.ts import salobj
 from lsst.ts.idl.enums.ScriptQueue import SalIndex
-from . import __version__
-from . import utils
-from .script_info import ScriptInfo
+
+from . import __version__, utils
 from .queue_model import QueueModel
+from .script_info import ScriptInfo
 
 SCRIPT_INDEX_MULT = 100000
 """Minimum Script SAL index is ScriptQueue SAL index * SCRIPT_INDEX_MULT
@@ -147,6 +146,33 @@ class ScriptQueue(salobj.BaseCsc):
     async def start(self):
         """Finish creating the script queue."""
         await super().start()
+        blank_data = self.evt_summaryState.DataType()
+
+        if hasattr(blank_data, "get_vars"):
+
+            def get_data_dict(data):
+                return data.get_vars()
+
+        else:
+
+            def get_data_dict(data):
+                return vars(data)
+
+        # A function to return message data as a dict of key: value
+        # Once we switch to Kafka remove this and just use vars
+        # (I tried that on DDS data and got segfaults in Jenkins).
+        # TODO DM-38093: delete self.get_data_dict and use vars(data)
+        # once we switch to Kafka salobj.
+        self.get_data_dict = get_data_dict
+
+        # Frozen set of base field names in SAL messages:
+        # "salIndex" and all "private_..." names.
+        self.base_field_names = frozenset(
+            name
+            for name in self.get_data_dict(blank_data)
+            if name.startswith("private_") or name == "salIndex"
+        )
+
         await self.model.start_task
         await self.evt_rootDirectories.set_write(
             standard=self.model.standardpath,
@@ -197,7 +223,7 @@ class ScriptQueue(salobj.BaseCsc):
             await self.evt_configSchema.set_write(
                 isStandard=data.isStandard,
                 path=data.path,
-                configSchema=stdout,
+                configSchema=stdout.decode(),
                 force_output=True,
             )
         except Exception:
@@ -359,10 +385,9 @@ class ScriptQueue(salobj.BaseCsc):
             raise RuntimeError("script_info has no group_id")
         metadata_dict = {
             key: value
-            for key, value in script_info.metadata.get_vars().items()
-            if not key.startswith("private_")
+            for key, value in self.get_data_dict(script_info.metadata).items()
+            if key not in self.base_field_names
         }
-        del metadata_dict["salIndex"]
         await self.evt_nextVisit.set_write(
             scriptSalIndex=script_info.index,
             groupId=script_info.group_id,

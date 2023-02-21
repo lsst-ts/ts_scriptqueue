@@ -19,6 +19,8 @@ pipeline {
             alwaysPull true
             image 'lsstts/develop-env:develop'
             args "--entrypoint=''"
+            label 'Node2_8CPU || CSC_Conda_Node'
+
         }
     }
     environment {

@@ -196,7 +196,7 @@ class ScriptQueue(salobj.BaseCsc):
             await self.evt_configSchema.set_write(
                 isStandard=data.isStandard,
                 path=data.path,
-                configSchema=stdout,
+                configSchema=stdout.decode(),
                 force_output=True,
             )
         except Exception:
@@ -358,10 +358,11 @@ class ScriptQueue(salobj.BaseCsc):
             raise RuntimeError("script_info has no group_id")
         metadata_dict = {
             key: value
-            for key, value in script_info.metadata.get_vars().items()
+            for key, value in vars(script_info.metadata).items()
             if not key.startswith("private_")
+            # _member_attributes is in DDS messages, but not Kafka messages.
+            and key not in {"salIndex", "_member_attributes"}
         }
-        del metadata_dict["salIndex"]
         await self.evt_nextVisit.set_write(
             scriptSalIndex=script_info.index,
             groupId=script_info.group_id,

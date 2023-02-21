@@ -20,7 +20,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import sys
-import faulthandler
+#import faulthandler
 
 import asyncio
 import copy
@@ -50,7 +50,6 @@ except ImportError:
 STD_TIMEOUT = 60
 
 I0 = scriptqueue.script_queue.SCRIPT_INDEX_MULT  # initial Script SAL index
-
 
 class MakeKWargs:
     """Functor to make a set of keyword arguments.
@@ -103,8 +102,11 @@ class MakeAddKwargs(MakeKWargs):
 
 class ScriptQueueConstructorTestCase(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
-        print(f"Recursion limit: " + sys.getrecursionlimit())
-        faulthandler.enable()
+        print("Hello world")
+        print(sys.getrecursionlimit())
+        sys.setrecursionlimit(1500)
+        #faulthandler.enable()
+
         salobj.set_random_lsst_dds_partition_prefix()
         try:
             self.default_standardpath = scriptqueue.get_default_scripts_dir(

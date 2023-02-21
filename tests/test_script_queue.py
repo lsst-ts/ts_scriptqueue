@@ -20,7 +20,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import sys
-#import faulthandler
+import faulthandler
 
 import asyncio
 import copy
@@ -105,7 +105,8 @@ class ScriptQueueConstructorTestCase(unittest.IsolatedAsyncioTestCase):
         print("Hello world")
         print(sys.getrecursionlimit())
         sys.setrecursionlimit(1500)
-        #faulthandler.enable()
+        print(sys.getrecursionlimit())
+        faulthandler.enable()
 
         salobj.set_random_lsst_dds_partition_prefix()
         try:

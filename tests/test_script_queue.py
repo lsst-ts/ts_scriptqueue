@@ -28,11 +28,9 @@ import unittest
 
 import pytest
 import yaml
-
-from lsst.ts import salobj
-from lsst.ts.idl.enums.ScriptQueue import Location, SalIndex, ScriptProcessState
+from lsst.ts import salobj, scriptqueue
 from lsst.ts.idl.enums.Script import ScriptState
-from lsst.ts import scriptqueue
+from lsst.ts.idl.enums.ScriptQueue import Location, SalIndex, ScriptProcessState
 
 try:
     from lsst.ts import standardscripts
@@ -692,13 +690,13 @@ class ScriptQueueTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCa
             )
 
     async def check_bin_script_initial_state(self, cmdline_args):
-
         for initial_state, index in (
             (None, SalIndex.MAIN_TEL),
             (salobj.State.STANDBY, SalIndex.AUX_TEL),
             (salobj.State.DISABLED, SalIndex.MAIN_TEL),
             (salobj.State.ENABLED, SalIndex.AUX_TEL),
         ):
+            salobj.set_random_lsst_dds_partition_prefix()
             with self.subTest(initial_state=initial_state, index=index):
                 await self.check_bin_script(
                     name="ScriptQueue",
@@ -1566,7 +1564,6 @@ class CmdLineTestCase(unittest.IsolatedAsyncioTestCase):
                 "--verbose",
             )
             try:
-
                 summaryState_data = await remote.evt_summaryState.next(
                     flush=False, timeout=STD_TIMEOUT
                 )
@@ -1614,7 +1611,6 @@ class CmdLineTestCase(unittest.IsolatedAsyncioTestCase):
                 exe_name, str(self.index), "--verbose"
             )
             try:
-
                 summaryState_data = await remote.evt_summaryState.next(
                     flush=False, timeout=STD_TIMEOUT
                 )

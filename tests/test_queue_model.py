@@ -28,11 +28,9 @@ import unittest
 import warnings
 
 import pytest
-
-from lsst.ts import salobj
-from lsst.ts.idl.enums.ScriptQueue import Location, ScriptProcessState
+from lsst.ts import salobj, scriptqueue
 from lsst.ts.idl.enums.Script import ScriptState
-from lsst.ts import scriptqueue
+from lsst.ts.idl.enums.ScriptQueue import Location, ScriptProcessState
 
 # Long enough to perform any reasonable operation
 # including starting a CSC or loading a script (seconds)
@@ -582,7 +580,6 @@ class QueueModelTestCase(unittest.IsolatedAsyncioTestCase):
         info_dict = dict()
         i0 = None
         for i in range(3):
-
             script_info = self.make_script_info(
                 is_standard=False,
                 path=os.path.join("subdir", "script6"),

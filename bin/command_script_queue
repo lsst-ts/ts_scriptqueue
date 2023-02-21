@@ -22,5 +22,4 @@
 
 from lsst.ts.scriptqueue import command_script_queue
 
-
 command_script_queue()

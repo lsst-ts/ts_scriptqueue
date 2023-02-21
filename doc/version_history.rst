@@ -6,19 +6,34 @@
 Version History
 ###############
 
-v2.12.0
+v2.12.1
 -------
 
-Changes:
+* Make the code compatible with the Kafka version of ts_salobj, while preserving compatibility with the DDS version.
+* pre-commit: update black to 23.1.0, isort to 5.12.0, mypy to 1.0.0, and pre-commit-hooks to v4.4.0.
+* ``Jenkinsfile``: do not run as root.
+
+Requirements:
+
+* ts_idl 3.5
+* ts_salobj 7.1
+* IDL files for ScriptQueue and Script built from ts_xml 12 and ts_xml 7
+
+v2.12.0
+-------
 
 * Use the new ``Script.ScriptState.CONFIGURE_FAILED`` enum value and rename ``ScriptQueue.ScriptProcessState.CONFIGUREFAILED`` to ``CONFIGURE_FAILED``.
   This requires ts_idl 4.2.
 * Modernize the CI Jenkinsfile.
 
+Requirements:
+
+* ts_idl 4.2
+* ts_salobj 7.1
+* IDL files for ScriptQueue and Script built from ts_xml 12 and ts_xml 7
+
 v2.11.0
 -------
-
-Changes:
 
 * Rename command-line scripts to remove ".py" suffix.
 * Update for ts_sal 7 and ts_xml 12, both of which are required:
@@ -41,8 +56,6 @@ Requirements:
 v2.10.0
 -------
 
-Changes:
-
 * Update for ts_salobj v7, which is required.
   This also requires ts_xml 11.
 * Use ts_utils and pytest-black.
@@ -56,8 +69,6 @@ Requirements:
 
 v2.9.0
 ------
-
-Changes:
 
 * Use new `lsst.ts.idl.enums.ScriptQueue.SalIndex` enum.
   This requires ts_idl 3.5, which is required.
@@ -78,8 +89,6 @@ Requirements:
 v2.8.6
 ------
 
-Changes:
-
 * In `tests/test_queue_model`, stop adding stream handlers to the test class logger. 
   This was causing duplicated messages to appear in the unit tests as more stream handlers were added at every test. 
   If debugging unit tests, add the option `--log-cli-level 10` to `pytest` command.
@@ -93,8 +102,6 @@ Requirements:
 
 v2.8.5
 ------
-
-Changes:
 
 * `ScriptInfo.terminate` is now asynchronous, and it now waits for the process to be created, if necessary (with a time limit).
 * `QueueModel.terminate_all` is now asynchronous, and it kills any zombie processes it finds (though these should be rare).
@@ -111,8 +118,6 @@ Requirements:
 
 v2.8.4
 ------
-
-Changes:
 
 * Update `test_script_queue` to support building conda package:
   * Add `check_bin_script_initial_state` utility to test scriptqueue bin script.
@@ -133,8 +138,6 @@ Requirements:
 v2.8.3
 ------
 
-Changes:
-
 * Use `unittest.IsolatedAsyncioTestCase` instead of the abandoned asynctest package.
 * Format the code with black 20.8b1.
 
@@ -148,8 +151,6 @@ Requirements:
 
 v2.8.2
 ------
-
-Changes:
 
 * `ScriptQueue`: set ``version`` class attribute, which is used to set
   the ``cscVersion`` field of the ``softwareVersions`` event.
@@ -166,8 +167,6 @@ Requirements:
 v2.8.1
 ------
 
-Changes:
-
 * Removed a small bit of ts_salobj 5 compatibility code.
 * Add a conda Jenkins build.
 
@@ -181,8 +180,6 @@ Requirements:
 
 v2.8.0
 ------
-
-Changes:
 
 * Update for ts_salobj 6.1, which is required.
 * Add support for the ``--state`` command-line argument in ``run_script_queue.py``.
@@ -205,8 +202,6 @@ Requirements:
 v2.7.2
 ------
 
-Changes:
-
 * Stop setting ``tel_max_history`` when creating `lsst.ts.salobj.Remote`\ s.
   I recommend not running this version with ts_salobj 5; it may work, but is risky.
 
@@ -221,8 +216,6 @@ Requirements:
 v2.7.1
 ------
 
-Changes:
-
 * Enhance the ScriptQueue commander by adding a heartbeat monitor for the currently running script.
 
 Requirements:
@@ -235,8 +228,6 @@ Requirements:
 
 v2.7.0
 ------
-
-Changes:
 
 * Overhaul the documentation.
 * Add all finished scripts to the history, even if they failed.
@@ -252,8 +243,6 @@ Requirements:
 v2.6.4
 ------
 
-Changes:
-
 * Make the `move`, `requeue` and `showScript` commands fail without logging an exception if a specified script does not exist.
 
 Requirements:
@@ -266,8 +255,6 @@ Requirements:
 
 v2.6.3
 ------
-
-Changes:
 
 * Enhance the ScriptQueue commander to add options for the "add" command
   and to accept a default log level for scripts as a command-line argument.
@@ -282,8 +269,6 @@ Requirements:
 
 v2.6.2
 ------
-
-Changes:
 
 * Fix the stopScripts command in `ScriptQueueCommander`.
 * Update the pre-commit hook to block the commit if any code is not formatted with black.
@@ -303,8 +288,6 @@ v2.6.1
 Salobj 6 changed the name of the ``SalInfo.makeAckCmd`` method to ``SalInfo.make_ackcmd``.
 Add a check to make sure ``SalInfo`` has a ``make_ackcmd`` attribute and use ``makeAckCmd`` if not.
 
-Changes:
-
 * Add backward compatibility between salobj 5 and 6.
 * Add Jenkinsfile for CI job.
 * In test_utils.py separate testing ``get_scripts_dir`` from standard and external scripts.
@@ -312,8 +295,6 @@ Changes:
 
 v2.6.0
 ------
-
-Changes:
 
 * Replaced ``bin/request_script.py`` with ``bin/command_script_queue.py``, which is based on `lsst.ts.salobj.CscCommander`.
   This change requires ts_sal v5.17.0 or later.
@@ -329,8 +310,6 @@ Requirements:
 v2.5.2
 ------
 
-Changes:
-
 * Fixed warnings in ``tests/test_queue_model.py`` caused by not allowing all queued scripts to finish.
 
 Requirements:
@@ -343,8 +322,6 @@ Requirements:
 
 v2.5.1
 ------
-
-Changes:
 
 * Add ``tests/test_black.py`` to verify that files are formatted with black.
   This requires ts_salobj 5.11 or later.

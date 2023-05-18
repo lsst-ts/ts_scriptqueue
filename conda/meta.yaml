@@ -7,8 +7,8 @@ source:
   path: ../
 
 build:
-  noarch: generic
-  script: python -m pip install --no-deps --ignore-installed .
+  noarch: python
+  script: {{ PYTHON }} -m pip install --no-deps --ignore-installed .
 
 test:
   requires:
@@ -16,24 +16,23 @@ test:
     - ts-idl {{ idl_version }}
     - ts-salobj {{ salobj_version }}
   source_files:
-    - python
     - bin
-    - tests
     - pyproject.toml
+    - python
+    - tests
   commands:
     - pytest
 
 requirements:
   host:
-    - python
     - pip
-    - setuptools_scm
+    - python {{ python }}
     - setuptools
-    - pytest-runner
+    - setuptools_scm
   run:
-    - python
+    - psutil
+    - python {{ python }}
     - setuptools
     - setuptools_scm
-    - psutil
     - ts-idl {{ idl_version }}
     - ts-salobj {{ salobj_version }}

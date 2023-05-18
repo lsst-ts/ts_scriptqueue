@@ -3,7 +3,6 @@
 .coverage
 .hypothesis
 pytest_session.txt
-.scon*
 *.log
 __pycache__
 version.py

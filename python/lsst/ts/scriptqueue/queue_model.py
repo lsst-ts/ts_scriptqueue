@@ -807,7 +807,7 @@ class QueueModel:
             return None
         return script_info
 
-    def _script_metadata_callback(self, data):
+    async def _script_metadata_callback(self, data):
         script_info = self._script_info_from_data(event_name="metadata", data=data)
         if script_info:
             script_info.metadata = data

@@ -6,6 +6,19 @@
 Version History
 ###############
 
+v2.12.2
+-------
+
+* `QueueModel`: make ``_script_metadata_callback`` to eliminate warnings from salobj.
+* Update to use ts_pre_commit_conf.
+* ``Jenkinsfile``: use new shared library.
+
+Requirements:
+
+* ts_idl 3.5
+* ts_salobj 7.1
+* IDL files for ScriptQueue and Script built from ts_xml 12
+
 v2.12.1
 -------
 
@@ -17,7 +30,7 @@ Requirements:
 
 * ts_idl 3.5
 * ts_salobj 7.1
-* IDL files for ScriptQueue and Script built from ts_xml 12 and ts_xml 7
+* IDL files for ScriptQueue and Script built from ts_xml 12
 
 v2.12.0
 -------
@@ -30,7 +43,7 @@ Requirements:
 
 * ts_idl 4.2
 * ts_salobj 7.1
-* IDL files for ScriptQueue and Script built from ts_xml 12 and ts_xml 7
+* IDL files for ScriptQueue and Script built from ts_xml 12
 
 v2.11.0
 -------
@@ -51,7 +64,7 @@ Requirements:
 
 * ts_idl 3.5
 * ts_salobj 7.1
-* IDL files for ScriptQueue and Script built from ts_xml 12 and ts_xml 7
+* IDL files for ScriptQueue and Script built from ts_xml 12
 
 v2.10.0
 -------

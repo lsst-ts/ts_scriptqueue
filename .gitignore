@@ -1,11 +1,21 @@
-.cache
+__pycache__
+*.egg
+*.egg-info
+*.log
+version.py
+
+# pytest
 .pytest_cache
 .coverage
 .hypothesis
 pytest_session.txt
-.scon*
-*.log
-__pycache__
-version.py
 tests/.tests
+
+# editors
 .vscode
+
+# ts_pre_commit_conf
+.pre-commit-config.yaml
+.flake8
+.isort.cfg
+.mypy.ini

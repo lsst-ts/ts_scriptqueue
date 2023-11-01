@@ -175,7 +175,7 @@ class RunOneScriptTestCase(unittest.IsolatedAsyncioTestCase):
             # (e.g. [1, 1, 2, 2, 1, 1] becomes [1, 2, 1]
             states_seen = []
 
-            def state_callback(data):
+            async def state_callback(data):
                 nonlocal states_seen
                 state = ScriptState(data.state)
                 if not states_seen or state != states_seen[-1]:

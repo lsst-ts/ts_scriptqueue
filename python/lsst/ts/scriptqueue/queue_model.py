@@ -712,7 +712,7 @@ class QueueModel:
             else:
                 await self._update_queue()
 
-    def _log_message_callback(self, data):
+    async def _log_message_callback(self, data):
         """Print Script logMessage data to stdout.
 
         To use: if self.verbose is true then set this as a callback

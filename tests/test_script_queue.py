@@ -29,8 +29,8 @@ import unittest
 import pytest
 import yaml
 from lsst.ts import salobj, scriptqueue
-from lsst.ts.idl.enums.Script import ScriptState
-from lsst.ts.idl.enums.ScriptQueue import Location, SalIndex, ScriptProcessState
+from lsst.ts.xml.enums.Script import ScriptState
+from lsst.ts.xml.enums.ScriptQueue import Location, SalIndex, ScriptProcessState
 
 try:
     from lsst.ts import standardscripts

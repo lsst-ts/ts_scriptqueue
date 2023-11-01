@@ -27,9 +27,9 @@ import pathlib
 import string
 
 from lsst.ts import salobj
-from lsst.ts.idl.enums.Script import ScriptState
-from lsst.ts.idl.enums.ScriptQueue import Location, SalIndex
 from lsst.ts.utils import make_done_future
+from lsst.ts.xml.enums.Script import ScriptState
+from lsst.ts.xml.enums.ScriptQueue import Location, SalIndex
 
 ADD_TIMEOUT = 5  # Timeout for the add command (seconds).
 # How long to wait before warning that a script heartbeat is late (seconds).

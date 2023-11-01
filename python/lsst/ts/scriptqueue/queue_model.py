@@ -32,9 +32,9 @@ import signal
 import astropy.time
 import psutil
 from lsst.ts import salobj
-from lsst.ts.idl.enums.Script import ScriptState
-from lsst.ts.idl.enums.ScriptQueue import Location
 from lsst.ts.utils import index_generator
+from lsst.ts.xml.enums.Script import ScriptState
+from lsst.ts.xml.enums.ScriptQueue import Location
 
 from . import utils
 from .script_info import ScriptInfo

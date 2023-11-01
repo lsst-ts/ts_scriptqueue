@@ -28,7 +28,7 @@ import unittest
 import pytest
 import yaml
 from lsst.ts import salobj, scriptqueue
-from lsst.ts.idl.enums.Script import ScriptState
+from lsst.ts.xml.enums.Script import ScriptState
 
 # Long enough to perform any reasonable operation
 # including starting a CSC or loading a script (seconds)

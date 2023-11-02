@@ -15,6 +15,7 @@ test:
     - ts-conda-build =0.3
     - ts-idl {{ idl_version }}
     - ts-salobj {{ salobj_version }}
+    - ts-xml >=20
   source_files:
     - bin
     - pyproject.toml
@@ -36,3 +37,4 @@ requirements:
     - setuptools_scm
     - ts-idl {{ idl_version }}
     - ts-salobj {{ salobj_version }}
+    - ts-xml >=20

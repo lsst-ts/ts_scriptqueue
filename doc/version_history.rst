@@ -6,6 +6,16 @@
 Version History
 ###############
 
+v2.12.3
+-------
+
+* Update ts_pre_commit_config to add ruff.
+* Add ts-xml as a test and runtime dependency.
+* In ``tests/test_script_queue.py``, update unit tests to work with kafka version of salobj.
+* Import enumerations from ts-xml instead of ts-idl.
+* Update ``.gitignore`` with latest ts-pre-commit-config setup.
+* Update all callbacks to be asynchronous.
+
 v2.12.2
 -------
 

@@ -27,7 +27,7 @@ import subprocess
 
 import numpy as np
 from lsst.ts import salobj
-from lsst.ts.idl.enums.ScriptQueue import SalIndex
+from lsst.ts.xml.enums.ScriptQueue import SalIndex
 
 from . import __version__, utils
 from .queue_model import QueueModel

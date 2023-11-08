@@ -27,9 +27,9 @@ import pathlib
 import string
 
 from lsst.ts import salobj
-from lsst.ts.idl.enums.Script import ScriptState
-from lsst.ts.idl.enums.ScriptQueue import Location, SalIndex
 from lsst.ts.utils import make_done_future
+from lsst.ts.xml.enums.Script import ScriptState
+from lsst.ts.xml.enums.ScriptQueue import Location, SalIndex
 
 ADD_TIMEOUT = 5  # Timeout for the add command (seconds).
 # How long to wait before warning that a script heartbeat is late (seconds).
@@ -148,7 +148,7 @@ class ScriptQueueCommander(salobj.CscCommander):
                 f"heartbeat not seen in {HEARTBEAT_ALARM_INTERVAL} seconds"
             )
 
-    def script_log_message(self, data):
+    async def script_log_message(self, data):
         exception_str = (
             (
                 f", traceback={data.traceback}, "
@@ -165,7 +165,7 @@ class ScriptQueueCommander(salobj.CscCommander):
             f"message={data.message}{exception_str}"
         )
 
-    def script_state(self, data):
+    async def script_state(self, data):
         try:
             state = ScriptState(data.state)
         except ValueError:
@@ -176,7 +176,7 @@ class ScriptQueueCommander(salobj.CscCommander):
             f"state={state.name}{reason}, lastCheckpoint={data.lastCheckpoint}"
         )
 
-    def script_heartbeat(self, data):
+    async def script_heartbeat(self, data):
         if data.salIndex != self._script_to_monitor:
             # A heartbeat from the wrong script.
             return

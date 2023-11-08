@@ -167,7 +167,7 @@ async def run_one_script(index, script, config, loglevel=None):
         )
         await remote.start_task
 
-        def log_callback(data):
+        async def log_callback(data):
             iso_time = datetime.datetime.now().time().isoformat(timespec="milliseconds")
             print(f"{iso_time} {logging.getLevelName(data.level)}: {data.message}")
 

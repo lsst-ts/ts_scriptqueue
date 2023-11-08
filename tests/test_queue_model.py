@@ -29,8 +29,8 @@ import warnings
 
 import pytest
 from lsst.ts import salobj, scriptqueue
-from lsst.ts.idl.enums.Script import ScriptState
-from lsst.ts.idl.enums.ScriptQueue import Location, ScriptProcessState
+from lsst.ts.xml.enums.Script import ScriptState
+from lsst.ts.xml.enums.ScriptQueue import Location, ScriptProcessState
 
 # Long enough to perform any reasonable operation
 # including starting a CSC or loading a script (seconds)

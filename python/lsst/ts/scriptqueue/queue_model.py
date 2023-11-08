@@ -32,9 +32,9 @@ import signal
 import astropy.time
 import psutil
 from lsst.ts import salobj
-from lsst.ts.idl.enums.Script import ScriptState
-from lsst.ts.idl.enums.ScriptQueue import Location
 from lsst.ts.utils import index_generator
+from lsst.ts.xml.enums.Script import ScriptState
+from lsst.ts.xml.enums.ScriptQueue import Location
 
 from . import utils
 from .script_info import ScriptInfo
@@ -712,7 +712,7 @@ class QueueModel:
             else:
                 await self._update_queue()
 
-    def _log_message_callback(self, data):
+    async def _log_message_callback(self, data):
         """Print Script logMessage data to stdout.
 
         To use: if self.verbose is true then set this as a callback

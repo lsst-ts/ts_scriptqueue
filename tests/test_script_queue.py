@@ -28,9 +28,9 @@ import unittest
 
 import pytest
 import yaml
-from lsst.ts import salobj, scriptqueue
-from lsst.ts.idl.enums.Script import ScriptState
-from lsst.ts.idl.enums.ScriptQueue import Location, SalIndex, ScriptProcessState
+from lsst.ts import salobj, scriptqueue, utils
+from lsst.ts.xml.enums.Script import ScriptState
+from lsst.ts.xml.enums.ScriptQueue import Location, SalIndex, ScriptProcessState
 
 try:
     from lsst.ts import standardscripts
@@ -229,6 +229,7 @@ class ScriptQueueTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCa
         datadir = os.path.abspath(os.path.join(os.path.dirname(__file__), "data"))
         self.standardpath = os.path.join(datadir, "standard")
         self.externalpath = os.path.join(datadir, "external")
+        self.events_oldest_timestamp = utils.current_tai()
 
     def basic_make_csc(self, initial_state, config_dir=None, simulation_mode=0):
         csc = scriptqueue.ScriptQueue(
@@ -653,9 +654,10 @@ class ScriptQueueTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCa
             await self.assert_next_queue(running=False, sal_indices=[I0])
 
             # Wait for the script queue to launch and configure the script.
-            script_state = await script_remote.evt_state.next(
-                flush=False, timeout=STD_TIMEOUT
-            )
+            topic = script_remote.evt_state
+
+            script_state = await self.get_next_sample(topic)
+
             assert script_state.state == ScriptState.UNCONFIGURED
             script_state = await script_remote.evt_state.next(
                 flush=False, timeout=STD_TIMEOUT
@@ -663,9 +665,7 @@ class ScriptQueueTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCa
             assert script_state.state == ScriptState.CONFIGURED
 
             # Check initial log level.
-            data = await script_remote.evt_logLevel.next(
-                flush=False, timeout=STD_TIMEOUT
-            )
+            data = await self.get_next_sample(topic=script_remote.evt_logLevel)
             assert data.level == logging.INFO
 
             # If log_level != 0 check final log level,
@@ -688,6 +688,14 @@ class ScriptQueueTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCa
             await self.assert_next_queue(
                 enabled=True, running=True, past_sal_indices=[I0]
             )
+
+    async def get_next_sample(self, topic):
+        sample = await topic.next(flush=False, timeout=STD_TIMEOUT)
+        while sample.private_sndStamp <= self.events_oldest_timestamp:
+            print(f"Discarding old {sample=}.")
+            sample = await topic.next(flush=False, timeout=STD_TIMEOUT)
+
+        return sample
 
     async def check_bin_script_initial_state(self, cmdline_args):
         for initial_state, index in (
@@ -783,8 +791,7 @@ class ScriptQueueTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCa
             await self.assert_next_queue(running=True, current_sal_index=I0)
 
             # Validate the expected script states through STOPPED.
-            # The first timeout is longer becauase scripts are slow to load.
-            timeout = STD_TIMEOUT
+            # The first timeout is longer because scripts are slow to load.
             for expected_script_state in (
                 ScriptState.UNCONFIGURED,
                 ScriptState.CONFIGURED,
@@ -794,11 +801,8 @@ class ScriptQueueTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCa
                 ScriptState.STOPPING,
                 ScriptState.STOPPED,
             ):
-                script_state = await script_remote.evt_state.next(
-                    flush=False, timeout=timeout
-                )
-                assert script_state.state == expected_script_state
-                timeout = STD_TIMEOUT
+                script_state = await self.get_next_sample(script_remote.evt_state)
+                assert ScriptState(script_state.state) == expected_script_state
 
             await self.assert_next_queue(running=True, past_sal_indices=[I0])
 
@@ -959,9 +963,8 @@ class ScriptQueueTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCa
 
             await self.assert_next_queue(enabled=True, running=True, sal_indices=[I0])
 
-            script_data0 = await self.remote.evt_script.next(
-                flush=False, timeout=STD_TIMEOUT
-            )
+            script_data0 = await self.get_next_sample(self.remote.evt_script)
+
             assert script_data0.processState == ScriptProcessState.LOADING
             script_data0 = await self.remote.evt_script.next(
                 flush=False, timeout=STD_TIMEOUT
@@ -1413,9 +1416,10 @@ class ScriptQueueTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCa
             await self.remote.cmd_enable.start(timeout=STD_TIMEOUT)
 
             # The queue should output available scripts once at startup.
-            available_scripts0 = await self.remote.evt_availableScripts.next(
-                flush=False, timeout=STD_TIMEOUT
+            available_scripts0 = await self.get_next_sample(
+                self.remote.evt_availableScripts
             )
+
             with pytest.raises(asyncio.TimeoutError):
                 await self.remote.evt_availableScripts.next(flush=False, timeout=0.1)
 
@@ -1542,6 +1546,15 @@ class CmdLineTestCase(unittest.IsolatedAsyncioTestCase):
         self.testdata_standardpath = os.path.join(self.datadir, "standard")
         self.testdata_externalpath = os.path.join(self.datadir, "external")
         self.badpath = os.path.join(self.datadir, "not_a_directory")
+        self.events_oldest_timestamp = utils.current_tai()
+
+    async def get_next_sample(self, topic):
+        sample = await topic.next(flush=False, timeout=STD_TIMEOUT)
+        while sample.private_sndStamp <= self.events_oldest_timestamp:
+            print(f"Discarding old {sample=}.")
+            sample = await topic.next(flush=False, timeout=STD_TIMEOUT)
+
+        return sample
 
     async def test_run_with_standard_and_external(self):
         exe_name = "run_script_queue"
@@ -1564,14 +1577,12 @@ class CmdLineTestCase(unittest.IsolatedAsyncioTestCase):
                 "--verbose",
             )
             try:
-                summaryState_data = await remote.evt_summaryState.next(
-                    flush=False, timeout=STD_TIMEOUT
-                )
+                summaryState_data = await self.get_next_sample(remote.evt_summaryState)
+
                 assert summaryState_data.summaryState == salobj.State.STANDBY
 
-                rootDir_data = await remote.evt_rootDirectories.next(
-                    flush=False, timeout=STD_TIMEOUT
-                )
+                rootDir_data = await self.get_next_sample(remote.evt_rootDirectories)
+
                 assert os.path.samefile(
                     rootDir_data.standard, self.testdata_standardpath
                 )
@@ -1611,14 +1622,10 @@ class CmdLineTestCase(unittest.IsolatedAsyncioTestCase):
                 exe_name, str(self.index), "--verbose"
             )
             try:
-                summaryState_data = await remote.evt_summaryState.next(
-                    flush=False, timeout=STD_TIMEOUT
-                )
+                summaryState_data = await self.get_next_sample(remote.evt_summaryState)
                 assert summaryState_data.summaryState == salobj.State.STANDBY
 
-                rootDir_data = await remote.evt_rootDirectories.next(
-                    flush=False, timeout=STD_TIMEOUT
-                )
+                rootDir_data = await self.get_next_sample(remote.evt_rootDirectories)
                 assert os.path.samefile(
                     rootDir_data.standard, self.default_standardpath
                 )

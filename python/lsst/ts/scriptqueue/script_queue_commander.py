@@ -75,9 +75,9 @@ class ScriptQueueCommander(salobj.CscCommander):
         )
 
         self.help_dict["showSchema"] = "type path  # type=s, std, e, or ext"
-        self.help_dict[
-            "stopScripts"
-        ] = "sal_index1 [sal_index2 [... sal_indexN]] terminate (0 or 1)"
+        self.help_dict["stopScripts"] = (
+            "sal_index1 [sal_index2 [... sal_indexN]] terminate (0 or 1)"
+        )
 
         self.script_remote = salobj.Remote(
             domain=self.domain,

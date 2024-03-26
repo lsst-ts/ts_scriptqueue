@@ -6,6 +6,12 @@
 Version History
 ###############
 
+v2.12.4
+-------
+
+* Reformat code with black.
+* Update the version of ts-conda-build to 0.4 in the conda recipe.
+
 v2.12.3
 -------
 

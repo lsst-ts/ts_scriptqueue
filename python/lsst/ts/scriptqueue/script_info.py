@@ -58,6 +58,8 @@ class ScriptInfo:
         Configuration data as a YAML encoded string.
     descr : `str`
         A short explanation of why this script is being run.
+    block : `str`
+        Name of the observing block the script is part of, e.g. BLOCK-000.
     log_level : `int` (optional)
         Log level for the script, as a Python logging level.
         0, the default, leaves the level unchanged.
@@ -81,6 +83,7 @@ class ScriptInfo:
         path,
         config,
         descr,
+        block="",
         log_level=0,
         pause_checkpoint="",
         stop_checkpoint="",
@@ -90,6 +93,9 @@ class ScriptInfo:
         self.remote = remote
         self.index = int(index)
         self.seq_num = int(seq_num)
+        self.block = block
+        self.block_id = ""
+        self.block_index = 0
         self.is_standard = bool(is_standard)
         self.path = str(path)
         self.config = config
@@ -325,6 +331,26 @@ class ScriptInfo:
                 )
             )
 
+    def set_block_index(self, block_index):
+        """Set the block index for this script.
+
+        Parameters
+        ----------
+        block_index : `int`
+            Block index.
+        """
+        self.block_index = int(block_index)
+
+    def set_block_id(self, block_id):
+        """Set block id, this is unique identifier for a block execution.
+
+        Parameters
+        ----------
+        block_id : `str`
+            Unique identifier for block execution.
+        """
+        self.block_id = str(block_id)
+
     async def set_group_id(self, group_id):
         """Set the group ID.
 
@@ -534,6 +560,7 @@ class ScriptInfo:
                 logLevel=self.log_level,
                 pauseCheckpoint=self.pause_checkpoint,
                 stopCheckpoint=self.stop_checkpoint,
+                blockId=self.block_id,
                 timeout=_CONFIGURE_TIMEOUT,
             )
         except asyncio.CancelledError:

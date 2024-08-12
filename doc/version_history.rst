@@ -6,6 +6,11 @@
 Version History
 ###############
 
+v2.13.0
+-------
+
+* Add support for block functionality.
+
 v2.12.4
 -------
 

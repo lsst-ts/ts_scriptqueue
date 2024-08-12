@@ -25,6 +25,7 @@ import logging
 import os
 import shutil
 import unittest
+from unittest.mock import patch
 
 import pytest
 import yaml
@@ -399,6 +400,114 @@ class ScriptQueueTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCa
             scriptSalIndex=sal_index,
         )
         assert data.groupId != ""
+
+    @patch("lsst.ts.utils.ImageNameServiceClient.get_next_obs_id")
+    @patch.dict(os.environ, {"IMAGE_SERVER_URL": "mytemp"})
+    async def test_add_block(self, mock_get):
+        """Test adding scripts that are part of a block."""
+
+        mock_get.side_effect = [
+            (0, ["BL1_O_20240228_000001"]),
+            (0, ["BL1_O_20240228_000002"]),
+        ]
+        is_standard = False
+        path = "script1"
+        config = "wait_time: 1"  # give showScript time to run
+        make_add_kwargs = MakeAddKwargs(
+            isStandard=is_standard, path=path, config=config, descr="test_add_block"
+        )
+        async with self.make_csc(initial_state=salobj.State.ENABLED), salobj.Remote(
+            domain=self.csc.domain, name="Script"
+        ) as script_remote:
+
+            await self.assert_next_queue(enabled=False, running=True)
+            await self.assert_next_queue(enabled=True, running=True)
+
+            # Pause the queue so we know what to expect of queue state.
+            await self.remote.cmd_pause.start(timeout=STD_TIMEOUT)
+            await self.assert_next_queue(running=False)
+
+            # Add script I0; queue is empty, so location is irrelevant.
+            add_kwargs = make_add_kwargs()
+            add_kwargs["block"] = "BLOCK-1"
+            add_kwargs["startBlock"] = True
+            add_kwargs["blockSize"] = 3
+
+            ackcmd = await self.remote.cmd_add.set_start(
+                **add_kwargs, timeout=STD_TIMEOUT
+            )
+            assert int(ackcmd.result) == I0
+            await self.assert_next_queue(sal_indices=[I0])
+
+            add_kwargs["startBlock"] = False
+            add_kwargs.pop("blockSize")
+
+            ackcmd = await self.remote.cmd_add.set_start(
+                **add_kwargs, timeout=STD_TIMEOUT
+            )
+            assert int(ackcmd.result) == I0 + 1
+            await self.assert_next_queue(sal_indices=[I0, I0 + 1])
+
+            ackcmd = await self.remote.cmd_add.set_start(
+                **add_kwargs, timeout=STD_TIMEOUT
+            )
+            assert int(ackcmd.result) == I0 + 2
+            await self.assert_next_queue(sal_indices=[I0, I0 + 1, I0 + 2])
+
+            # Adding another script to the same block should fail.
+            with pytest.raises(
+                salobj.AckError,
+                match="Block already filled with all the expected number of scripts. Declared capacity is 3.",
+            ):
+                await self.remote.cmd_add.set_start(**add_kwargs, timeout=STD_TIMEOUT)
+
+            # Start another block execution of the same block.
+            add_kwargs = make_add_kwargs()
+            add_kwargs["block"] = "BLOCK-1"
+            add_kwargs["startBlock"] = True
+            add_kwargs["blockSize"] = 3
+
+            ackcmd = await self.remote.cmd_add.set_start(
+                **add_kwargs, timeout=STD_TIMEOUT
+            )
+            # We have to skip one index because the failed attempt to add a
+            # script above consumes one index.
+            assert int(ackcmd.result) == I0 + 4
+            await self.assert_next_queue(sal_indices=[I0, I0 + 1, I0 + 2, I0 + 4])
+
+            add_kwargs["startBlock"] = False
+            add_kwargs.pop("blockSize")
+
+            ackcmd = await self.remote.cmd_add.set_start(
+                **add_kwargs, timeout=STD_TIMEOUT
+            )
+            assert int(ackcmd.result) == I0 + 5
+            await self.assert_next_queue(
+                sal_indices=[I0, I0 + 1, I0 + 2, I0 + 4, I0 + 5]
+            )
+
+            ackcmd = await self.remote.cmd_add.set_start(
+                **add_kwargs, timeout=STD_TIMEOUT
+            )
+            assert int(ackcmd.result) == I0 + 6
+            await self.assert_next_queue(
+                sal_indices=[I0, I0 + 1, I0 + 2, I0 + 4, I0 + 5, I0 + 6]
+            )
+
+            # Resume queue and wait for all scripts to finish.
+            await self.remote.cmd_resume.start(timeout=STD_TIMEOUT)
+
+            queue = await self.assert_next_sample(self.remote.evt_queue)
+            while queue.length > 0:
+                queue = await self.assert_next_sample(self.remote.evt_queue)
+
+            block_ids = set()
+            state = await script_remote.evt_state.next(flush=False, timeout=STD_TIMEOUT)
+            while (state := script_remote.evt_state.get_oldest()) is not None:
+                if state.blockId:
+                    block_ids.add(state.blockId)
+            assert "BL1_O_20240228_000001" in block_ids
+            assert "BL1_O_20240228_000002" in block_ids
 
     async def test_add_remove(self):
         """Test add, remove and showScript."""

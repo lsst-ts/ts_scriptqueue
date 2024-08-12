@@ -305,6 +305,7 @@ class ScriptQueue(salobj.BaseCsc):
             is_standard=data.isStandard,
             path=data.path,
             config=data.config,
+            block=data.block,
             log_level=data.logLevel,
             pause_checkpoint=data.pauseCheckpoint,
             stop_checkpoint=data.stopCheckpoint,
@@ -315,6 +316,8 @@ class ScriptQueue(salobj.BaseCsc):
             script_info=script_info,
             location=data.location,
             location_sal_index=data.locationSalIndex,
+            start_block=data.startBlock,
+            block_size=data.blockSize,
         )
 
         return self.salinfo.make_ackcmd(

@@ -6,6 +6,11 @@
 Version History
 ###############
 
+v2.13.1
+-------
+
+* Implement a work around on the test_add_block unittest for Scripts not reporting their initial state.
+
 v2.13.0
 -------
 

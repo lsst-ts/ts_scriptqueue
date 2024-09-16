@@ -499,8 +499,16 @@ class ScriptQueueTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCa
 
             queue = await self.assert_next_sample(self.remote.evt_queue)
             while queue.length > 0:
-                queue = await self.assert_next_sample(self.remote.evt_queue)
-
+                try:
+                    queue = await self.assert_next_sample(self.remote.evt_queue)
+                except asyncio.TimeoutError:
+                    print(
+                        "Timeout waiting for scriptueue to make progress. "
+                        f"Stopping first script in the queue: {queue.salIndices[0]}."
+                    )
+                    await self.remote.cmd_stopScripts.set_start(
+                        length=1, salIndices=queue.salIndices, timeout=STD_TIMEOUT
+                    )
             block_ids = set()
             state = await script_remote.evt_state.next(flush=False, timeout=STD_TIMEOUT)
             while (state := script_remote.evt_state.get_oldest()) is not None:

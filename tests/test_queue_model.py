@@ -26,6 +26,7 @@ import os
 import time
 import unittest
 import warnings
+from unittest.mock import patch
 
 import pytest
 from lsst.ts import salobj, scriptqueue
@@ -487,6 +488,147 @@ class QueueModelTestCase(unittest.IsolatedAsyncioTestCase):
 
         # Make sure that next_visit_canceled_callback was not called
         assert self.next_visit_canceled_queue.empty()
+
+    async def test_add_blocks_fails_no_image_server_url(self):
+        """Test adding scripts that are part of a block."""
+        await self.assert_next_queue(enabled=True, running=True)
+
+        # Add script i0; queue is empty, so location is irrelevant.
+        add_kwargs = self.make_add_kwargs(location=Location.LAST)
+        add_kwargs["script_info"].block = "BLOCK-1"
+        add_kwargs["start_block"] = True
+        add_kwargs["block_size"] = 3
+
+        _ = add_kwargs["script_info"].index
+        with pytest.raises(
+            ValueError,
+            match="IMAGE_SERVER_URL environment variable not defined. "
+            "Block indexing functionality will not work.",
+        ):
+            await asyncio.wait_for(self.model.add(**add_kwargs), timeout=STD_TIMEOUT)
+
+    @patch("lsst.ts.utils.ImageNameServiceClient.get_next_obs_id")
+    @patch.dict(os.environ, {"IMAGE_SERVER_URL": "mytemp"})
+    async def test_add_blocks(self, mock_get):
+        """Test adding scripts that are part of a block."""
+        mock_get.side_effect = [
+            (0, ["BL1_O_20240228_000001"]),
+            (0, ["BL1_O_20240228_000002"]),
+        ]
+        await self.assert_next_queue(enabled=True, running=True)
+
+        # Pause the queue so we know what to expect of queue state.
+        await self.model.set_running(False)
+        await self.assert_next_queue(running=False)
+
+        # Add script i0; queue is empty, so location is irrelevant.
+        add_kwargs = self.make_add_kwargs(location=Location.LAST)
+        add_kwargs["script_info"].block = "BLOCK-1"
+        add_kwargs["start_block"] = True
+        add_kwargs["block_size"] = 3
+
+        i0 = add_kwargs["script_info"].index
+        await asyncio.wait_for(self.model.add(**add_kwargs), timeout=STD_TIMEOUT)
+        await self.assert_next_queue(sal_indices=[i0])
+
+        # Add script i0+1 last: test add last.
+        add_kwargs = self.make_add_kwargs(location=Location.LAST)
+        add_kwargs["script_info"].block = "BLOCK-1"
+        add_kwargs["start_block"] = False
+        add_kwargs["block_size"] = 0
+        await asyncio.wait_for(self.model.add(**add_kwargs), timeout=STD_TIMEOUT)
+        await self.assert_next_queue(sal_indices=[i0, i0 + 1])
+
+        add_kwargs = self.make_add_kwargs(location=Location.LAST)
+        add_kwargs["script_info"].block = "BLOCK-1"
+        add_kwargs["start_block"] = False
+        add_kwargs["block_size"] = 0
+        await asyncio.wait_for(self.model.add(**add_kwargs), timeout=STD_TIMEOUT)
+        await self.assert_next_queue(sal_indices=[i0, i0 + 1, i0 + 2])
+
+        # Add a second instance of the same block.
+
+        # Add script i0; queue is empty, so location is irrelevant.
+        add_kwargs = self.make_add_kwargs(location=Location.LAST)
+        add_kwargs["script_info"].block = "BLOCK-1"
+        add_kwargs["start_block"] = True
+        add_kwargs["block_size"] = 3
+
+        await asyncio.wait_for(self.model.add(**add_kwargs), timeout=STD_TIMEOUT)
+        await self.assert_next_queue(sal_indices=[i0, i0 + 1, i0 + 2, i0 + 3])
+
+        # Add script i0+1 last: test add last.
+        add_kwargs = self.make_add_kwargs(location=Location.LAST)
+        add_kwargs["script_info"].block = "BLOCK-1"
+        add_kwargs["start_block"] = False
+        add_kwargs["block_size"] = 0
+        await asyncio.wait_for(self.model.add(**add_kwargs), timeout=STD_TIMEOUT)
+        await self.assert_next_queue(sal_indices=[i0, i0 + 1, i0 + 2, i0 + 3, i0 + 4])
+
+        add_kwargs = self.make_add_kwargs(location=Location.LAST)
+        add_kwargs["script_info"].block = "BLOCK-1"
+        add_kwargs["start_block"] = False
+        add_kwargs["block_size"] = 0
+        await asyncio.wait_for(self.model.add(**add_kwargs), timeout=STD_TIMEOUT)
+        await self.assert_next_queue(
+            sal_indices=[i0, i0 + 1, i0 + 2, i0 + 3, i0 + 4, i0 + 5]
+        )
+
+        assert "BLOCK-1" in self.model.block_model.blocks
+        assert "BLOCK-1" in self.model.block_model.blocks
+        assert "BL1_O_20240228_000001" in self.model.block_model.blocks["BLOCK-1"]
+        assert "BL1_O_20240228_000002" in self.model.block_model.blocks["BLOCK-1"]
+        assert (
+            "BL1_O_20240228_000002"
+            == self.model.block_model.get_current_block("BLOCK-1").get_block_uid()
+        )
+
+    @patch("lsst.ts.utils.ImageNameServiceClient.get_next_obs_id")
+    @patch.dict(os.environ, {"IMAGE_SERVER_URL": "mytemp"})
+    async def test_add_blocks_more_scripts(self, mock_get):
+        """Test adding scripts that are part of a block."""
+        mock_get.return_value = (0, ["BL1_O_20240228_000001"])
+        await self.assert_next_queue(enabled=True, running=True)
+
+        # Pause the queue so we know what to expect of queue state.
+        await self.model.set_running(False)
+        await self.assert_next_queue(running=False)
+
+        # Add script i0; queue is empty, so location is irrelevant.
+        add_kwargs = self.make_add_kwargs(location=Location.LAST)
+        add_kwargs["script_info"].block = "BLOCK-1"
+        add_kwargs["start_block"] = True
+        add_kwargs["block_size"] = 3
+
+        i0 = add_kwargs["script_info"].index
+        await asyncio.wait_for(self.model.add(**add_kwargs), timeout=STD_TIMEOUT)
+        await self.assert_next_queue(sal_indices=[i0])
+
+        # Add script i0+1 last: test add last.
+        add_kwargs = self.make_add_kwargs(location=Location.LAST)
+        add_kwargs["script_info"].block = "BLOCK-1"
+        add_kwargs["start_block"] = False
+        add_kwargs["block_size"] = 0
+        await asyncio.wait_for(self.model.add(**add_kwargs), timeout=STD_TIMEOUT)
+        await self.assert_next_queue(sal_indices=[i0, i0 + 1])
+
+        add_kwargs = self.make_add_kwargs(location=Location.LAST)
+        add_kwargs["script_info"].block = "BLOCK-1"
+        add_kwargs["start_block"] = False
+        add_kwargs["block_size"] = 0
+        await asyncio.wait_for(self.model.add(**add_kwargs), timeout=STD_TIMEOUT)
+        await self.assert_next_queue(sal_indices=[i0, i0 + 1, i0 + 2])
+
+        add_kwargs = self.make_add_kwargs(location=Location.LAST)
+        add_kwargs["script_info"].block = "BLOCK-1"
+        add_kwargs["start_block"] = False
+        add_kwargs["block_size"] = 0
+
+        with pytest.raises(
+            RuntimeError,
+            match="Block already filled with all the expected number of scripts. Declared capacity is 3.",
+        ):
+            await asyncio.wait_for(self.model.add(**add_kwargs), timeout=STD_TIMEOUT)
 
     async def test_add_bad_config(self):
         """Test adding a script with invalid configuration."""

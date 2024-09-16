@@ -37,6 +37,8 @@ from lsst.ts.xml.enums.Script import ScriptState
 from lsst.ts.xml.enums.ScriptQueue import Location
 
 from . import utils
+from .block_info import BlockInfo
+from .block_model import BlockModel
 from .script_info import ScriptInfo
 
 # Standard timeout (seconds). Long enough to perform any reasonable operation,
@@ -173,6 +175,7 @@ class QueueModel:
         # queue of ScriptInfo instances
         self.queue = collections.deque()
         self.history = collections.deque(maxlen=MAX_HISTORY)
+        self.block_model = BlockModel()
         self.current_script = None
         self._running = True
         self._enabled = False
@@ -188,7 +191,14 @@ class QueueModel:
             self.remote.evt_logMessage.callback = self._log_message_callback
         self.start_task = self.remote.start_task
 
-    async def add(self, script_info, location, location_sal_index):
+    async def add(
+        self,
+        script_info,
+        location,
+        location_sal_index,
+        start_block=False,
+        block_size=0,
+    ):
         """Add a script to the queue.
 
         Launch the script in a new subprocess and wait for the subprocess
@@ -203,6 +213,10 @@ class QueueModel:
             Location of script.
         location_sal_index : `int`
             SAL index of script that ``location`` is relative to.
+        start_block : `bool`, optional
+            Start a new block? Default=False.
+        block_size : `int`, optional
+            How many scripts are part of this block? Default=0
 
         Raises
         ------
@@ -216,6 +230,18 @@ class QueueModel:
         """
         # do this first to make sure the path exists
         fullpath = self.make_full_path(script_info.is_standard, script_info.path)
+
+        if script_info.block:
+            if start_block:
+                block = BlockInfo(
+                    log=self.log, block_id=script_info.block, block_size=block_size
+                )
+                await block.set_block_uid()
+                self.block_model.remove_done_blocks()
+                self.block_model.add_block(block)
+            else:
+                block = self.block_model.get_current_block(script_info.block)
+            block.add(script_info)
 
         await self._insert_script(
             script_info=script_info,
@@ -447,6 +473,11 @@ class QueueModel:
             Info for the requeued script.
         """
         old_script_info = self.get_script_info(sal_index, search_history=True)
+
+        if old_script_info.block_id:
+            raise RuntimeError(
+                f"Script {sal_index} is part of a block and cannot be requeued."
+            )
 
         script_info = ScriptInfo(
             log=self.log,

@@ -62,7 +62,7 @@ class BlockInfo:
 
         self._block_ticket_id = abs(int(block_match.groupdict()["id"]))
         self._block_type = (
-            "BockT"
+            "BlockT"
             if block_match.groupdict()["block_test_case"] is not None
             else "Block"
         )

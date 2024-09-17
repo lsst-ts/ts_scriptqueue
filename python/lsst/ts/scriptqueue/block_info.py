@@ -148,4 +148,4 @@ class BlockInfo:
         `bool`
             True is block is done, False otherwise.
         """
-        return all([script_info.process_done() for script_info in self.scripts_info])
+        return all([script_info.process_done for script_info in self.scripts_info])

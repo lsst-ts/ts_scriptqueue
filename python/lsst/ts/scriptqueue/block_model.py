@@ -89,6 +89,6 @@ class BlockModel:
             for block_id in self.blocks[block]:
                 if block_id == self.current_blocks[block]:
                     continue
-                elif self.block[block][block_id].done():
+                elif self.blocks[block][block_id].done():
                     blocks_to_remove.append(block_id)
             _ = [self.blocks[block].pop(block_id) for block_id in blocks_to_remove]

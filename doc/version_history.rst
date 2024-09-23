@@ -6,6 +6,15 @@
 Version History
 ###############
 
+v2.13.2
+-------
+
+* In block_model, fix issue with remove_done_blocks.
+
+* In block_info, fix block_type when block is a test case.
+
+* In block_info, fix done() method.
+
 v2.13.1
 -------
 

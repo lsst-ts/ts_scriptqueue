@@ -889,10 +889,13 @@ class QueueModel:
               script to history. This is intended for use by ``running``
               to allow the queue to resume after pausing on failure.
         """
+        self.log.debug(f"Updating queue: {force_callback=}, {pause_on_failure=}.")
+
         initial_current_index = self.current_index
         initial_queue_indices = self.queue_indices
         initial_history_indices = self.history_indices
         if self.current_script:
+            self.log.debug(f"current_script={self.current_script}.")
             if self.current_script.process_done:
                 if self.current_script.failed and (
                     pause_on_failure or not self.running
@@ -903,6 +906,8 @@ class QueueModel:
                 else:
                     self.history.appendleft(self.current_script)
                     self.current_script = None
+        else:
+            self.log.debug("No current script.")
 
         if self.enabled and self.running:
             # Clear done scripts from the top of the queue.
@@ -920,6 +925,7 @@ class QueueModel:
                     and script_info.runnable
                     and script_info.index not in self._scripts_being_stopped
                 ):
+                    self.log.debug(f"Running script: {script_info}.")
                     self.current_script = script_info
                     self.queue.popleft()
                     script_info.run()

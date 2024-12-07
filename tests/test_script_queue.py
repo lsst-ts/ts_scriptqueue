@@ -727,7 +727,16 @@ class ScriptQueueTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCa
                 script_data = await self.remote.evt_script.next(
                     flush=False, timeout=STD_TIMEOUT
                 )
-                if script_data.scriptSalIndex == I0 + 1:
+                # Note after DM-48015: The script will move to the
+                # done list as soon as its script state is done,
+                # which is before the process state is done.
+                # Since we want to check that the process state
+                # eventually goes to done, we continue until we get it.
+                # If this never happens this loop will timeout eventually.
+                if (
+                    script_data.scriptSalIndex == I0 + 1
+                    and script_data.processState == ScriptProcessState.DONE
+                ):
                     break
             assert script_data.scriptSalIndex == I0 + 1
             assert script_data.cmdId == seq_num1
@@ -1047,6 +1056,7 @@ class ScriptQueueTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCa
                 sal_indices=[],
                 past_sal_indices=[I0, I0 + 1],
             )
+            self.remote.evt_script.flush()
             await self.assert_next_queue(
                 running=True,
                 current_sal_index=0,
@@ -1054,7 +1064,24 @@ class ScriptQueueTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCa
                 past_sal_indices=[I0 + 2, I0, I0 + 1],
             )
 
-            script_data2 = self.remote.evt_script.get()
+            # Note after DM-48015; we are not moving scripts to done
+            # as soon as the script state is done. This means we will
+            # get scriptState == DONE and processState != DONE first,
+            # and eventually we will get processState == DONE. In order
+            # to test this we need to loop and wait for the event with
+            # processState == DONE. If this never happens the loop
+            # will timeout.
+            script_data2 = await self.assert_next_sample(
+                self.remote.evt_script, flush=False, timeout=STD_TIMEOUT
+            )
+            while not (
+                script_data2.cmdId == seq_num2
+                and script_data2.processState == ScriptProcessState.DONE
+            ):
+                script_data2 = await self.assert_next_sample(
+                    self.remote.evt_script, flush=False, timeout=STD_TIMEOUT
+                )
+
             assert script_data2.cmdId == seq_num2
             assert script_data2.scriptSalIndex == I0 + 2
             assert script_data2.processState == ScriptProcessState.DONE

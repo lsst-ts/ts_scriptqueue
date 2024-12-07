@@ -861,7 +861,9 @@ class QueueModel:
 
     async def _script_info_callback(self, script_info):
         """ScriptInfo callback."""
-        self.log.debug(f"Script info callback: {script_info}.")
+        self.log.debug(
+            f"Script info callback: {script_info.index}::{script_info.process_state.name}."
+        )
         if self.script_callback:
             try:
                 self.log.debug("Calling script callback start.")

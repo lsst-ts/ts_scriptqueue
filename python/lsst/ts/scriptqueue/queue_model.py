@@ -872,7 +872,11 @@ class QueueModel:
             except Exception:
                 self.log.exception("script_callback failed; continuing")
 
-        if script_info.process_done or script_info.terminated:
+        if (
+            script_info.script_state == ScriptState.DONE
+            or script_info.process_done
+            or script_info.terminated
+        ):
             self.log.debug("Script done or terminated, removing script.")
             asyncio.create_task(self._remove_script(script_info.index))
             return

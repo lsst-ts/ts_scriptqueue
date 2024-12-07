@@ -862,7 +862,7 @@ class QueueModel:
     async def _script_info_callback(self, script_info):
         """ScriptInfo callback."""
         self.log.debug(
-            f"Script info callback: {script_info.index}::{script_info.process_state.name}."
+            f"Script info callback: {script_info.index}::{script_info.script_state!r}."
         )
         if self.script_callback:
             try:

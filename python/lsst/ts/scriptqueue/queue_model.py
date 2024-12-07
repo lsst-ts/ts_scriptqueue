@@ -721,15 +721,24 @@ class QueueModel:
     async def _remove_script(self, sal_index):
         """Remove a script from the queue."""
         key = ScriptKey(sal_index)
+        self.log.debug(f"Removing script {key} from the queue.")
         if self.current_script and self.current_script == key:
             if sal_index in self._scripts_being_stopped:
                 self._scripts_being_stopped.remove(sal_index)
                 if not self._scripts_being_stopped:
+                    self.log.debug("No more scripts to stop, updating queue.")
                     await self._update_queue()
+                else:
+                    self.log.debug(
+                        "Still have scripts to be stopped, skip updating queue."
+                    )
                 # else let removal finish before starting the next job,
                 # because it messes up the queue state callbacks otherwise
             else:
                 # removal is handled by _update_queue
+                self.log.debug(
+                    "Script being removed not the current script, updating the queue will remove it."
+                )
                 await self._update_queue()
         elif key in self.queue:
             script_info = self.pop_script_info(sal_index)
@@ -739,8 +748,10 @@ class QueueModel:
                 if not self._scripts_being_stopped:
                     # that was the last script to stop;
                     # now show the queue state
+                    self.log.debug("Finished removing all scripts, updating queue.")
                     await self._update_queue()
             else:
+                self.log.debug("Updating queue.")
                 await self._update_queue()
 
     async def _log_message_callback(self, data):

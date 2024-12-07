@@ -864,7 +864,9 @@ class QueueModel:
         self.log.debug(f"Script info callback: {script_info}.")
         if self.script_callback:
             try:
+                self.log.debug("Calling script callback start.")
                 await self.script_callback(script_info)
+                self.log.debug("Calling script callback done.")
             except Exception:
                 self.log.exception("script_callback failed; continuing")
 

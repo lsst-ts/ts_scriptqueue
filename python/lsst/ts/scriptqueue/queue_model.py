@@ -917,7 +917,10 @@ class QueueModel:
         initial_history_indices = self.history_indices
         if self.current_script:
             self.log.debug(f"current_script={self.current_script}.")
-            if self.current_script.process_done:
+            if (
+                self.current_script.script_state == ScriptState.DONE
+                or self.current_script.process_done
+            ):
                 if self.current_script.failed and (
                     pause_on_failure or not self.running
                 ):

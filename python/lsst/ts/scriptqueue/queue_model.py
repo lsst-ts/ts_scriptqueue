@@ -861,6 +861,7 @@ class QueueModel:
 
     async def _script_info_callback(self, script_info):
         """ScriptInfo callback."""
+        self.log.debug(f"Script info callback: {script_info}.")
         if self.script_callback:
             try:
                 await self.script_callback(script_info)
@@ -868,6 +869,7 @@ class QueueModel:
                 self.log.exception("script_callback failed; continuing")
 
         if script_info.process_done or script_info.terminated:
+            self.log.debug("Script done or terminated, removing script.")
             asyncio.create_task(self._remove_script(script_info.index))
             return
 

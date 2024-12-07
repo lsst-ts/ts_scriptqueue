@@ -1084,7 +1084,13 @@ class QueueModelTestCase(unittest.IsolatedAsyncioTestCase):
 
         # Assert that the process return code is 0 for success
         # and that the final script state Done is sent and recorded.
+        # Note after DM-48015: In order to speedup script execution we
+        # are now moving forward as soon as the script state is done,
+        # and no longer waiting for the script process to complete.
+        # This means that here we need to ensure the script process
+        # goes to done soon, but it might not be done right away.
         script_info = self.model.get_script_info(i0 + 2, search_history=True)
+        await asyncio.wait_for(script_info.process_task, timeout=STD_TIMEOUT)
         assert script_info.process_done
         assert script_info.process.returncode == 0
         assert script_info.script_state == ScriptState.DONE

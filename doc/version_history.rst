@@ -6,6 +6,11 @@
 Version History
 ###############
 
+v2.14.0
+-------
+
+* Updated the ScriptQueue behavior to move scripts to the "done" list and start running the next script as soon as the current script state is done, instead of waiting for the process to be done.
+
 v2.13.2
 -------
 

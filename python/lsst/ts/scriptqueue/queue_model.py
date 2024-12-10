@@ -721,15 +721,24 @@ class QueueModel:
     async def _remove_script(self, sal_index):
         """Remove a script from the queue."""
         key = ScriptKey(sal_index)
+        self.log.debug(f"Removing script {key} from the queue.")
         if self.current_script and self.current_script == key:
             if sal_index in self._scripts_being_stopped:
                 self._scripts_being_stopped.remove(sal_index)
                 if not self._scripts_being_stopped:
+                    self.log.debug("No more scripts to stop, updating queue.")
                     await self._update_queue()
+                else:
+                    self.log.debug(
+                        "Still have scripts to be stopped, skip updating queue."
+                    )
                 # else let removal finish before starting the next job,
                 # because it messes up the queue state callbacks otherwise
             else:
                 # removal is handled by _update_queue
+                self.log.debug(
+                    "Script being removed not the current script, updating the queue will remove it."
+                )
                 await self._update_queue()
         elif key in self.queue:
             script_info = self.pop_script_info(sal_index)
@@ -739,8 +748,10 @@ class QueueModel:
                 if not self._scripts_being_stopped:
                     # that was the last script to stop;
                     # now show the queue state
+                    self.log.debug("Finished removing all scripts, updating queue.")
                     await self._update_queue()
             else:
+                self.log.debug("Updating queue.")
                 await self._update_queue()
 
     async def _log_message_callback(self, data):
@@ -850,13 +861,21 @@ class QueueModel:
 
     async def _script_info_callback(self, script_info):
         """ScriptInfo callback."""
+        self.log.debug(
+            f"Script info callback: {script_info.index}::{script_info.script_state!r}."
+        )
         if self.script_callback:
             try:
                 await self.script_callback(script_info)
             except Exception:
                 self.log.exception("script_callback failed; continuing")
 
-        if script_info.process_done or script_info.terminated:
+        if (
+            script_info.script_state == ScriptState.DONE
+            or script_info.process_done
+            or script_info.terminated
+        ):
+            self.log.debug("Script done or terminated, removing script.")
             asyncio.create_task(self._remove_script(script_info.index))
             return
 
@@ -889,11 +908,17 @@ class QueueModel:
               script to history. This is intended for use by ``running``
               to allow the queue to resume after pausing on failure.
         """
+        self.log.debug(f"Updating queue: {force_callback=}, {pause_on_failure=}.")
+
         initial_current_index = self.current_index
         initial_queue_indices = self.queue_indices
         initial_history_indices = self.history_indices
         if self.current_script:
-            if self.current_script.process_done:
+            self.log.debug(f"current_script={self.current_script}.")
+            if (
+                self.current_script.script_state == ScriptState.DONE
+                or self.current_script.process_done
+            ):
                 if self.current_script.failed and (
                     pause_on_failure or not self.running
                 ):
@@ -903,6 +928,8 @@ class QueueModel:
                 else:
                     self.history.appendleft(self.current_script)
                     self.current_script = None
+        else:
+            self.log.debug("No current script.")
 
         if self.enabled and self.running:
             # Clear done scripts from the top of the queue.
@@ -920,6 +947,7 @@ class QueueModel:
                     and script_info.runnable
                     and script_info.index not in self._scripts_being_stopped
                 ):
+                    self.log.debug(f"Running script: {script_info}.")
                     self.current_script = script_info
                     self.queue.popleft()
                     script_info.run()

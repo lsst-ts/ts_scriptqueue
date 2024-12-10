@@ -62,7 +62,7 @@ class BlockInfo:
 
         self._block_ticket_id = abs(int(block_match.groupdict()["id"]))
         self._block_type = (
-            "BockT"
+            "BlockT"
             if block_match.groupdict()["block_test_case"] is not None
             else "Block"
         )
@@ -148,4 +148,4 @@ class BlockInfo:
         `bool`
             True is block is done, False otherwise.
         """
-        return all([script_info.process_done() for script_info in self.scripts_info])
+        return all([script_info.process_done for script_info in self.scripts_info])

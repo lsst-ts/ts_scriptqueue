@@ -6,6 +6,11 @@
 Version History
 ###############
 
+v2.14.1
+-------
+
+* Updated conda recipe to ensure version number is generated correctly.
+
 v2.14.0
 -------
 

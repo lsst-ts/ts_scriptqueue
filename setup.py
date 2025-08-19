@@ -1,4 +1,6 @@
+import setuptools
 import setuptools_scm
-from setuptools import setup
 
-setup(version=setuptools_scm.get_version())
+setuptools.setup(
+    version=setuptools_scm.get_version(write_to="python/lsst/ts/scriptqueue/version.py")
+)

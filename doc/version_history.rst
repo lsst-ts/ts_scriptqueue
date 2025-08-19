@@ -6,6 +6,13 @@
 Version History
 ###############
 
+v2.14.1
+-------
+
+* Updated conda recipe to ensure version number is generated correctly.
+* Updated unit tests to conform with latest version of salobj.
+* Updated ``do_stopScripts`` to send in progress acknowledgements and to increase the timeout to stop scripts.
+
 v2.14.0
 -------
 

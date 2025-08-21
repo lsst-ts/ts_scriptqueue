@@ -102,7 +102,7 @@ class MakeAddKwargs(MakeKWargs):
 
 class ScriptQueueConstructorTestCase(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
-        salobj.set_random_lsst_dds_partition_prefix()
+        salobj.set_test_topic_subname()
         try:
             self.default_standardpath = scriptqueue.get_default_scripts_dir(
                 is_standard=True

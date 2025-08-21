@@ -1546,7 +1546,7 @@ class ScriptQueueTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCa
             # Remove I0+1; the value of terminate doesn't matter
             # because the script is not running.
             print(f"remove script {I0+1} from the queue")
-            stop_data = self.make_stop_data([I0 + 1], terminate=False)
+            stop_data = self.make_stop_data([I0 + 1], terminate=True)
             await self.remote.cmd_stopScripts.start(stop_data, timeout=STD_TIMEOUT)
             await self.assert_next_queue(
                 running=True,
@@ -1570,7 +1570,7 @@ class ScriptQueueTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCa
             )
             await self.assert_next_next_visit_canceled(sal_index=I0 + 2)
             await self.assert_next_next_visit(sal_index=I0 + 3)
-            stop_data = self.make_stop_data([I0, I0 + 2, I0 + 3], terminate=False)
+            stop_data = self.make_stop_data([I0, I0 + 2, I0 + 3], terminate=True)
             await self.remote.cmd_stopScripts.start(stop_data, timeout=STD_TIMEOUT)
             await self.assert_next_queue(
                 running=True,

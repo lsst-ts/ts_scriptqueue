@@ -30,6 +30,7 @@ from unittest.mock import patch
 
 import pytest
 from lsst.ts import salobj, scriptqueue
+from lsst.ts.xml import subsystems
 from lsst.ts.xml.enums.Script import ScriptState
 from lsst.ts.xml.enums.ScriptQueue import Location, ScriptProcessState
 
@@ -63,7 +64,7 @@ class QueueModelTestCase(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.t0 = time.monotonic()
         self.min_sal_index = next(make_min_sal_index)
-        salobj.set_random_lsst_dds_partition_prefix()
+        salobj.set_test_topic_subname()
         self.datadir = os.path.abspath(os.path.join(os.path.dirname(__file__), "data"))
         self.standardpath = os.path.join(self.datadir, "standard")
         self.externalpath = os.path.join(self.datadir, "external")
@@ -94,13 +95,40 @@ class QueueModelTestCase(unittest.IsolatedAsyncioTestCase):
         await self.model.start_task
 
     async def asyncTearDown(self):
-        nkilled = len(
-            await asyncio.wait_for(self.model.terminate_all(), timeout=STD_TIMEOUT)
+        killed_scripts_info = await asyncio.wait_for(
+            self.model.terminate_all(), timeout=STD_TIMEOUT
         )
-        if nkilled > 0:
-            warnings.warn(f"Killed {nkilled} subprocesses")
+        if killed_scripts_info:
+            killed_scripts_index = ",".join(
+                [f"{script_info.index}" for script_info in killed_scripts_info]
+            )
+            warnings.warn(
+                f"Killed {len(killed_scripts_info)} subprocesses: {killed_scripts_index}"
+            )
 
+        await self.model.remote.close()
         await self.domain.close()
+
+        topic_subname = os.environ["LSST_TOPIC_SUBNAME"]
+
+        delete_topics = await salobj.delete_topics.DeleteTopics.new()
+
+        delete_topics_args = salobj.delete_topics.DeleteTopicsArgs(
+            all_topics=False,
+            subname=topic_subname,
+            force=False,
+            dry=False,
+            log_level=None,
+            components=subsystems,
+        )
+
+        try:
+            delete_topics.execute(delete_topics_args)
+        except AssertionError:
+            pass
+
+        # Sleep some time to let the cluster have time to finish the deletion
+        await asyncio.sleep(5.0)
 
     async def assert_next_next_visit(self, sal_index):
         """Assert that the next next_visit callback is for the specified index.
@@ -1369,6 +1397,13 @@ class QueueModelTestCase(unittest.IsolatedAsyncioTestCase):
             queue_info = await asyncio.wait_for(
                 self.queue_info_queue.get(), timeout=STD_TIMEOUT
             )
+            if not self.model.running:
+                print("Queue is not running, run it...")
+                await self.model.set_running(True)
+
+            print(
+                f"Waiting for {i0+2} and empty queue. Got {queue_info.current_index=}, {queue_info.queue=}."
+            )
             if queue_info.current_index == i0 + 2 and not queue_info.queue:
                 break
         await self.assert_next_queue(
@@ -1405,7 +1440,8 @@ class QueueModelTestCase(unittest.IsolatedAsyncioTestCase):
         # script i0+1 was running, so it was stopped gently
         # if terminate False, else terminated abruptly
         assert script_info1.process_done
-        assert not (script_info1.failed)
+        if not terminate:
+            assert not (script_info1.failed)
         assert not (script_info1.running)
         if terminate:
             assert script_info1.terminated
@@ -1423,9 +1459,10 @@ class QueueModelTestCase(unittest.IsolatedAsyncioTestCase):
         assert script_info2.script_state == ScriptState.DONE
 
         # script i0+3 was stopped while queued, so it was terminated,
-        # regardless of the `terminate` argument
+        # regardless of the `terminate` argument. terminated
+        # scripts now will fail.
         assert script_info3.process_done
-        assert not (script_info3.failed)
+        assert script_info3.failed
         assert not (script_info3.running)
         assert script_info3.terminated
         assert script_info3.process_state == ScriptProcessState.TERMINATED

@@ -1440,7 +1440,8 @@ class QueueModelTestCase(unittest.IsolatedAsyncioTestCase):
         # script i0+1 was running, so it was stopped gently
         # if terminate False, else terminated abruptly
         assert script_info1.process_done
-        assert not (script_info1.failed)
+        if not terminate:
+            assert not (script_info1.failed)
         assert not (script_info1.running)
         if terminate:
             assert script_info1.terminated
@@ -1458,9 +1459,10 @@ class QueueModelTestCase(unittest.IsolatedAsyncioTestCase):
         assert script_info2.script_state == ScriptState.DONE
 
         # script i0+3 was stopped while queued, so it was terminated,
-        # regardless of the `terminate` argument
+        # regardless of the `terminate` argument. terminated
+        # scripts now will fail.
         assert script_info3.process_done
-        assert not (script_info3.failed)
+        assert script_info3.failed
         assert not (script_info3.running)
         assert script_info3.terminated
         assert script_info3.process_state == ScriptProcessState.TERMINATED

@@ -1397,6 +1397,13 @@ class QueueModelTestCase(unittest.IsolatedAsyncioTestCase):
             queue_info = await asyncio.wait_for(
                 self.queue_info_queue.get(), timeout=STD_TIMEOUT
             )
+            if not self.model.running:
+                print("Queue is not running, run it...")
+                await self.model.set_running(True)
+
+            print(
+                f"Waiting for {i0+2} and empty queue. Got {queue_info.current_index=}, {queue_info.queue=}."
+            )
             if queue_info.current_index == i0 + 2 and not queue_info.queue:
                 break
         await self.assert_next_queue(

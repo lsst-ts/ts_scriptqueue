@@ -360,7 +360,10 @@ class ScriptQueue(salobj.BaseCsc):
         self.assert_enabled("stopScripts")
         if data.length <= 0:
             raise salobj.ExpectedError(f"length={data.length} must be positive")
-        timeout = 5 + 0.2 * data.length
+        timeout = 10 + data.length
+        await self.cmd_stopScripts.ack_in_progress(
+            data, timeout=timeout + 1, result="Stopping scripts."
+        )
         await asyncio.wait_for(
             self.model.stop_scripts(
                 sal_indices=data.salIndices[0 : data.length], terminate=data.terminate

@@ -30,6 +30,7 @@ from unittest.mock import patch
 import pytest
 import yaml
 from lsst.ts import salobj, scriptqueue, utils
+from lsst.ts.xml import subsystems
 from lsst.ts.xml.enums.Script import ScriptState
 from lsst.ts.xml.enums.ScriptQueue import Location, SalIndex, ScriptProcessState
 
@@ -120,6 +121,28 @@ class ScriptQueueConstructorTestCase(unittest.IsolatedAsyncioTestCase):
         self.testdata_standardpath = os.path.join(self.datadir, "standard")
         self.testdata_externalpath = os.path.join(self.datadir, "external")
         self.badpath = os.path.join(self.datadir, "not_a_directory")
+
+    async def asyncTearDown(self):
+        topic_subname = os.environ["LSST_TOPIC_SUBNAME"]
+
+        delete_topics = await salobj.delete_topics.DeleteTopics.new()
+
+        delete_topics_args = salobj.delete_topics.DeleteTopicsArgs(
+            all_topics=False,
+            subname=topic_subname,
+            force=False,
+            dry=False,
+            log_level=None,
+            components=subsystems,
+        )
+
+        try:
+            delete_topics.execute(delete_topics_args)
+        except AssertionError:
+            pass
+
+        # Sleep some time to let the cluster have time to finish the deletion
+        await asyncio.sleep(5.0)
 
     @unittest.skipIf(
         standardscripts is None or externalscripts is None,
@@ -241,6 +264,12 @@ class ScriptQueueTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCa
             verbose=True,
         )
         return csc
+
+    async def asyncTearDown(self):
+        try:
+            await super().asyncTearDown()
+        except AssertionError:
+            pass
 
     def make_stop_data(self, stop_indices, terminate):
         """Make data for the stopScripts command.

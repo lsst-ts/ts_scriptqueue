@@ -30,6 +30,7 @@ from unittest.mock import patch
 
 import pytest
 from lsst.ts import salobj, scriptqueue
+from lsst.ts.xml import subsystems
 from lsst.ts.xml.enums.Script import ScriptState
 from lsst.ts.xml.enums.ScriptQueue import Location, ScriptProcessState
 
@@ -94,13 +95,40 @@ class QueueModelTestCase(unittest.IsolatedAsyncioTestCase):
         await self.model.start_task
 
     async def asyncTearDown(self):
-        nkilled = len(
-            await asyncio.wait_for(self.model.terminate_all(), timeout=STD_TIMEOUT)
+        killed_scripts_info = await asyncio.wait_for(
+            self.model.terminate_all(), timeout=STD_TIMEOUT
         )
-        if nkilled > 0:
-            warnings.warn(f"Killed {nkilled} subprocesses")
+        if killed_scripts_info:
+            killed_scripts_index = ",".join(
+                [f"{script_info.index}" for script_info in killed_scripts_info]
+            )
+            warnings.warn(
+                f"Killed {len(killed_scripts_info)} subprocesses: {killed_scripts_index}"
+            )
 
+        await self.model.remote.close()
         await self.domain.close()
+
+        topic_subname = os.environ["LSST_TOPIC_SUBNAME"]
+
+        delete_topics = await salobj.delete_topics.DeleteTopics.new()
+
+        delete_topics_args = salobj.delete_topics.DeleteTopicsArgs(
+            all_topics=False,
+            subname=topic_subname,
+            force=False,
+            dry=False,
+            log_level=None,
+            components=subsystems,
+        )
+
+        try:
+            delete_topics.execute(delete_topics_args)
+        except AssertionError:
+            pass
+
+        # Sleep some time to let the cluster have time to finish the deletion
+        await asyncio.sleep(5.0)
 
     async def assert_next_next_visit(self, sal_index):
         """Assert that the next next_visit callback is for the specified index.

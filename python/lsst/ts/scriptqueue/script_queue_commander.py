@@ -48,9 +48,7 @@ class ScriptQueueCommander(salobj.CscCommander):
     def __init__(self, script_log_level, **kwargs):
         super().__init__(name="ScriptQueue", **kwargs)
         self.script_log_level = script_log_level
-        self.help_dict[
-            "add"
-        ] = f"""type path config options  # add a script to the end of the queue:
+        self.help_dict["add"] = f"""type path config options  # add a script to the end of the queue:
     • type = s or std for standard, e or ext for external
     • config = @yaml_path or keyword1=value1 keyword2=value2 ...
       where yaml_path is the path to a yaml file; the .yaml suffix is optional
@@ -75,9 +73,7 @@ class ScriptQueueCommander(salobj.CscCommander):
         )
 
         self.help_dict["showSchema"] = "type path  # type=s, std, e, or ext"
-        self.help_dict["stopScripts"] = (
-            "sal_index1 [sal_index2 [... sal_indexN]] terminate (0 or 1)"
-        )
+        self.help_dict["stopScripts"] = "sal_index1 [sal_index2 [... sal_indexN]] terminate (0 or 1)"
 
         self.script_remote = salobj.Remote(
             domain=self.domain,
@@ -90,9 +86,7 @@ class ScriptQueueCommander(salobj.CscCommander):
         self.script_remote.evt_state.callback = self.script_state
         self.script_remote.evt_heartbeat.callback = self.script_heartbeat
         # Dict of "type" argument: isStandard
-        self.script_type_dict = dict(
-            s=True, std=True, standard=True, e=False, ext=False, external=False
-        )
+        self.script_type_dict = dict(s=True, std=True, standard=True, e=False, ext=False, external=False)
         # SAL index of script whose heartbeat is being monitored;
         # this should be the currently executing script.
         self._script_to_monitor = 0
@@ -107,9 +101,7 @@ class ScriptQueueCommander(salobj.CscCommander):
         try:
             return self.script_type_dict[script_type]
         except KeyError:
-            raise KeyError(
-                f"type {script_type!r} must be one of {list(self.script_type_dict.keys())}"
-            )
+            raise KeyError(f"type {script_type!r} must be one of {list(self.script_type_dict.keys())}")
 
     def evt_availableScripts_callback(self, data):
         standard_scripts = data.standard.split(":")
@@ -126,9 +118,7 @@ class ScriptQueueCommander(salobj.CscCommander):
             self._script_to_monitor = data.currentSalIndex
             self.script_heartbeat_monitor_task.cancel()
             if data.currentSalIndex != 0:
-                self.script_heartbeat_monitor_task = asyncio.create_task(
-                    self.script_heartbeat_monitor()
-                )
+                self.script_heartbeat_monitor_task = asyncio.create_task(self.script_heartbeat_monitor())
         salIndices = data.salIndices[0 : data.length]
         pastSalIndices = data.pastSalIndices[0 : data.pastLength]
         print(
@@ -181,9 +171,7 @@ class ScriptQueueCommander(salobj.CscCommander):
             # A heartbeat from the wrong script.
             return
         self.script_heartbeat_monitor_task.cancel()
-        self.script_heartbeat_monitor_task = asyncio.create_task(
-            self.script_heartbeat_monitor()
-        )
+        self.script_heartbeat_monitor_task = asyncio.create_task(self.script_heartbeat_monitor())
 
     async def do_add(self, args):
         """Overrride the standard add command to simplify the interface."""
@@ -208,16 +196,12 @@ class ScriptQueueCommander(salobj.CscCommander):
                     # Start of options
                     break
                 elif args[0] not in string.ascii_letters:
-                    raise ValueError(
-                        f"Argument {arg!r} should start with a letter, in args={args}"
-                    )
+                    raise ValueError(f"Argument {arg!r} should start with a letter, in args={args}")
                 else:
                     options_start_ind += 1
                     name_value = arg.split("=", 1)
                     if len(name_value) != 2:
-                        raise ValueError(
-                            f"Could not parse config arg {arg!r} as keyword=value, in {args}"
-                        )
+                        raise ValueError(f"Could not parse config arg {arg!r} as keyword=value, in {args}")
                     name, value = name_value
                     config_yaml_items.append(f"{name}: {value}")
 
@@ -226,9 +210,7 @@ class ScriptQueueCommander(salobj.CscCommander):
             if arg.startswith("-"):
                 name_value = arg[1:].split("=", 1)
                 if len(name_value) != 2:
-                    raise ValueError(
-                        f"Could not parse option arg {arg!r} as keyword=value, in {args}"
-                    )
+                    raise ValueError(f"Could not parse option arg {arg!r} as keyword=value, in {args}")
                 name, value = name_value
                 default_value = options_dict.get(name, None)
                 if default_value is None:

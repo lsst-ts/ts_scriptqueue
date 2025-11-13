@@ -49,9 +49,7 @@ class ParseRunOneScriptTestCase(unittest.IsolatedAsyncioTestCase):
         config_path = DATA_DIR / "config1.yaml"
         with open(config_path, "r") as f:
             expected_config = f.read()
-        cmd = scriptqueue.parse_run_one_script_cmd(
-            args=[str(script), "--config", config_path.as_posix()]
-        )
+        cmd = scriptqueue.parse_run_one_script_cmd(args=[str(script), "--config", config_path.as_posix()])
         assert script.samefile(cmd.script)
         assert cmd.config == expected_config
 
@@ -59,9 +57,7 @@ class ParseRunOneScriptTestCase(unittest.IsolatedAsyncioTestCase):
         script = DATA_DIR / "external" / "script1"
         config_dict = dict(abool=True, anint=47, afloat=0.2, astr="string_value")
         config_arg_list = [f"{key}={value}" for key, value in config_dict.items()]
-        cmd = scriptqueue.parse_run_one_script_cmd(
-            args=[str(script), "--parameters"] + config_arg_list
-        )
+        cmd = scriptqueue.parse_run_one_script_cmd(args=[str(script), "--parameters"] + config_arg_list)
         assert script.samefile(cmd.script)
         config_dict_from_parser = yaml.safe_load(cmd.config)
         assert config_dict_from_parser == config_dict
@@ -72,15 +68,11 @@ class ParseRunOneScriptTestCase(unittest.IsolatedAsyncioTestCase):
         assert cmd.loglevel is None
 
         loglevel = 15
-        cmd = scriptqueue.parse_run_one_script_cmd(
-            args=[str(script), "--loglevel", str(loglevel)]
-        )
+        cmd = scriptqueue.parse_run_one_script_cmd(args=[str(script), "--loglevel", str(loglevel)])
         assert cmd.loglevel == loglevel
 
         loglevel = 21
-        cmd = scriptqueue.parse_run_one_script_cmd(
-            args=[str(script), "-l", str(loglevel)]
-        )
+        cmd = scriptqueue.parse_run_one_script_cmd(args=[str(script), "-l", str(loglevel)])
         assert cmd.loglevel == loglevel
 
     def test_invalid_arguments(self):
@@ -110,27 +102,19 @@ class ParseRunOneScriptTestCase(unittest.IsolatedAsyncioTestCase):
         with pytest.raises(SystemExit):
             # --index must be <= salobj.MAX_SAL_INDEX
             too_large_index = salobj.MAX_SAL_INDEX + 1
-            scriptqueue.parse_run_one_script_cmd(
-                args=[str(script), "--index", str(too_large_index)]
-            )
+            scriptqueue.parse_run_one_script_cmd(args=[str(script), "--index", str(too_large_index)])
         with pytest.raises(SystemExit):
             # --index must be an integer
-            scriptqueue.parse_run_one_script_cmd(
-                args=[str(script), "--index", "not_an_integer"]
-            )
+            scriptqueue.parse_run_one_script_cmd(args=[str(script), "--index", "not_an_integer"])
         with pytest.raises(SystemExit):
             # --parameters requires data
             scriptqueue.parse_run_one_script_cmd(args=[str(script), "--parameters"])
         with pytest.raises(SystemExit):
             # invalid data for --parameters; no =
-            scriptqueue.parse_run_one_script_cmd(
-                args=[str(script), "--parameters", "invalid_parameter"]
-            )
+            scriptqueue.parse_run_one_script_cmd(args=[str(script), "--parameters", "invalid_parameter"])
         with pytest.raises(SystemExit):
             # invalid data for --parameters; space
-            scriptqueue.parse_run_one_script_cmd(
-                args=[str(script), "--parameters", "wait_time", "=", "0.1"]
-            )
+            scriptqueue.parse_run_one_script_cmd(args=[str(script), "--parameters", "wait_time", "=", "0.1"])
         with pytest.raises(SystemExit):
             # cannot specify both --config and --parameters
             scriptqueue.parse_run_one_script_cmd(
@@ -153,24 +137,21 @@ class RunOneScriptTestCase(unittest.IsolatedAsyncioTestCase):
         config_path = DATA_DIR / "config1.yaml"
         with open(config_path, "r") as f:
             config = f.read()
-        await scriptqueue.run_one_script(
-            index=1, script=script, config=config, loglevel=10
-        )
+        await scriptqueue.run_one_script(index=1, script=script, config=config, loglevel=10)
 
     async def test_run_command_line(self):
         exe_name = "run_one_script"
         exe_path = shutil.which(exe_name)
         if exe_path is None:
-            self.fail(
-                f"Could not find bin script {exe_name}; did you setup and scons this package?"
-            )
+            self.fail(f"Could not find bin script {exe_name}; did you setup and scons this package?")
 
         index = 135
         script = DATA_DIR / "standard" / "subdir" / "script3"
         config_path = DATA_DIR / "config1.yaml"
-        async with salobj.Domain() as domain, salobj.Remote(
-            domain=domain, name="Script", index=index
-        ) as remote:
+        async with (
+            salobj.Domain() as domain,
+            salobj.Remote(domain=domain, name="Script", index=index) as remote,
+        ):
             # The script states seen, ignoring sequential duplicates
             # (e.g. [1, 1, 2, 2, 1, 1] becomes [1, 2, 1]
             states_seen = []

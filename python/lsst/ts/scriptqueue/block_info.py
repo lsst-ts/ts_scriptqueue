@@ -27,9 +27,7 @@ from collections import deque
 
 from lsst.ts.utils import ImageNameServiceClient
 
-BLOCK_REGEX = re.compile(
-    r"(?P<block_test_case>BLOCK-T)?(?P<block>BLOCK-)?(?P<id>[0-9]*)"
-)
+BLOCK_REGEX = re.compile(r"(?P<block_test_case>BLOCK-T)?(?P<block>BLOCK-)?(?P<id>[0-9]*)")
 
 
 class BlockInfo:
@@ -56,16 +54,10 @@ class BlockInfo:
 
         block_match = BLOCK_REGEX.match(block_id)
         if block_match.span()[1] == 0:
-            raise ValueError(
-                f"{block_id} has the wrong format, should be BLOCK-N or BLOCK-TN."
-            )
+            raise ValueError(f"{block_id} has the wrong format, should be BLOCK-N or BLOCK-TN.")
 
         self._block_ticket_id = abs(int(block_match.groupdict()["id"]))
-        self._block_type = (
-            "BlockT"
-            if block_match.groupdict()["block_test_case"] is not None
-            else "Block"
-        )
+        self._block_type = "BlockT" if block_match.groupdict()["block_test_case"] is not None else "Block"
 
         self._block_uid = None
         self.scripts_info = deque(maxlen=block_size)
@@ -86,9 +78,7 @@ class BlockInfo:
             Block unique id.
         """
         if not self.has_uid():
-            raise RuntimeError(
-                "Block uid has not been set yet, call set_block_uid first."
-            )
+            raise RuntimeError("Block uid has not been set yet, call set_block_uid first.")
 
         return self._block_uid
 

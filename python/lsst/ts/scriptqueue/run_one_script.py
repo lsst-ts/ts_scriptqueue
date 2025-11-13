@@ -82,10 +82,7 @@ class ParameterAction(argparse.Action):
         for nameValue in values:
             name, sep, valueStr = nameValue.partition("=")
             if not valueStr:
-                parser.error(
-                    "%s value %s must be in form name=value"
-                    % (option_string, nameValue)
-                )
+                parser.error("%s value %s must be in form name=value" % (option_string, nameValue))
             config_list.append(f"{name}: {valueStr}")
         namespace.config = "\n".join(config_list)
 
@@ -99,9 +96,7 @@ def parse_run_one_script_cmd(args=None):
     )
 
     parser.add_argument("script", help="Path of script to run.")
-    parser.add_argument(
-        "--index", type=int, help="Script index; default is a random value"
-    )
+    parser.add_argument("--index", type=int, help="Script index; default is a random value")
     parser.add_argument(
         "-l",
         "--loglevel",
@@ -128,9 +123,7 @@ def parse_run_one_script_cmd(args=None):
     if cmd.index is None:
         cmd.index = random.randint(1, SCRIPT_INDEX_MULT - 1)
     elif not 0 < cmd.index <= salobj.MAX_SAL_INDEX:
-        parser.error(
-            f"index={cmd.index} must be in the range [1, {salobj.MAX_SAL_INDEX}], inclusive"
-        )
+        parser.error(f"index={cmd.index} must be in the range [1, {salobj.MAX_SAL_INDEX}], inclusive")
     if cmd.config is None:
         cmd.config = ""
     return cmd
@@ -193,9 +186,7 @@ async def run_one_script(index, script, config, loglevel=None):
             await script_info.config_task
             if loglevel is not None:
                 print(f"setting script log level to {loglevel}")
-                await remote.cmd_setLogLevel.set_start(
-                    level=loglevel, timeout=STD_TIMEOUT
-                )
+                await remote.cmd_setLogLevel.set_start(level=loglevel, timeout=STD_TIMEOUT)
             group_id = astropy.time.Time.now().tai.isot
             print(f"setting group ID={group_id}")
             await script_info.set_group_id(group_id=group_id)
@@ -212,9 +203,7 @@ async def run_one_script(index, script, config, loglevel=None):
 async def _run_one_script_cli_impl():
     """Implementation for run_one_script_cli."""
     cmd = parse_run_one_script_cmd()
-    await run_one_script(
-        index=cmd.index, script=cmd.script, config=cmd.config, loglevel=cmd.loglevel
-    )
+    await run_one_script(index=cmd.index, script=cmd.script, config=cmd.config, loglevel=cmd.loglevel)
 
 
 def run_one_script_cli():

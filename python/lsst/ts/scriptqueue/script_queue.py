@@ -82,9 +82,7 @@ class ScriptQueue(salobj.BaseCsc):
         verbose=False,
     ):
         if index < 0 or index > _MAX_SCRIPTQUEUE_INDEX:
-            raise ValueError(
-                f"index {index} must be >= 0 and <= {_MAX_SCRIPTQUEUE_INDEX}"
-            )
+            raise ValueError(f"index {index} must be >= 0 and <= {_MAX_SCRIPTQUEUE_INDEX}")
         standardpath = self._get_scripts_path(standardpath, is_standard=True)
         externalpath = self._get_scripts_path(externalpath, is_standard=False)
         self.verbose = verbose
@@ -229,9 +227,7 @@ class ScriptQueue(salobj.BaseCsc):
         except Exception:
             if process.returncode is None:
                 process.terminate()
-                self.log.warning(
-                    "showSchema killed a process that was not properly terminated"
-                )
+                self.log.warning("showSchema killed a process that was not properly terminated")
             raise
         finally:
             os.environ["PATH"] = initialpath
@@ -257,9 +253,7 @@ class ScriptQueue(salobj.BaseCsc):
         """
         self.assert_enabled("showScript")
         try:
-            script_info = self.model.get_script_info(
-                data.scriptSalIndex, search_history=True
-            )
+            script_info = self.model.get_script_info(data.scriptSalIndex, search_history=True)
         except ValueError:
             raise salobj.ExpectedError(f"Unknown script {data.scriptSalIndex}")
         await self.put_script(script_info, force_output=True)
@@ -361,13 +355,9 @@ class ScriptQueue(salobj.BaseCsc):
         if data.length <= 0:
             raise salobj.ExpectedError(f"length={data.length} must be positive")
         timeout = 10 + data.length
-        await self.cmd_stopScripts.ack_in_progress(
-            data, timeout=timeout + 1, result="Stopping scripts."
-        )
+        await self.cmd_stopScripts.ack_in_progress(data, timeout=timeout + 1, result="Stopping scripts.")
         await asyncio.wait_for(
-            self.model.stop_scripts(
-                sal_indices=data.salIndices[0 : data.length], terminate=data.terminate
-            ),
+            self.model.stop_scripts(sal_indices=data.salIndices[0 : data.length], terminate=data.terminate),
             timeout,
         )
 
@@ -381,10 +371,7 @@ class ScriptQueue(salobj.BaseCsc):
     async def put_next_visit(self, script_info):
         """Output the ``nextVisit`` event."""
         if self.verbose:
-            print(
-                f"put_next_visit: index={script_info.index}, "
-                f"group_id={script_info.group_id}"
-            )
+            print(f"put_next_visit: index={script_info.index}, group_id={script_info.group_id}")
         if script_info.metadata is None:
             raise RuntimeError("script_info has no metadata")
         if not script_info.group_id:
@@ -404,10 +391,7 @@ class ScriptQueue(salobj.BaseCsc):
     async def put_next_visit_canceled(self, script_info):
         """Output the ``nextVisitCanceled`` event."""
         if self.verbose:
-            print(
-                f"put_next_visit_canceled: index={script_info.index}, "
-                f"group_id={script_info.group_id}"
-            )
+            print(f"put_next_visit_canceled: index={script_info.index}, group_id={script_info.group_id}")
         if not script_info.group_id:
             raise RuntimeError("script_info has no group_id")
         await self.evt_nextVisitCanceled.set_write(
@@ -491,13 +475,11 @@ class ScriptQueue(salobj.BaseCsc):
     def add_arguments(cls, parser):
         parser.add_argument(
             "--standard",
-            help="Directory containing standard scripts; "
-            "defaults to ts_standardscripts/scripts",
+            help="Directory containing standard scripts; defaults to ts_standardscripts/scripts",
         )
         parser.add_argument(
             "--external",
-            help="Directory containing external scripts; "
-            "defaults to ts_externalscripts/scripts",
+            help="Directory containing external scripts; defaults to ts_externalscripts/scripts",
         )
         parser.add_argument(
             "--verbose",

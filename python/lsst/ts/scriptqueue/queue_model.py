@@ -182,9 +182,7 @@ class QueueModel:
         self._index_generator = index_generator(imin=min_sal_index, imax=max_sal_index)
         self._scripts_being_stopped = set()
         # use index=0 so we get messages for all scripts
-        self.remote = salobj.Remote(
-            domain=domain, name="Script", index=0, evt_max_history=0
-        )
+        self.remote = salobj.Remote(domain=domain, name="Script", index=0, evt_max_history=0)
         self.remote.evt_metadata.callback = self._script_metadata_callback
         self.remote.evt_state.callback = self._script_state_callback
         if self.verbose:
@@ -233,9 +231,7 @@ class QueueModel:
 
         if script_info.block:
             if start_block:
-                block = BlockInfo(
-                    log=self.log, block_id=script_info.block, block_size=block_size
-                )
+                block = BlockInfo(log=self.log, block_id=script_info.block, block_size=block_size)
                 await block.set_block_uid()
                 self.block_model.remove_done_blocks()
                 self.block_model.add_block(block)
@@ -389,10 +385,7 @@ class QueueModel:
             If location is relative and a script at ``location_sal_index``
             is not queued.
         """
-        if (
-            location in (Location.BEFORE, Location.AFTER)
-            and location_sal_index == sal_index
-        ):
+        if location in (Location.BEFORE, Location.AFTER) and location_sal_index == sal_index:
             # this is a no-op, and is not properly handled by _insert_script,
             # but first make sure the script is on the queue
             self.get_queue_index(sal_index)
@@ -475,9 +468,7 @@ class QueueModel:
         old_script_info = self.get_script_info(sal_index, search_history=True)
 
         if old_script_info.block_id:
-            raise RuntimeError(
-                f"Script {sal_index} is part of a block and cannot be requeued."
-            )
+            raise RuntimeError(f"Script {sal_index} is part of a block and cannot be requeued.")
 
         script_info = ScriptInfo(
             log=self.log,
@@ -555,9 +546,7 @@ class QueueModel:
         if script_info.script_state == ScriptState.RUNNING:
             # process is running, so send the "stop" command
             try:
-                await script_info.remote.cmd_stop.set_start(
-                    salIndex=script_info.index, timeout=STD_TIMEOUT
-                )
+                await script_info.remote.cmd_stop.set_start(salIndex=script_info.index, timeout=STD_TIMEOUT)
                 # give the process time to terminate
                 await asyncio.wait_for(script_info.process.wait(), timeout=STD_TIMEOUT)
                 # let the script be removed or moved
@@ -729,9 +718,7 @@ class QueueModel:
                     self.log.debug("No more scripts to stop, updating queue.")
                     await self._update_queue()
                 else:
-                    self.log.debug(
-                        "Still have scripts to be stopped, skip updating queue."
-                    )
+                    self.log.debug("Still have scripts to be stopped, skip updating queue.")
                 # else let removal finish before starting the next job,
                 # because it messes up the queue state callbacks otherwise
             else:
@@ -786,9 +773,7 @@ class QueueModel:
             The only time you would set this False is if you are about
             to terminate the script.
         """
-        self.log.debug(
-            f"Clear group info for {script_info.index}; command_script={command_script}"
-        )
+        self.log.debug(f"Clear group info for {script_info.index}; command_script={command_script}")
         if self.next_visit_canceled_callback:
             try:
                 await self.next_visit_canceled_callback(script_info)
@@ -838,9 +823,7 @@ class QueueModel:
             # not a script for this QueueModel
             return None
         try:
-            script_info = self.get_script_info(
-                sal_index=sal_index, search_history=False
-            )
+            script_info = self.get_script_info(sal_index=sal_index, search_history=False)
         except ValueError:
             self.log.warning(
                 f"QueueModel got a Script {event_name} event for script {sal_index}, "
@@ -861,29 +844,19 @@ class QueueModel:
 
     async def _script_info_callback(self, script_info):
         """ScriptInfo callback."""
-        self.log.debug(
-            f"Script info callback: {script_info.index}::{script_info.script_state!r}."
-        )
+        self.log.debug(f"Script info callback: {script_info.index}::{script_info.script_state!r}.")
         if self.script_callback:
             try:
                 await self.script_callback(script_info)
             except Exception:
                 self.log.exception("script_callback failed; continuing")
 
-        if (
-            script_info.script_state == ScriptState.DONE
-            or script_info.process_done
-            or script_info.terminated
-        ):
+        if script_info.script_state == ScriptState.DONE or script_info.process_done or script_info.terminated:
             self.log.debug("Script done or terminated, removing script.")
             asyncio.create_task(self._remove_script(script_info.index))
             return
 
-        if (
-            self.queue
-            and self.queue[0].index == script_info.index
-            and script_info.configured
-        ):
+        if self.queue and self.queue[0].index == script_info.index and script_info.configured:
             # This script is next in line and may need its group ID set
             # or be ready to be run.
             await self._update_queue(force_callback=False)
@@ -915,13 +888,8 @@ class QueueModel:
         initial_history_indices = self.history_indices
         if self.current_script:
             self.log.debug(f"current_script={self.current_script}.")
-            if (
-                self.current_script.script_state == ScriptState.DONE
-                or self.current_script.process_done
-            ):
-                if self.current_script.failed and (
-                    pause_on_failure or not self.running
-                ):
+            if self.current_script.script_state == ScriptState.DONE or self.current_script.process_done:
+                if self.current_script.failed and (pause_on_failure or not self.running):
                     # set `_running` instead of `running` so as to
                     # not trigger _update_queue
                     self._running = False

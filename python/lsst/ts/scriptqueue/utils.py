@@ -50,11 +50,7 @@ def find_public_scripts(root):
     paths = []
     for dirpath, dirnames, filenames in os.walk(root, topdown=True, followlinks=False):
         dirnames[:] = [name for name in dirnames if not name.startswith(".")]
-        paths += [
-            os.path.join(dirpath, filename)
-            for filename in filenames
-            if filename[0] not in (".", "_")
-        ]
+        paths += [os.path.join(dirpath, filename) for filename in filenames if filename[0] not in (".", "_")]
     executables = [path for path in paths if os.access(path, os.X_OK)]
     return [os.path.relpath(exe, root) for exe in executables]
 

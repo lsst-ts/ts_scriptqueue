@@ -304,12 +304,7 @@ class ScriptInfo:
         True if the script is configured and not started,
         and the group ID is neither set nor being set.
         """
-        return (
-            self.configured
-            and not self.started
-            and not self.group_id
-            and not self.setting_group_id
-        )
+        return self.configured and not self.started and not self.group_id and not self.setting_group_id
 
     def clear_group_id(self, command_script):
         """Clear the group ID.
@@ -374,9 +369,7 @@ class ScriptInfo:
             raise ValueError(f"group_id={group_id} must not be blank")
 
         if not self.needs_group_id:
-            raise RuntimeError(
-                f"script {self.index} is not in a state to have group ID set."
-            )
+            raise RuntimeError(f"script {self.index} is not in a state to have group ID set.")
 
         self._cancel_set_clear_group_id()
         self.set_group_id_task = asyncio.create_task(
@@ -465,9 +458,7 @@ class ScriptInfo:
         if not self.process_done:
             self._terminated = True
             try:
-                await asyncio.wait_for(
-                    self._terminate_process(), timeout=_TERMINATE_TIMEOUT
-                )
+                await asyncio.wait_for(self._terminate_process(), timeout=_TERMINATE_TIMEOUT)
             except asyncio.TimeoutError:
                 if self.process is None:
                     self.log.warning(

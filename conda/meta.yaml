@@ -12,9 +12,9 @@ build:
 
 test:
   requires:
-    - ts-conda-build =0.4
+    - ts-conda-build =0.5
     - ts-salobj {{ salobj_version }}
-    - ts-xml >=20
+    - ts-xml {{ xml_version }}
   source_files:
     - bin
     - pyproject.toml

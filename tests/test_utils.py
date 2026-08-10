@@ -36,7 +36,7 @@ from lsst.ts import scriptqueue
 
 
 class UtilsTestCase(unittest.TestCase):
-    def test_find_public_scripts(self):
+    def test_find_public_scripts(self) -> None:
         root = os.path.join(os.path.dirname(__file__), "data/standard")
         scripts = scriptqueue.find_public_scripts(root)
         expectedscripts = set(
@@ -51,14 +51,14 @@ class UtilsTestCase(unittest.TestCase):
         assert set(scripts) == expectedscripts
 
     @unittest.skipIf(standardscripts is None, "Could not import ts_standardscripts")
-    def test_get_default_standard_scripts_dir(self):
+    def test_get_default_standard_scripts_dir(self) -> None:
         standard_dir = scriptqueue.get_default_scripts_dir(is_standard=True)
         assert isinstance(standard_dir, pathlib.Path)
         assert standard_dir.samefile(standardscripts.get_scripts_dir())
         assert standard_dir.name == "scripts"
 
     @unittest.skipIf(externalscripts is None, "Could not import ts_externalscripts")
-    def test_get_default_external_scripts_dir(self):
+    def test_get_default_external_scripts_dir(self) -> None:
         external_dir = scriptqueue.get_default_scripts_dir(is_standard=False)
         assert isinstance(external_dir, pathlib.Path)
         assert external_dir.samefile(externalscripts.get_scripts_dir())

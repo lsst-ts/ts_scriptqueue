@@ -23,6 +23,8 @@ __all__ = [
     "BlockModel",
 ]
 
+from .block_info import BlockInfo
+
 
 class BlockModel:
     """Manages block information.
@@ -34,11 +36,11 @@ class BlockModel:
     fails the entire block must fail.
     """
 
-    def __init__(self):
-        self.blocks = dict()
-        self.current_blocks = dict()
+    def __init__(self) -> None:
+        self.blocks: dict[str, dict[str, BlockInfo]] = dict()
+        self.current_blocks: dict[str, str] = dict()
 
-    def add_block(self, block_info):
+    def add_block(self, block_info: BlockInfo) -> None:
         """Add block info to the list of blocks.
 
         When a new block is added it will become the "current"
@@ -60,7 +62,7 @@ class BlockModel:
 
         self.current_blocks[block_info.block_id] = block_info.get_block_uid()
 
-    def get_current_block(self, block_id):
+    def get_current_block(self, block_id: str) -> BlockInfo:
         """Return the BlockInfo for the current block.
 
         Parameters
@@ -81,7 +83,7 @@ class BlockModel:
 
         return block_info
 
-    def remove_done_blocks(self):
+    def remove_done_blocks(self) -> None:
         """Remove blocks that have already finished."""
 
         for block in self.blocks:

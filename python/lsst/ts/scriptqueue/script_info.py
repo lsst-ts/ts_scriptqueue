@@ -23,11 +23,17 @@ __all__ = ["ScriptInfo"]
 
 import asyncio
 import inspect
+import logging
 import os
+from collections.abc import Callable, Coroutine
+from typing import Any, Self
 
+from lsst.ts import salobj
 from lsst.ts.utils import current_tai
 from lsst.ts.xml.enums.Script import ScriptState
 from lsst.ts.xml.enums.ScriptQueue import ScriptProcessState
+
+from .type_hints import Indexed
 
 _CONFIGURE_TIMEOUT = 60  # Time limit for the configure command (seconds)
 _SET_GROUP_ID_TIMEOUT = 5  # Time limit for setGroupId command (seconds)
@@ -75,19 +81,19 @@ class ScriptInfo:
 
     def __init__(
         self,
-        log,
-        remote,
-        index,
-        seq_num,
-        is_standard,
-        path,
-        config,
-        descr,
-        block="",
-        log_level=0,
-        pause_checkpoint="",
-        stop_checkpoint="",
-        verbose=False,
+        log: logging.Logger,
+        remote: salobj.Remote,
+        index: int,
+        seq_num: int,
+        is_standard: bool,
+        path: str | os.PathLike,
+        config: str,
+        descr: str,
+        block: str = "",
+        log_level: int = 0,
+        pause_checkpoint: str = "",
+        stop_checkpoint: str = "",
+        verbose: bool = False,
     ):
         self.log = log.getChild(f"ScriptInfo(index={index})")
         self.remote = remote
@@ -107,27 +113,27 @@ class ScriptInfo:
         self.group_id = ""
         self.verbose = verbose
         # Most recent value of script metadata; None until set.
-        self.metadata = None
+        self.metadata: str | None = None
         # The most recent state reported by the Script,
         # or 0 if the script is not yet loaded.
         self.script_state = 0
         # Delay between when the script sent state and it was received (sec)
         self.state_delay = 0
         # Time at which the script process was started. 0 before that.
-        self.timestamp_process_start = 0
+        self.timestamp_process_start: float = 0
         # Time at which the _configure method was started. 0 before that.
         # Note: under unusual circumstances the _configure method may fail
         # before the configure command is sent to the task.
-        self.timestamp_configure_start = 0
+        self.timestamp_configure_start: float = 0
         # Time at which the configure command finished (succeeded or failed).
         # 0 before that.
-        self.timestamp_configure_end = 0
+        self.timestamp_configure_end: float = 0
         # Time at which the script started running. 0 before that.
-        self.timestamp_run_start = 0
+        self.timestamp_run_start: float = 0
         # Time at which the script process finished. 0 before that.
-        self.timestamp_process_end = 0
+        self.timestamp_process_end: float = 0
         # Task for creating self.process, or None if just beginning to load.
-        self.create_process_task = None
+        self.create_process_task: asyncio.Task[asyncio.subprocess.Process] | None = None
         # Task that finishes when configuration starts.
         # By the time start_task is done config_task and process_task
         # will exist (instead of being None). Thus:
@@ -135,22 +141,22 @@ class ScriptInfo:
         #   then await config_task.
         # * To wait for a script to finish: first await start_task
         #   then await process_task:
-        self.start_task = asyncio.Future()
+        self.start_task: asyncio.Future[None] = asyncio.Future()
         # Process in which the ``Script`` SAL component is loaded.
-        self.process = None
+        self.process: asyncio.subprocess.Process | None = None
         # Task awaiting ``process.wait()``, or None if
         # the process has not yet started.
-        self.process_task = None
+        self.process_task: asyncio.Task[int | None] | None = None
         # Task awaiting configuration to complete, or None if
         # configuration has not yet started.
-        self.config_task = None
+        self.config_task: asyncio.Future[None] | None = None
         # Task awaiting clearing group ID. None if group ID not cleared.
         # Reset to None when group ID is set.
-        self.clear_group_id_task = None
+        self.clear_group_id_task: asyncio.Future[None] | None = None
         # Task awaiting setting group ID, None if group ID is not set.
         # Reset to None when group ID is cleared.
-        self.set_group_id_task = None
-        self._callback = None
+        self.set_group_id_task: asyncio.Future[None] | None = None
+        self._callback: Callable[[Self], Coroutine[Any, Any, None]] | None = None
 
         # The following guarantees that if we terminate a process
         # and it sucessfully stops, then we can report it as terminated;
@@ -159,7 +165,7 @@ class ScriptInfo:
         self._terminated = False
 
     @property
-    def callback(self):
+    def callback(self) -> Callable[[Self], Coroutine[Any, Any, None]] | None:
         """Set, clear or get a callback coroutine (async function) to call
         whenever the script state changes.
 
@@ -174,40 +180,41 @@ class ScriptInfo:
         return self._callback
 
     @callback.setter
-    def callback(self, callback):
+    def callback(self, callback: Callable[[Self], Coroutine[Any, Any, None]] | None) -> None:
         if callback is not None and not inspect.iscoroutinefunction(callback):
             raise TypeError(f"callback={callback} must be a coroutine or None")
         self._callback = callback
 
     @property
-    def configured(self):
+    def configured(self) -> bool:
         """True if the configure command succeeded."""
-        return self._configure_run and self.config_task.exception() is None
+        return self.config_task is not None and self._configure_run and self.config_task.exception() is None
 
     @property
-    def configure_failed(self):
+    def configure_failed(self) -> bool:
         """True if the configure command failed."""
-        return self.script_state == ScriptState.CONFIGURE_FAILED or (
-            self._configure_run and self.config_task.exception() is not None
+        return self.config_task is not None and (
+            self.script_state == ScriptState.CONFIGURE_FAILED
+            or (self._configure_run and self.config_task.exception() is not None)
         )
 
     @property
-    def load_failed(self):
+    def load_failed(self) -> bool:
         """True if the script could not be loaded."""
         return self.process_done and self.timestamp_configure_start == 0
 
     @property
-    def running(self):
+    def running(self) -> bool:
         """True if the script was commanded to run and is not done."""
         return self.timestamp_run_start > 0 and not self.process_done
 
     @property
-    def started(self):
+    def started(self) -> bool:
         """True if the script was commanded to run or terminate."""
         return self.timestamp_run_start > 0 or self.terminated or self.process_done
 
     @property
-    def process_done(self):
+    def process_done(self) -> bool:
         """True if the script process was started and is done.
 
         Notes
@@ -220,16 +227,18 @@ class ScriptInfo:
         return self.process_task is not None and self.process_task.done()
 
     @property
-    def failed(self):
+    def failed(self) -> bool:
         """True if the script failed.
 
         This will be false if the script was terminated."""
         if not self.process_done:
             return False
-        return self.process.returncode is not None and self.process.returncode > 0
+        return (
+            self.process is not None and self.process.returncode is not None and self.process.returncode > 0
+        )
 
     @property
-    def terminated(self):
+    def terminated(self) -> bool:
         """True if the script was terminated.
 
         Notes
@@ -244,10 +253,10 @@ class ScriptInfo:
             return True
         if not self.process_done:
             return False
-        return self.process.returncode is None or self.process.returncode < 0
+        return self.process is None or self.process.returncode is None or self.process.returncode < 0
 
     @property
-    def process_state(self):
+    def process_state(self) -> ScriptProcessState:
         """State of the script subprocess.
 
         One of the `ScriptProcessState` enumeration constants.
@@ -266,7 +275,7 @@ class ScriptInfo:
             return ScriptProcessState.CONFIGURED
         return ScriptProcessState.LOADING
 
-    def run(self):
+    def run(self) -> None:
         """Start the script running.
 
         Raises
@@ -284,21 +293,21 @@ class ScriptInfo:
         self.timestamp_run_start = current_tai()
 
     @property
-    def runnable(self):
+    def runnable(self) -> bool:
         """Can the script be run?
 
         For a script to be runnable it must be configured, not started,
         and it must have a group ID.
         """
-        return self.configured and not self.started and self.group_id
+        return self.configured and not self.started and bool(self.group_id)
 
     @property
-    def setting_group_id(self):
+    def setting_group_id(self) -> bool:
         """Return True if the group ID is being set."""
-        return self.set_group_id_task and not self.set_group_id_task.done()
+        return self.set_group_id_task is not None and not self.set_group_id_task.done()
 
     @property
-    def needs_group_id(self):
+    def needs_group_id(self) -> bool:
         """Is this script ready to be assigned a group ID?
 
         True if the script is configured and not started,
@@ -306,7 +315,7 @@ class ScriptInfo:
         """
         return self.configured and not self.started and not self.group_id and not self.setting_group_id
 
-    def clear_group_id(self, command_script):
+    def clear_group_id(self, command_script: bool) -> None:
         """Clear the group ID.
 
         Can be called in any state.
@@ -326,7 +335,7 @@ class ScriptInfo:
                 )
             )
 
-    def set_block_index(self, block_index):
+    def set_block_index(self, block_index: int) -> None:
         """Set the block index for this script.
 
         Parameters
@@ -336,7 +345,7 @@ class ScriptInfo:
         """
         self.block_index = int(block_index)
 
-    def set_block_id(self, block_id):
+    def set_block_id(self, block_id: str) -> None:
         """Set block id, this is unique identifier for a block execution.
 
         Parameters
@@ -346,7 +355,7 @@ class ScriptInfo:
         """
         self.block_id = str(block_id)
 
-    async def set_group_id(self, group_id):
+    async def set_group_id(self, group_id: str) -> None:
         """Set the group ID.
 
         Also creates ``self.set_group_id_task`` and sets it done on success
@@ -381,7 +390,7 @@ class ScriptInfo:
         self.group_id = group_id
         await self._run_callback()
 
-    async def start_loading(self, fullpath):
+    async def start_loading(self, fullpath: os.PathLike) -> None:
         """Start the script process and start a task that will configure
         the script when it is ready.
 
@@ -432,7 +441,7 @@ class ScriptInfo:
             if not self.timestamp_process_start == 0:
                 await self._run_callback()
 
-    async def terminate(self):
+    async def terminate(self) -> bool:
         """Terminate the script and wait for the process to terminate.
 
         If terminating the script process takes longer than _TERMINATE_TIMEOUT,
@@ -470,7 +479,7 @@ class ScriptInfo:
             await self._run_callback()
         return self._terminated
 
-    async def _terminate_process(self):
+    async def _terminate_process(self) -> None:
         """Terminate the script process and wait for it to terminate.
 
         If necessary, first wait for the process to finish being created.
@@ -484,20 +493,26 @@ class ScriptInfo:
             self.process.terminate()
             await self.process.wait()
 
-    def __eq__(self, other):
+    def __eq__(self, other: object) -> bool:
+
+        if not isinstance(other, Indexed):
+            return NotImplemented
         return self.index == other.index
 
-    def __ne__(self, other):
+    def __ne__(self, other: object) -> bool:
+
+        if not isinstance(other, Indexed):
+            return NotImplemented
         return not (self == other)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return (
             f"ScriptInfo(index={self.index}, seq_num={self.seq_num}, "
             f"is_standard={self.is_standard}, path={self.path}, "
             f"config={self.config}, descr={self.descr})"
         )
 
-    def _cancel_set_clear_group_id(self):
+    def _cancel_set_clear_group_id(self) -> None:
         """Cancel set and/or clear group ID tasks, if running.
 
         Set the tasks to None.
@@ -510,7 +525,7 @@ class ScriptInfo:
             self.set_group_id_task.cancel()
         self.set_group_id_task = None
 
-    def _cleanup(self, returncode=None):
+    def _cleanup(self, returncode: asyncio.Task[int] | None = None) -> None:
         """Clean up when the Script subprocess exits.
 
         Set the timestamp_process_end, cancel the config task,
@@ -522,12 +537,12 @@ class ScriptInfo:
         self._cancel_set_clear_group_id()
         asyncio.create_task(self._finish_cleanup())
 
-    async def _finish_cleanup(self):
+    async def _finish_cleanup(self) -> None:
         await self._run_callback()
         self.callback = None
         self.remote = None
 
-    async def _configure(self):
+    async def _configure(self) -> None:
         """Configure the script.
 
         If configuration fails or is cancelled then terminate the script.
@@ -564,15 +579,15 @@ class ScriptInfo:
             self.timestamp_configure_end = current_tai()
 
     @property
-    def _configure_run(self):
+    def _configure_run(self) -> bool:
         """Return True if the _configure method was run."""
         return self.config_task is not None and self.config_task.done()
 
-    async def _run_callback(self, *args):
+    async def _run_callback(self, *args: Any) -> None:
         if self.callback:
             await self.callback(self)
 
-    def _trigger_callback(self, *args):
+    def _trigger_callback(self, *args: Any) -> None:
         """Synchonous version of _run_callback.
 
         Call _run_callback directly, if possible.
@@ -580,7 +595,7 @@ class ScriptInfo:
         if self.callback:
             asyncio.create_task(self._run_callback())
 
-    async def _script_state_callback(self, state):
+    async def _script_state_callback(self, state: ScriptState) -> None:
         self.script_state = state.state
         self.state_delay = current_tai() - state.private_sndStamp
         if self.script_state == ScriptState.UNCONFIGURED and self.config_task is None:

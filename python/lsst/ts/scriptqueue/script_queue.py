@@ -21,18 +21,24 @@
 
 __all__ = ["ScriptQueue", "run_script_queue"]
 
+import argparse
 import asyncio
 import os
 import subprocess
+from pathlib import Path
+from typing import Any
 
 import numpy as np
 
 from lsst.ts import salobj
 from lsst.ts.xml.enums.ScriptQueue import SalIndex
+from lsst.ts.xml.sal_enums import State
+from lsst.ts.xml.type_hints import BaseMsgType
 
 from . import __version__, utils
 from .queue_model import QueueModel
 from .script_info import ScriptInfo
+from .type_hints import ScriptInfoProtocol
 
 SCRIPT_INDEX_MULT = 100000
 """Minimum Script SAL index is ScriptQueue SAL index * SCRIPT_INDEX_MULT
@@ -76,11 +82,11 @@ class ScriptQueue(salobj.BaseCsc):
 
     def __init__(
         self,
-        index,
-        initial_state=salobj.State.STANDBY,
-        standardpath=None,
-        externalpath=None,
-        verbose=False,
+        index: int,
+        initial_state: State = State.STANDBY,
+        standardpath: str | os.PathLike | None = None,
+        externalpath: str | os.PathLike | None = None,
+        verbose: bool = False,
     ):
         if index < 0 or index > _MAX_SCRIPTQUEUE_INDEX:
             raise ValueError(f"index {index} must be >= 0 and <= {_MAX_SCRIPTQUEUE_INDEX}")
@@ -109,7 +115,7 @@ class ScriptQueue(salobj.BaseCsc):
             verbose=verbose,
         )
 
-    def _get_scripts_path(self, patharg, is_standard):
+    def _get_scripts_path(self, patharg: str | os.PathLike | None, is_standard: bool) -> os.PathLike:
         """Get the scripts path from the ``standardpath`` or ``externalpath``
         constructor argument.
 
@@ -136,25 +142,25 @@ class ScriptQueue(salobj.BaseCsc):
         if patharg is None:
             dir_path = utils.get_default_scripts_dir(is_standard)
         else:
-            dir_path = patharg
+            dir_path = Path(patharg)
         if not os.path.isdir(dir_path):
             category = "standard" if is_standard else "external"
             raise ValueError(f"{category} scripts path {dir_path} is not a directory")
-        return dir_path
+        return Path(dir_path)
 
-    async def start(self):
+    async def start(self) -> None:
         """Finish creating the script queue."""
         await super().start()
         blank_data = self.evt_summaryState.DataType()
 
         if hasattr(blank_data, "get_vars"):
 
-            def get_data_dict(data):
+            def get_data_dict(data: BaseMsgType) -> dict[str, Any]:
                 return data.get_vars()
 
         else:
 
-            def get_data_dict(data):
+            def get_data_dict(data: BaseMsgType) -> dict[str, Any]:
                 return vars(data)
 
         # A function to return message data as a dict of key: value
@@ -180,12 +186,12 @@ class ScriptQueue(salobj.BaseCsc):
         )
         await self.put_queue()
 
-    async def close_tasks(self):
+    async def close_tasks(self) -> None:
         """Shut down the queue, terminate all scripts and free resources."""
         await self.model.close()
         await super().close_tasks()
 
-    async def do_showAvailableScripts(self, data=None):
+    async def do_showAvailableScripts(self, data: BaseMsgType | None = None) -> None:
         """Output a list of available scripts.
 
         Parameters
@@ -201,7 +207,7 @@ class ScriptQueue(salobj.BaseCsc):
             force_output=True,
         )
 
-    async def do_showSchema(self, data):
+    async def do_showSchema(self, data: BaseMsgType) -> None:
         """Output the config schema for a script.
 
         Parameters
@@ -233,7 +239,7 @@ class ScriptQueue(salobj.BaseCsc):
         finally:
             os.environ["PATH"] = initialpath
 
-    async def do_showQueue(self, data):
+    async def do_showQueue(self, data: BaseMsgType) -> None:
         """Output the queue event.
 
         Parameters
@@ -244,7 +250,7 @@ class ScriptQueue(salobj.BaseCsc):
         self.assert_enabled("showQueue")
         await self.put_queue()
 
-    async def do_showScript(self, data):
+    async def do_showScript(self, data: BaseMsgType) -> None:
         """Output the script event for one script.
 
         Parameters
@@ -259,7 +265,7 @@ class ScriptQueue(salobj.BaseCsc):
             raise salobj.ExpectedError(f"Unknown script {data.scriptSalIndex}")
         await self.put_script(script_info, force_output=True)
 
-    async def do_pause(self, data):
+    async def do_pause(self, data: BaseMsgType) -> None:
         """Pause the queue. A no-op if already paused.
 
         Unlike most commands, this can be issued in any state.
@@ -271,7 +277,7 @@ class ScriptQueue(salobj.BaseCsc):
         """
         await self.model.set_running(False)
 
-    async def do_resume(self, data):
+    async def do_resume(self, data: BaseMsgType) -> None:
         """Run the queue. A no-op if already running.
 
         Parameters
@@ -282,7 +288,7 @@ class ScriptQueue(salobj.BaseCsc):
         self.assert_enabled("resume")
         await self.model.set_running(True)
 
-    async def do_add(self, data):
+    async def do_add(self, data: BaseMsgType) -> None:
         """Add a script to the queue.
 
         Start and configure a script SAL component, but don't run it.
@@ -321,7 +327,7 @@ class ScriptQueue(salobj.BaseCsc):
             result=str(script_info.index),
         )
 
-    async def do_move(self, data):
+    async def do_move(self, data: BaseMsgType) -> None:
         """Move a script within the queue."""
         self.assert_enabled("move")
         try:
@@ -333,7 +339,7 @@ class ScriptQueue(salobj.BaseCsc):
         except ValueError as e:
             raise salobj.ExpectedError(str(e))
 
-    async def do_requeue(self, data):
+    async def do_requeue(self, data: BaseMsgType) -> None:
         """Put a script back on the queue with the same configuration."""
         self.assert_enabled("requeue")
         try:
@@ -346,7 +352,7 @@ class ScriptQueue(salobj.BaseCsc):
         except ValueError as e:
             raise salobj.ExpectedError(str(e))
 
-    async def do_stopScripts(self, data):
+    async def do_stopScripts(self, data: BaseMsgType) -> None:
         """Stop one or more queued scripts and/or the current script.
 
         If you stop the current script, it is moved to the history.
@@ -362,14 +368,14 @@ class ScriptQueue(salobj.BaseCsc):
             timeout,
         )
 
-    async def handle_summary_state(self):
+    async def handle_summary_state(self) -> None:
         await super().handle_summary_state()
         enabled = self.summary_state == salobj.State.ENABLED
         await self.model.set_enable(enabled)
         if enabled:
             await self.do_showAvailableScripts()
 
-    async def put_next_visit(self, script_info):
+    async def put_next_visit(self, script_info: ScriptInfoProtocol) -> None:
         """Output the ``nextVisit`` event."""
         if self.verbose:
             print(f"put_next_visit: index={script_info.index}, group_id={script_info.group_id}")
@@ -389,7 +395,7 @@ class ScriptQueue(salobj.BaseCsc):
             force_output=True,
         )
 
-    async def put_next_visit_canceled(self, script_info):
+    async def put_next_visit_canceled(self, script_info: ScriptInfoProtocol) -> None:
         """Output the ``nextVisitCanceled`` event."""
         if self.verbose:
             print(f"put_next_visit_canceled: index={script_info.index}, group_id={script_info.group_id}")
@@ -401,7 +407,7 @@ class ScriptQueue(salobj.BaseCsc):
             force_output=True,
         )
 
-    async def put_queue(self):
+    async def put_queue(self) -> None:
         """Output the queued scripts as a ``queue`` event.
 
         The data is put even if the queue has not changed. That way commands
@@ -436,7 +442,7 @@ class ScriptQueue(salobj.BaseCsc):
             force_output=True,
         )
 
-    async def put_script(self, script_info, force_output=False):
+    async def put_script(self, script_info: ScriptInfoProtocol, force_output: bool = False) -> None:
         """Output information about a script as a ``script`` event.
 
         Designed to be used as a QueueModel script_callback.
@@ -473,7 +479,7 @@ class ScriptQueue(salobj.BaseCsc):
         )
 
     @classmethod
-    def add_arguments(cls, parser):
+    def add_arguments(cls, parser: argparse.ArgumentParser) -> None:
         parser.add_argument(
             "--standard",
             help="Directory containing standard scripts; defaults to ts_standardscripts/scripts",
@@ -489,12 +495,12 @@ class ScriptQueue(salobj.BaseCsc):
         )
 
     @classmethod
-    def add_kwargs_from_args(cls, args, kwargs):
+    def add_kwargs_from_args(cls, args: argparse.Namespace, kwargs: dict[str, Any]) -> None:
         kwargs["standardpath"] = args.standard
         kwargs["externalpath"] = args.external
         kwargs["verbose"] = args.verbose
 
 
-def run_script_queue():
+def run_script_queue() -> None:
     """Run the ScriptQueue CSC."""
     asyncio.run(ScriptQueue.amain(index=SalIndex))

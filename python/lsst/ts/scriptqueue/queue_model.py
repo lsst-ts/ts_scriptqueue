@@ -31,6 +31,7 @@ import signal
 
 import astropy.time
 import psutil
+
 from lsst.ts import salobj
 from lsst.ts.utils import index_generator
 from lsst.ts.xml.enums.Script import ScriptState

@@ -60,7 +60,7 @@ class BlockInfo:
         self._block_type = "BlockT" if block_match.groupdict()["block_test_case"] is not None else "Block"
 
         self._block_uid = None
-        self.scripts_info = deque(maxlen=block_size)
+        self.scripts_info = deque(maxlen=int(block_size))
 
         self.image_server_url = os.environ.get("IMAGE_SERVER_URL")
         if self.image_server_url is None:

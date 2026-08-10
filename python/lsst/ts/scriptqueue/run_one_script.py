@@ -29,6 +29,7 @@ import pathlib
 import random
 
 import astropy
+
 from lsst.ts import salobj
 
 from .script_queue import SCRIPT_INDEX_MULT, ScriptInfo

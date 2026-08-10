@@ -29,6 +29,7 @@ import warnings
 from unittest.mock import patch
 
 import pytest
+
 from lsst.ts import salobj, scriptqueue
 from lsst.ts.xml import subsystems
 from lsst.ts.xml.enums.Script import ScriptState

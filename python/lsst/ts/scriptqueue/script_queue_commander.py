@@ -21,15 +21,18 @@
 
 __all__ = ["ScriptQueueCommander"]
 
+import argparse
 import asyncio
 import logging
 import pathlib
 import string
+from typing import Any
 
 from lsst.ts import salobj
 from lsst.ts.utils import make_done_future
 from lsst.ts.xml.enums.Script import ScriptState
 from lsst.ts.xml.enums.ScriptQueue import Location, SalIndex
+from lsst.ts.xml.type_hints import BaseMsgType
 
 ADD_TIMEOUT = 5  # Timeout for the add command (seconds).
 # How long to wait before warning that a script heartbeat is late (seconds).
@@ -45,7 +48,7 @@ class ScriptQueueCommander(salobj.CscCommander):
         Default log level for scripts.
     """
 
-    def __init__(self, script_log_level, **kwargs):
+    def __init__(self, script_log_level: int, **kwargs: Any) -> None:
         super().__init__(name="ScriptQueue", **kwargs)
         self.script_log_level = script_log_level
         self.help_dict["add"] = f"""type path config options  # add a script to the end of the queue:
@@ -92,18 +95,18 @@ class ScriptQueueCommander(salobj.CscCommander):
         self._script_to_monitor = 0
         self.script_heartbeat_monitor_task = make_done_future()
 
-    async def start(self):
+    async def start(self) -> None:
         await super().start()
         await self.script_remote.start_task
 
-    def get_is_standard(self, script_type):
+    def get_is_standard(self, script_type: str) -> bool:
         """Convert a script type argument to isStandard bool."""
         try:
             return self.script_type_dict[script_type]
         except KeyError:
             raise KeyError(f"type {script_type!r} must be one of {list(self.script_type_dict.keys())}")
 
-    def evt_availableScripts_callback(self, data):
+    def evt_availableScripts_callback(self, data: BaseMsgType) -> None:
         standard_scripts = data.standard.split(":")
         external_scripts = data.external.split(":")
         print("standard scripts:")
@@ -113,7 +116,7 @@ class ScriptQueueCommander(salobj.CscCommander):
         for name in external_scripts:
             print(f"• {name}")
 
-    def evt_queue_callback(self, data):
+    def evt_queue_callback(self, data: BaseMsgType) -> None:
         if self._script_to_monitor != data.currentSalIndex:
             self._script_to_monitor = data.currentSalIndex
             self.script_heartbeat_monitor_task.cancel()
@@ -130,7 +133,7 @@ class ScriptQueueCommander(salobj.CscCommander):
             f"pastSalIndices={pastSalIndices}"
         )
 
-    async def script_heartbeat_monitor(self):
+    async def script_heartbeat_monitor(self) -> None:
         while True:
             await asyncio.sleep(HEARTBEAT_ALARM_INTERVAL)
             print(
@@ -138,7 +141,7 @@ class ScriptQueueCommander(salobj.CscCommander):
                 f"heartbeat not seen in {HEARTBEAT_ALARM_INTERVAL} seconds"
             )
 
-    async def script_log_message(self, data):
+    async def script_log_message(self, data: BaseMsgType) -> None:
         exception_str = (
             (
                 f", traceback={data.traceback}, "
@@ -155,7 +158,7 @@ class ScriptQueueCommander(salobj.CscCommander):
             f"message={data.message}{exception_str}"
         )
 
-    async def script_state(self, data):
+    async def script_state(self, data: BaseMsgType) -> None:
         try:
             state = ScriptState(data.state)
         except ValueError:
@@ -166,14 +169,14 @@ class ScriptQueueCommander(salobj.CscCommander):
             f"state={state.name}{reason}, lastCheckpoint={data.lastCheckpoint}"
         )
 
-    async def script_heartbeat(self, data):
+    async def script_heartbeat(self, data: BaseMsgType) -> None:
         if data.salIndex != self._script_to_monitor:
             # A heartbeat from the wrong script.
             return
         self.script_heartbeat_monitor_task.cancel()
         self.script_heartbeat_monitor_task = asyncio.create_task(self.script_heartbeat_monitor())
 
-    async def do_add(self, args):
+    async def do_add(self, args: list[Any]) -> None:
         """Overrride the standard add command to simplify the interface."""
         if len(args) < 2:
             raise ValueError("Need at least 2 arguments")
@@ -237,7 +240,7 @@ class ScriptQueueCommander(salobj.CscCommander):
             timeout=ADD_TIMEOUT,
         )
 
-    async def do_showSchema(self, args):
+    async def do_showSchema(self, args: list[str]) -> None:
         """Overrride the standard showSchema command for named script type."""
         if len(args) != 2:
             raise ValueError("Need 2 arguments: type path")
@@ -248,7 +251,7 @@ class ScriptQueueCommander(salobj.CscCommander):
             path=path,
         )
 
-    async def do_stopScripts(self, args):
+    async def do_stopScripts(self, args: list[str]) -> None:
         """Handle the stopScript command, which takes a list of script
         indices.
         """
@@ -267,7 +270,7 @@ class ScriptQueueCommander(salobj.CscCommander):
         await self.remote.cmd_stopScripts.start(data=stop_data)
 
     @classmethod
-    def add_arguments(cls, parser):
+    def add_arguments(cls, parser: argparse.ArgumentParser) -> None:
         parser.add_argument(
             "-l",
             "--loglevel",
@@ -277,11 +280,11 @@ class ScriptQueueCommander(salobj.CscCommander):
         )
 
     @classmethod
-    def add_kwargs_from_args(cls, args, kwargs):
+    def add_kwargs_from_args(cls, args: argparse.Namespace, kwargs: dict[str, Any]) -> None:
         kwargs["script_log_level"] = args.loglevel
 
 
-def command_script_queue():
+def command_script_queue() -> None:
     """Run a command-line interface to command a ScriptQueue.
 
     Intended for engineering use.

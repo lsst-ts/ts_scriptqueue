@@ -30,6 +30,7 @@ import yaml
 
 from lsst.ts import salobj, scriptqueue
 from lsst.ts.xml.enums.Script import ScriptState
+from lsst.ts.xml.type_hints import BaseMsgType
 
 # Long enough to perform any reasonable operation
 # including starting a CSC or loading a script (seconds)
@@ -39,14 +40,14 @@ DATA_DIR = pathlib.Path(__file__).resolve().parent / "data"
 
 
 class ParseRunOneScriptTestCase(unittest.IsolatedAsyncioTestCase):
-    def test_basics(self):
+    def test_basics(self) -> None:
         script = DATA_DIR / "standard" / "subdir" / "script3"
         cmd = scriptqueue.parse_run_one_script_cmd(args=[str(script)])
         assert script.samefile(cmd.script)
         assert cmd.config == ""
 
-    def test_config_arg(self):
-        script = DATA_DIR / "external" / "script1"
+    def test_config_arg(self) -> None:
+        script = DATA_DIR / "external" / "script7"
         config_path = DATA_DIR / "config1.yaml"
         with open(config_path, "r") as f:
             expected_config = f.read()
@@ -54,8 +55,8 @@ class ParseRunOneScriptTestCase(unittest.IsolatedAsyncioTestCase):
         assert script.samefile(cmd.script)
         assert cmd.config == expected_config
 
-    def test_parameters_arg(self):
-        script = DATA_DIR / "external" / "script1"
+    def test_parameters_arg(self) -> None:
+        script = DATA_DIR / "external" / "script7"
         config_dict = dict(abool=True, anint=47, afloat=0.2, astr="string_value")
         config_arg_list = [f"{key}={value}" for key, value in config_dict.items()]
         cmd = scriptqueue.parse_run_one_script_cmd(args=[str(script), "--parameters"] + config_arg_list)
@@ -63,8 +64,8 @@ class ParseRunOneScriptTestCase(unittest.IsolatedAsyncioTestCase):
         config_dict_from_parser = yaml.safe_load(cmd.config)
         assert config_dict_from_parser == config_dict
 
-    def test_loglevel(self):
-        script = DATA_DIR / "external" / "script1"
+    def test_loglevel(self) -> None:
+        script = DATA_DIR / "external" / "script7"
         cmd = scriptqueue.parse_run_one_script_cmd(args=[str(script)])
         assert cmd.loglevel is None
 
@@ -76,8 +77,8 @@ class ParseRunOneScriptTestCase(unittest.IsolatedAsyncioTestCase):
         cmd = scriptqueue.parse_run_one_script_cmd(args=[str(script), "-l", str(loglevel)])
         assert cmd.loglevel == loglevel
 
-    def test_invalid_arguments(self):
-        script = DATA_DIR / "external" / "script1"
+    def test_invalid_arguments(self) -> None:
+        script = DATA_DIR / "external" / "script7"
         config_path = DATA_DIR / "config1.yaml"
 
         with pytest.raises(SystemExit):
@@ -130,17 +131,17 @@ class ParseRunOneScriptTestCase(unittest.IsolatedAsyncioTestCase):
 
 
 class RunOneScriptTestCase(unittest.IsolatedAsyncioTestCase):
-    def setUp(self):
+    def setUp(self) -> None:
         salobj.set_random_lsst_dds_partition_prefix()
 
-    async def test_run_one_script(self):
+    async def test_run_one_script(self) -> None:
         script = DATA_DIR / "standard" / "subdir" / "script3"
         config_path = DATA_DIR / "config1.yaml"
         with open(config_path, "r") as f:
             config = f.read()
         await scriptqueue.run_one_script(index=1, script=script, config=config, loglevel=10)
 
-    async def test_run_command_line(self):
+    async def test_run_command_line(self) -> None:
         exe_name = "run_one_script"
         exe_path = shutil.which(exe_name)
         if exe_path is None:
@@ -155,9 +156,9 @@ class RunOneScriptTestCase(unittest.IsolatedAsyncioTestCase):
         ):
             # The script states seen, ignoring sequential duplicates
             # (e.g. [1, 1, 2, 2, 1, 1] becomes [1, 2, 1]
-            states_seen = []
+            states_seen: list[ScriptState] = []
 
-            async def state_callback(data):
+            async def state_callback(data: BaseMsgType) -> None:
                 nonlocal states_seen
                 state = ScriptState(data.state)
                 if not states_seen or state != states_seen[-1]:

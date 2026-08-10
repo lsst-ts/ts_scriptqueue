@@ -25,12 +25,16 @@ import argparse
 import asyncio
 import datetime
 import logging
+import os
 import pathlib
 import random
+from collections.abc import Sequence
+from typing import Any
 
 import astropy
 
 from lsst.ts import salobj
+from lsst.ts.xml.type_hints import BaseMsgType
 
 from .script_queue import SCRIPT_INDEX_MULT, ScriptInfo
 
@@ -40,7 +44,13 @@ STD_TIMEOUT = 5  # timeout for fast commands
 class ConfigAction(argparse.Action):
     """Read config from a file."""
 
-    def __call__(self, parser, namespace, value, option_string=None):
+    def __call__(
+        self,
+        parser: argparse.ArgumentParser,
+        namespace: argparse.Namespace,
+        values: str | Sequence[Any] | None,
+        option_string: str | None = None,
+    ) -> None:
         """Read config from a file.
 
         Parameters
@@ -55,9 +65,9 @@ class ConfigAction(argparse.Action):
         option_string : `str`, optional
             Option value specified by the user.
         """
-        if not pathlib.Path(value).is_file():
-            parser.error(f"Cannot find --config file {value}")
-        with open(value, "r") as f:
+        if values is None or not pathlib.Path(str(values)).is_file():
+            parser.error(f"Cannot find --config file {values!r}")
+        with open(str(values), "r") as f:
             config = f.read()
             namespace.config = config
 
@@ -65,7 +75,13 @@ class ConfigAction(argparse.Action):
 class ParameterAction(argparse.Action):
     """Parse name=value pairs as config."""
 
-    def __call__(self, parser, namespace, values, option_string):
+    def __call__(
+        self,
+        parser: argparse.ArgumentParser,
+        namespace: argparse.Namespace,
+        values: str | Sequence[Any] | None,
+        option_string: str | None = None,
+    ) -> None:
         """Parse name=value pairs as config.
 
         Parameters
@@ -80,6 +96,8 @@ class ParameterAction(argparse.Action):
             Option value specified by the user.
         """
         config_list = []
+        if values is None:
+            return
         for nameValue in values:
             name, sep, valueStr = nameValue.partition("=")
             if not valueStr:
@@ -88,7 +106,7 @@ class ParameterAction(argparse.Action):
         namespace.config = "\n".join(config_list)
 
 
-def parse_run_one_script_cmd(args=None):
+def parse_run_one_script_cmd(args: list[str] | None = None) -> argparse.Namespace:
     """Parse command-line arguments for run_one_script."""
     description = "Run one SAL script."
 
@@ -130,7 +148,7 @@ def parse_run_one_script_cmd(args=None):
     return cmd
 
 
-async def run_one_script(index, script, config, loglevel=None):
+async def run_one_script(index: int, script: os.PathLike, config: str, loglevel: int | None = None) -> None:
     """Run one SAL script.
 
     Parameters
@@ -161,7 +179,7 @@ async def run_one_script(index, script, config, loglevel=None):
         )
         await remote.start_task
 
-        async def log_callback(data):
+        async def log_callback(data: BaseMsgType) -> None:
             iso_time = datetime.datetime.now().time().isoformat(timespec="milliseconds")
             print(f"{iso_time} {logging.getLevelName(data.level)}: {data.message}")
 
@@ -184,7 +202,8 @@ async def run_one_script(index, script, config, loglevel=None):
             print("waiting for the script to load")
             await script_info.start_task
             print("waiting for the script to be configured")
-            await script_info.config_task
+            if script_info.config_task is not None:
+                await script_info.config_task
             if loglevel is not None:
                 print(f"setting script log level to {loglevel}")
                 await remote.cmd_setLogLevel.set_start(level=loglevel, timeout=STD_TIMEOUT)
@@ -193,7 +212,8 @@ async def run_one_script(index, script, config, loglevel=None):
             await script_info.set_group_id(group_id=group_id)
             print("running the script")
             script_info.run()
-            await script_info.process_task
+            if script_info.process_task is not None:
+                await script_info.process_task
             print("script succeeded")
         except BaseException:
             # make sure the background process is terminated
@@ -201,12 +221,12 @@ async def run_one_script(index, script, config, loglevel=None):
             raise
 
 
-async def _run_one_script_cli_impl():
+async def _run_one_script_cli_impl() -> None:
     """Implementation for run_one_script_cli."""
     cmd = parse_run_one_script_cmd()
     await run_one_script(index=cmd.index, script=cmd.script, config=cmd.config, loglevel=cmd.loglevel)
 
 
-def run_one_script_cli():
+def run_one_script_cli() -> None:
     """Use the command line to run one script."""
     asyncio.run(_run_one_script_cli_impl())

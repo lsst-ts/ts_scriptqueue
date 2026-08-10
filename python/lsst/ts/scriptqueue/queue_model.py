@@ -25,6 +25,7 @@ import asyncio
 import collections
 import copy
 import inspect
+import logging
 import os
 import pathlib
 import signal
@@ -36,11 +37,13 @@ from lsst.ts import salobj
 from lsst.ts.utils import index_generator
 from lsst.ts.xml.enums.Script import ScriptState
 from lsst.ts.xml.enums.ScriptQueue import Location
+from lsst.ts.xml.type_hints import BaseMsgType
 
 from . import utils
 from .block_info import BlockInfo
 from .block_model import BlockModel
 from .script_info import ScriptInfo
+from .type_hints import AsyncNoArgsCallback, AsyncScriptInfoBoolCallback, AsyncScriptInfoCallback, Indexed
 
 # Standard timeout (seconds). Long enough to perform any reasonable operation,
 # including starting a CSC or loading a script (seconds)
@@ -61,7 +64,7 @@ class Scripts:
         Relative paths to external SAL scripts
     """
 
-    def __init__(self, standard, external):
+    def __init__(self, standard: list[str], external: list[str]) -> None:
         self.standard = standard
         self.external = external
 
@@ -76,19 +79,23 @@ class ScriptKey:
         components that are currently running.
     """
 
-    def __init__(self, index):
+    def __init__(self, index: int) -> None:
         self.index = int(index)
 
-    def __hash__(self):
+    def __hash__(self) -> int:
         return self.index
 
-    def __eq__(self, other):
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, Indexed):
+            return NotImplemented
         return self.index == other.index
 
-    def __ne__(self, other):
+    def __ne__(self, other: object) -> bool:
+        if not isinstance(other, Indexed):
+            return NotImplemented
         return not (self == other)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"ScriptKey(index={self.index})"
 
 
@@ -136,17 +143,17 @@ class QueueModel:
 
     def __init__(
         self,
-        domain,
-        log,
-        standardpath,
-        externalpath,
-        next_visit_callback=None,
-        next_visit_canceled_callback=None,
-        queue_callback=None,
-        script_callback=None,
-        min_sal_index=MIN_SAL_INDEX,
-        max_sal_index=salobj.MAX_SAL_INDEX,
-        verbose=False,
+        domain: salobj.Domain,
+        log: logging.Logger,
+        standardpath: os.PathLike,
+        externalpath: os.PathLike,
+        next_visit_callback: AsyncScriptInfoCallback | None = None,
+        next_visit_canceled_callback: AsyncScriptInfoCallback | None = None,
+        queue_callback: AsyncNoArgsCallback | None = None,
+        script_callback: AsyncScriptInfoBoolCallback | None = None,
+        min_sal_index: int = MIN_SAL_INDEX,
+        max_sal_index: int = salobj.MAX_SAL_INDEX,
+        verbose: bool = False,
     ):
         if not os.path.isdir(standardpath):
             raise ValueError(f"No such dir standardpath={standardpath}")
@@ -174,14 +181,14 @@ class QueueModel:
         self.max_sal_index = max_sal_index
         self.verbose = verbose
         # queue of ScriptInfo instances
-        self.queue = collections.deque()
-        self.history = collections.deque(maxlen=MAX_HISTORY)
+        self.queue: collections.deque[ScriptInfo] = collections.deque()
+        self.history: collections.deque[ScriptInfo] = collections.deque(maxlen=MAX_HISTORY)
         self.block_model = BlockModel()
-        self.current_script = None
+        self.current_script: ScriptInfo | None = None
         self._running = True
         self._enabled = False
         self._index_generator = index_generator(imin=min_sal_index, imax=max_sal_index)
-        self._scripts_being_stopped = set()
+        self._scripts_being_stopped: set[int] = set()
         # use index=0 so we get messages for all scripts
         self.remote = salobj.Remote(domain=domain, name="Script", index=0, evt_max_history=0)
         self.remote.evt_metadata.callback = self._script_metadata_callback
@@ -192,12 +199,12 @@ class QueueModel:
 
     async def add(
         self,
-        script_info,
-        location,
-        location_sal_index,
-        start_block=False,
-        block_size=0,
-    ):
+        script_info: ScriptInfo,
+        location: Location,
+        location_sal_index: int,
+        start_block: bool = False,
+        block_size: int = 0,
+    ) -> None:
         """Add a script to the queue.
 
         Launch the script in a new subprocess and wait for the subprocess
@@ -250,25 +257,25 @@ class QueueModel:
         await asyncio.wait_for(coro, timeout=STD_TIMEOUT)
 
     @property
-    def current_index(self):
+    def current_index(self) -> int:
         """SAL index of the current script, or 0 if none."""
         return 0 if self.current_script is None else self.current_script.index
 
     @property
-    def history_indices(self):
+    def history_indices(self) -> list[int]:
         """SAL indices of scripts on the history queue."""
         return [script_info.index for script_info in self.history]
 
     @property
-    def queue_indices(self):
+    def queue_indices(self) -> list[int]:
         """SAL indices of scripts on the queue."""
         return [script_info.index for script_info in self.queue]
 
-    async def close(self):
+    async def close(self) -> None:
         """Shut down the queue, terminate all scripts and free resources."""
         await self.terminate_all()
 
-    def find_available_scripts(self):
+    def find_available_scripts(self) -> Scripts:
         """Find available scripts.
 
         Returns
@@ -281,7 +288,7 @@ class QueueModel:
             external=utils.find_public_scripts(self.externalpath),
         )
 
-    def get_queue_index(self, sal_index):
+    def get_queue_index(self, sal_index: int) -> int:
         """Get queue index of a script on the queue.
 
         Parameters
@@ -295,9 +302,9 @@ class QueueModel:
             If the script cannot be found on the queue.
         """
         key = ScriptKey(sal_index)
-        return self.queue.index(key)
+        return self.queue.index(key)  # type: ignore[arg-type]
 
-    def get_script_info(self, sal_index, search_history):
+    def get_script_info(self, sal_index: int, search_history: bool) -> ScriptInfo:
         """Get information about a script.
 
         Search current script, the queue and history.
@@ -306,6 +313,14 @@ class QueueModel:
         ----------
         sal_index : `int`
             SAL index of script.
+        search_history : `bool`
+            Search past history? If False will only look for the current
+            and queued scripts.
+
+        Returns
+        -------
+        `ScriptInfo`
+            Script info for the requested sal index.
 
         Raises
         ------
@@ -316,15 +331,17 @@ class QueueModel:
             return self.current_script
         key = ScriptKey(sal_index)
         try:
-            return self.queue[self.queue.index(key)]
+            queue_index = self.queue.index(key)  # type: ignore[arg-type]
+            return self.queue[queue_index]
         except ValueError:
             if search_history:
                 pass
             else:
                 raise
-        return self.history[self.history.index(key)]
+        history_index = self.history.index(key)  # type: ignore[arg-type]
+        return self.history[history_index]
 
-    def make_full_path(self, is_standard, path):
+    def make_full_path(self, is_standard: bool, path: str | os.PathLike) -> os.PathLike:
         """Make a full path from path and is_standard and check that
         it points to a runnable script.
 
@@ -364,7 +381,7 @@ class QueueModel:
             raise ValueError(f"Script {fullpath} is not executable.")
         return fullpath
 
-    async def move(self, sal_index, location, location_sal_index):
+    async def move(self, sal_index: int, location: Location, location_sal_index: int) -> None:
         """Move a script within the queue.
 
         Parameters
@@ -406,17 +423,22 @@ class QueueModel:
             raise
 
     @property
-    def next_sal_index(self):
+    def next_sal_index(self) -> int:
         """Get the next available SAL Script index."""
         return next(self._index_generator)
 
-    def pop_script_info(self, sal_index):
+    def pop_script_info(self, sal_index: int) -> ScriptInfo:
         """Remove and return information about a script on the queue.
 
         Parameters
         ----------
         sal_index : `int`
             SAL index of script.
+
+        Returns
+        -------
+        `ScriptInfo`
+            Script infor of the removed script.
 
         Raises
         ------
@@ -428,7 +450,9 @@ class QueueModel:
         del self.queue[queue_index]
         return script_info
 
-    async def requeue(self, sal_index, seq_num, location, location_sal_index):
+    async def requeue(
+        self, sal_index: int, seq_num: int, location: Location, location_sal_index: int
+    ) -> ScriptInfo:
         """Requeue a script.
 
         Add a script that is a copy of an existing script,
@@ -440,8 +464,6 @@ class QueueModel:
 
         Parameters
         ----------
-        domain : `lsst.ts.salobj.Domain`
-            DDS domain.
         sal_index : `int`
             SAL index of script to requeue.
         seq_num : `int`
@@ -489,7 +511,7 @@ class QueueModel:
         )
         return script_info
 
-    async def stop_scripts(self, sal_indices, terminate):
+    async def stop_scripts(self, sal_indices: list[int], terminate: bool) -> None:
         """Stop one or more queued scripts and/or the current script.
 
         Silently ignores scripts that cannot be found or are already stopped.
@@ -526,7 +548,7 @@ class QueueModel:
         finally:
             self._scripts_being_stopped = set()
 
-    async def stop_one_script(self, script_info):
+    async def stop_one_script(self, script_info: ScriptInfo) -> None:
         """Stop a queued or running script, giving it time to clean up.
 
         First send the script the ``stop`` command, giving that ``timeout``
@@ -549,7 +571,8 @@ class QueueModel:
             try:
                 await script_info.remote.cmd_stop.set_start(salIndex=script_info.index, timeout=STD_TIMEOUT)
                 # give the process time to terminate
-                await asyncio.wait_for(script_info.process.wait(), timeout=STD_TIMEOUT)
+                if script_info.process is not None:
+                    await asyncio.wait_for(script_info.process.wait(), timeout=STD_TIMEOUT)
                 # let the script be removed or moved
                 await asyncio.sleep(0)
                 return
@@ -558,7 +581,7 @@ class QueueModel:
                 pass
         await self.terminate_one_script(script_info)
 
-    async def terminate_one_script(self, script_info):
+    async def terminate_one_script(self, script_info: ScriptInfo) -> None:
         """Terminate a queued or running script.
 
         If successful (as it will be, unless the script catches SIGTERM),
@@ -595,14 +618,14 @@ class QueueModel:
         await asyncio.sleep(0)
 
     @property
-    def enabled(self):
+    def enabled(self) -> bool:
         """Get enabled state.
 
         True if ScriptQueue is in the enabled state, False otherwise.
         """
         return self._enabled
 
-    async def set_enable(self, enabled):
+    async def set_enable(self, enabled: bool) -> None:
         """Set enabled state."""
         was_enabled = self._enabled
         self._enabled = bool(enabled)
@@ -610,14 +633,14 @@ class QueueModel:
             await self._update_queue()
 
     @property
-    def running(self):
+    def running(self) -> bool:
         """Get or set running state.
 
         If set False the queue pauses.
         """
         return self._running
 
-    async def set_running(self, run):
+    async def set_running(self, run: bool) -> None:
         """Set running state."""
         was_running = self._running
         self._running = bool(run)
@@ -625,7 +648,7 @@ class QueueModel:
             await self._update_queue(pause_on_failure=False)
 
     @staticmethod
-    def next_group_id():
+    def next_group_id() -> str:
         """Get the next group ID.
 
         The group ID is the current TAI date and time as a string in ISO
@@ -635,7 +658,7 @@ class QueueModel:
         """
         return astropy.time.Time.now().tai.isot
 
-    async def terminate_all(self):
+    async def terminate_all(self) -> list[ScriptInfo]:
         """Terminate all scripts and return info for the ones terminated.
 
         Returns
@@ -670,7 +693,9 @@ class QueueModel:
 
         return info_list
 
-    async def _insert_script(self, script_info, location, location_sal_index):
+    async def _insert_script(
+        self, script_info: ScriptInfo, location: Location, location_sal_index: int
+    ) -> None:
         """Insert a script info into the queue.
 
         Parameters
@@ -708,7 +733,7 @@ class QueueModel:
         script_info.callback = self._script_info_callback
         await self._update_queue()
 
-    async def _remove_script(self, sal_index):
+    async def _remove_script(self, sal_index: int) -> None:
         """Remove a script from the queue."""
         key = ScriptKey(sal_index)
         self.log.debug(f"Removing script {key} from the queue.")
@@ -742,7 +767,7 @@ class QueueModel:
                 self.log.debug("Updating queue.")
                 await self._update_queue()
 
-    async def _log_message_callback(self, data):
+    async def _log_message_callback(self, data: BaseMsgType) -> None:
         """Print Script logMessage data to stdout.
 
         To use: if self.verbose is true then set this as a callback
@@ -758,7 +783,7 @@ class QueueModel:
             f"level={data.level}; traceback={data.traceback!r}"
         )
 
-    async def clear_group_id(self, script_info, command_script):
+    async def clear_group_id(self, script_info: ScriptInfo, command_script: bool) -> None:
         """Clear the group ID of the specified script, if appropriate.
 
         Clear the group ID of the specified script if the group ID
@@ -782,7 +807,7 @@ class QueueModel:
                 self.log.exception("next_visit_canceled_callback failed; continuing")
         script_info.clear_group_id(command_script=command_script)
 
-    async def set_group_id(self, script_info):
+    async def set_group_id(self, script_info: ScriptInfo) -> None:
         """Set or clear the group ID for a script.
 
         Parameters
@@ -804,7 +829,7 @@ class QueueModel:
             except Exception:
                 self.log.exception("next_visit_callback failed; continuing")
 
-    def _script_info_from_data(self, event_name, data):
+    def _script_info_from_data(self, event_name: str, data: BaseMsgType) -> ScriptInfo | None:
         """Get script info for the script specified in Script event data
 
         Parameters
@@ -833,17 +858,17 @@ class QueueModel:
             return None
         return script_info
 
-    async def _script_metadata_callback(self, data):
+    async def _script_metadata_callback(self, data: BaseMsgType) -> None:
         script_info = self._script_info_from_data(event_name="metadata", data=data)
         if script_info:
             script_info.metadata = data
 
-    async def _script_state_callback(self, data):
+    async def _script_state_callback(self, data: BaseMsgType) -> None:
         script_info = self._script_info_from_data(event_name="state", data=data)
         if script_info:
             await script_info._script_state_callback(data)
 
-    async def _script_info_callback(self, script_info):
+    async def _script_info_callback(self, script_info: ScriptInfo) -> None:
         """ScriptInfo callback."""
         self.log.debug(f"Script info callback: {script_info.index}::{script_info.script_state!r}.")
         if self.script_callback:
@@ -862,7 +887,7 @@ class QueueModel:
             # or be ready to be run.
             await self._update_queue(force_callback=False)
 
-    async def _update_queue(self, force_callback=True, pause_on_failure=True):
+    async def _update_queue(self, force_callback: bool = True, pause_on_failure: bool = True) -> None:
         """Call whenever the queue changes state.
 
         If the current script is done, move it to the history queue.

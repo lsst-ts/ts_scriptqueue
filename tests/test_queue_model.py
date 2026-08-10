@@ -26,7 +26,9 @@ import os
 import time
 import unittest
 import warnings
-from unittest.mock import patch
+from collections.abc import Iterable, Sequence
+from typing import Any, Generator
+from unittest.mock import Mock, patch
 
 import pytest
 
@@ -40,7 +42,7 @@ from lsst.ts.xml.enums.ScriptQueue import Location, ScriptProcessState
 STD_TIMEOUT = 60
 
 
-def _min_sal_index_generator():
+def _min_sal_index_generator() -> Generator[int, None, None]:
     min_sal_index = 1000
     while True:
         yield min_sal_index
@@ -53,7 +55,7 @@ make_min_sal_index = _min_sal_index_generator()
 class QueueInfo:
     """Information about the queue. Used by assert_next_queue."""
 
-    def __init__(self, model):
+    def __init__(self, model: scriptqueue.QueueModel) -> None:
         self.enabled = model.enabled
         self.running = model.running
         self.current_index = model.current_index
@@ -62,7 +64,7 @@ class QueueInfo:
 
 
 class QueueModelTestCase(unittest.IsolatedAsyncioTestCase):
-    async def asyncSetUp(self):
+    async def asyncSetUp(self) -> None:
         self.t0 = time.monotonic()
         self.min_sal_index = next(make_min_sal_index)
         salobj.set_test_topic_subname()
@@ -73,13 +75,13 @@ class QueueModelTestCase(unittest.IsolatedAsyncioTestCase):
         self.log = logging.getLogger()
         # Queue of (sal_index, group_id) set by next_visit_callback
         # and used by assert_next_next_visit
-        self.next_visit_queue = asyncio.Queue()
+        self.next_visit_queue: asyncio.Queue[tuple[int, str]] = asyncio.Queue()
         # Queue of (sal_index, group_id) set by next_visit_canceled_callback
         # and used by assert_next_next_visit_canceled
-        self.next_visit_canceled_queue = asyncio.Queue()
+        self.next_visit_canceled_queue: asyncio.Queue[tuple[int, str]] = asyncio.Queue()
         # Queue of script queue information;
         # used by assert_next_queue
-        self.queue_info_queue = asyncio.Queue()
+        self.queue_info_queue: asyncio.Queue[QueueInfo] = asyncio.Queue()
         self.model = scriptqueue.QueueModel(
             domain=self.domain,
             log=self.log,
@@ -95,7 +97,7 @@ class QueueModelTestCase(unittest.IsolatedAsyncioTestCase):
         await self.model.set_enable(True)
         await self.model.start_task
 
-    async def asyncTearDown(self):
+    async def asyncTearDown(self) -> None:
         killed_scripts_info = await asyncio.wait_for(self.model.terminate_all(), timeout=STD_TIMEOUT)
         if killed_scripts_info:
             killed_scripts_index = ",".join([f"{script_info.index}" for script_info in killed_scripts_info])
@@ -125,7 +127,7 @@ class QueueModelTestCase(unittest.IsolatedAsyncioTestCase):
         # Sleep some time to let the cluster have time to finish the deletion
         await asyncio.sleep(5.0)
 
-    async def assert_next_next_visit(self, sal_index):
+    async def assert_next_next_visit(self, sal_index: int) -> None:
         """Assert that the next next_visit callback is for the specified index.
 
         Parameters
@@ -139,7 +141,7 @@ class QueueModelTestCase(unittest.IsolatedAsyncioTestCase):
         assert next_sal_index == sal_index
         assert next_group_id != ""
 
-    async def assert_next_next_visit_canceled(self, sal_index):
+    async def assert_next_next_visit_canceled(self, sal_index: int) -> None:
         """Assert that the next next_visit_canceled callback
         is for the specified index.
 
@@ -156,13 +158,13 @@ class QueueModelTestCase(unittest.IsolatedAsyncioTestCase):
 
     async def assert_next_queue(
         self,
-        enabled=True,
-        running=False,
-        current_sal_index=0,
-        sal_indices=(),
-        past_sal_indices=(),
-        wait=True,
-    ):
+        enabled: bool = True,
+        running: bool = False,
+        current_sal_index: int = 0,
+        sal_indices: Sequence[int] = (),
+        past_sal_indices: Iterable[int] = (),
+        wait: bool = True,
+    ) -> QueueInfo:
         """Check next or current queue state.
 
         The defaults are appropriate to an enabled, paused queue
@@ -229,7 +231,9 @@ class QueueModelTestCase(unittest.IsolatedAsyncioTestCase):
             assert actual_past_sal_indices == list(past_sal_indices)
         return queue_info
 
-    def assert_script_info_equal(self, info1, info2, is_requeue=False):
+    def assert_script_info_equal(
+        self, info1: scriptqueue.ScriptInfo, info2: scriptqueue.ScriptInfo, is_requeue: bool = False
+    ) -> None:
         """Assert two ScriptInfo are equal.
 
         If is_requeue (indicating that we are comparing a requeued
@@ -249,12 +253,12 @@ class QueueModelTestCase(unittest.IsolatedAsyncioTestCase):
 
     def make_add_kwargs(
         self,
-        location=Location.LAST,
-        location_sal_index=0,
-        is_standard=False,
-        path=None,
-        config="wait_time: 0.1",
-    ):
+        location: Location = Location.LAST,
+        location_sal_index: int = 0,
+        is_standard: bool = False,
+        path: str | None = None,
+        config: str = "wait_time: 0.1",
+    ) -> dict[str, Any]:
         """Make keyword arguments for QueueModel.add.
 
         Parameters
@@ -279,7 +283,9 @@ class QueueModelTestCase(unittest.IsolatedAsyncioTestCase):
             location_sal_index=location_sal_index,
         )
 
-    def make_script_info(self, is_standard=False, path=None, config="wait_time: 0.1"):
+    def make_script_info(
+        self, is_standard: bool = False, path: str | None = None, config: str = "wait_time: 0.1"
+    ) -> scriptqueue.ScriptInfo:
         """Make a `ScriptInfo`.
 
         Parameters
@@ -305,7 +311,7 @@ class QueueModelTestCase(unittest.IsolatedAsyncioTestCase):
             verbose=True,
         )
 
-    async def next_visit_callback(self, script_info):
+    async def next_visit_callback(self, script_info: scriptqueue.ScriptInfo) -> None:
         dt = time.monotonic() - self.t0
         print(
             f"next_visit_callback() for {script_info.index}: "
@@ -314,7 +320,7 @@ class QueueModelTestCase(unittest.IsolatedAsyncioTestCase):
         )
         await self.next_visit_queue.put((script_info.index, script_info.group_id))
 
-    async def next_visit_canceled_callback(self, script_info):
+    async def next_visit_canceled_callback(self, script_info: scriptqueue.ScriptInfo) -> None:
         dt = time.monotonic() - self.t0
         print(
             f"next_visit_canceled_callback() for {script_info.index}: "
@@ -323,7 +329,7 @@ class QueueModelTestCase(unittest.IsolatedAsyncioTestCase):
         )
         await self.next_visit_canceled_queue.put((script_info.index, script_info.group_id))
 
-    async def queue_callback(self):
+    async def queue_callback(self) -> None:
         dt = time.monotonic() - self.t0
         print(
             f"queue_callback(): enabled={self.model.enabled}; "
@@ -335,7 +341,7 @@ class QueueModelTestCase(unittest.IsolatedAsyncioTestCase):
         )
         await self.queue_info_queue.put(QueueInfo(self.model))
 
-    async def script_callback(self, script_info):
+    async def script_callback(self, script_info: scriptqueue.ScriptInfo) -> None:
         curr_time = time.monotonic()
         dt = curr_time - self.t0
         print(
@@ -350,7 +356,7 @@ class QueueModelTestCase(unittest.IsolatedAsyncioTestCase):
             f"state_delay={script_info.state_delay:0.1f}"
         )
 
-    async def test_add_scripts(self):
+    async def test_add_scripts(self) -> None:
         """Test add."""
         await self.assert_next_queue(enabled=True, running=True)
 
@@ -430,7 +436,7 @@ class QueueModelTestCase(unittest.IsolatedAsyncioTestCase):
         # and use it in the remaining tests.
         queue_info = await self.assert_next_queue(
             sal_indices=[i0 + 2, i0 + 1, i0 + 3],
-            past_sal_indices={i0 + 6, i0 + 5, i0, i0 + 4},
+            past_sal_indices={int(i0 + 6), int(i0 + 5), int(i0), int(i0 + 4)},
         )
         stopped_scripts = [info.index for info in queue_info.history]
 
@@ -488,7 +494,7 @@ class QueueModelTestCase(unittest.IsolatedAsyncioTestCase):
         # Make sure that next_visit_canceled_callback was not called
         assert self.next_visit_canceled_queue.empty()
 
-    async def test_add_blocks_fails_no_image_server_url(self):
+    async def test_add_blocks_fails_no_image_server_url(self) -> None:
         """Test adding scripts that are part of a block."""
         await self.assert_next_queue(enabled=True, running=True)
 
@@ -508,7 +514,7 @@ class QueueModelTestCase(unittest.IsolatedAsyncioTestCase):
 
     @patch("lsst.ts.utils.ImageNameServiceClient.get_next_obs_id")
     @patch.dict(os.environ, {"IMAGE_SERVER_URL": "mytemp"})
-    async def test_add_blocks(self, mock_get):
+    async def test_add_blocks(self, mock_get: Mock) -> None:
         """Test adding scripts that are part of a block."""
         mock_get.side_effect = [
             (0, ["BL1_O_20240228_000001"]),
@@ -579,7 +585,7 @@ class QueueModelTestCase(unittest.IsolatedAsyncioTestCase):
 
     @patch("lsst.ts.utils.ImageNameServiceClient.get_next_obs_id")
     @patch.dict(os.environ, {"IMAGE_SERVER_URL": "mytemp"})
-    async def test_add_blocks_more_scripts(self, mock_get):
+    async def test_add_blocks_more_scripts(self, mock_get: Mock) -> None:
         """Test adding scripts that are part of a block."""
         mock_get.return_value = (0, ["BL1_O_20240228_000001"])
         await self.assert_next_queue(enabled=True, running=True)
@@ -624,7 +630,7 @@ class QueueModelTestCase(unittest.IsolatedAsyncioTestCase):
         ):
             await asyncio.wait_for(self.model.add(**add_kwargs), timeout=STD_TIMEOUT)
 
-    async def test_add_bad_config(self):
+    async def test_add_bad_config(self) -> None:
         """Test adding a script with invalid configuration."""
         await self.assert_next_queue(enabled=True, running=True)
 
@@ -648,7 +654,7 @@ class QueueModelTestCase(unittest.IsolatedAsyncioTestCase):
         assert script0.process_done
         assert script0.process_state == ScriptProcessState.CONFIGURE_FAILED
 
-    async def check_add_then_stop_script(self, terminate):
+    async def check_add_then_stop_script(self, terminate: bool) -> None:
         """Test adding a script immediately followed by stoppping it."""
         await self.assert_next_queue(enabled=True, running=True)
 
@@ -672,13 +678,13 @@ class QueueModelTestCase(unittest.IsolatedAsyncioTestCase):
         assert not (script0.configured)
         assert script0.process_state == ScriptProcessState.TERMINATED
 
-    async def test_add_then_stop_script(self):
+    async def test_add_then_stop_script(self) -> None:
         await self.check_add_then_stop_script(terminate=False)
 
-    async def test_add_then_terminate_script(self):
+    async def test_add_then_terminate_script(self) -> None:
         await self.check_add_then_stop_script(terminate=True)
 
-    def test_constructor_errors(self):
+    def test_constructor_errors(self) -> None:
         nonexistentpath = os.path.join(self.datadir, "garbage")
         with pytest.raises(ValueError):
             scriptqueue.QueueModel(
@@ -702,7 +708,7 @@ class QueueModelTestCase(unittest.IsolatedAsyncioTestCase):
                 externalpath=nonexistentpath,
             )
 
-    async def test_get_script_info(self):
+    async def test_get_script_info(self) -> None:
         await self.assert_next_queue(enabled=True, running=True)
 
         # Pause the queue so we know what to expect of queue state.
@@ -771,7 +777,7 @@ class QueueModelTestCase(unittest.IsolatedAsyncioTestCase):
             past_sal_indices=[i0 + 2, i0 + 1, i0],
         )
 
-    def test_make_full_path(self):
+    def test_make_full_path(self) -> None:
         for is_standard, badpath in (
             (True, "../script5"),  # file is in external, not standard
             (True, "subdir/nonex2"),  # file is not executable
@@ -786,7 +792,7 @@ class QueueModelTestCase(unittest.IsolatedAsyncioTestCase):
 
         for is_standard, goodpath in (
             (True, "subdir/subsubdir/script4"),
-            (False, "subdir/script3"),
+            (False, "subdir/script8"),
             (True, "script2"),
         ):
             with self.subTest(is_standard=is_standard, path=goodpath):
@@ -795,7 +801,7 @@ class QueueModelTestCase(unittest.IsolatedAsyncioTestCase):
                 expected_fullpath = os.path.join(root, goodpath)
                 assert fullpath.samefile(expected_fullpath)
 
-    async def test_move(self):
+    async def test_move(self) -> None:
         """Test move, pause and showQueue"""
         await self.assert_next_queue(enabled=True, running=True)
 
@@ -902,7 +908,7 @@ class QueueModelTestCase(unittest.IsolatedAsyncioTestCase):
             timeout=STD_TIMEOUT,
         )
 
-    async def test_clear_group_id(self):
+    async def test_clear_group_id(self) -> None:
         """Test that a script at the top of the queue has its group ID cleared
         if it is moved elsewhere.
         """
@@ -968,7 +974,7 @@ class QueueModelTestCase(unittest.IsolatedAsyncioTestCase):
             past_sal_indices=[i0 + 1, i0 + 2, i0],
         )
 
-    async def test_pause_on_failure(self):
+    async def test_pause_on_failure(self) -> None:
         """Test that a failed script pauses the queue."""
         await self.assert_next_queue(enabled=True, running=True)
 
@@ -1049,7 +1055,7 @@ class QueueModelTestCase(unittest.IsolatedAsyncioTestCase):
         assert script_info.process.returncode == 0
         assert script_info.script_state == ScriptState.DONE
 
-    async def test_requeue(self):
+    async def test_requeue(self) -> None:
         """Test requeue"""
         await self.assert_next_queue(enabled=True, running=True)
 
@@ -1200,7 +1206,7 @@ class QueueModelTestCase(unittest.IsolatedAsyncioTestCase):
         for requeue_info, info in zip(requeue_info_list, info_list):
             self.assert_script_info_equal(requeue_info, info, is_requeue=True)
 
-    async def test_resume_before_first_script_runnable(self):
+    async def test_resume_before_first_script_runnable(self) -> None:
         await self.assert_next_queue(enabled=True, running=True)
 
         # pause the queue so we know what to expect of queue state
@@ -1228,7 +1234,7 @@ class QueueModelTestCase(unittest.IsolatedAsyncioTestCase):
         )
         await self.assert_next_queue(running=True, current_sal_index=0, sal_indices=[], past_sal_indices=[i0])
 
-    async def test_run_immediately(self):
+    async def test_run_immediately(self) -> None:
         await self.assert_next_queue(enabled=True, running=True)
 
         info0 = self.make_script_info(is_standard=False, path=os.path.join("subdir", "script6"), config="")
@@ -1246,7 +1252,7 @@ class QueueModelTestCase(unittest.IsolatedAsyncioTestCase):
         )
         await self.assert_next_queue(running=True, current_sal_index=0, sal_indices=[], past_sal_indices=[i0])
 
-    async def check_stop_scripts(self, terminate):
+    async def check_stop_scripts(self, terminate: bool) -> None:
         await self.assert_next_queue(enabled=True, running=True)
 
         # pause the queue so we know what to expect of queue state
@@ -1392,13 +1398,13 @@ class QueueModelTestCase(unittest.IsolatedAsyncioTestCase):
             timeout=STD_TIMEOUT,
         )
 
-    async def test_stop_scripts_noterminate(self):
+    async def test_stop_scripts_noterminate(self) -> None:
         await self.check_stop_scripts(terminate=False)
 
-    async def test_stop_scripts_terminate(self):
+    async def test_stop_scripts_terminate(self) -> None:
         await self.check_stop_scripts(terminate=True)
 
-    async def wait_done(self, *indices):
+    async def wait_done(self, *indices: int) -> list[Any]:
         """Wait for the specified scripts finish running (succeed or fail).
 
         Return the result of each task.
@@ -1417,7 +1423,7 @@ class QueueModelTestCase(unittest.IsolatedAsyncioTestCase):
             late_scripts = [ind for task, ind in zip(process_tasks, indices) if not task.done()]
             raise RuntimeError(f"Scripts {late_scripts} did not finish in 60 seconds")
 
-    async def wait_configured(self, *indices):
+    async def wait_configured(self, *indices: int) -> None:
         """Wait for the specified scripts to be configured.
 
         Call this before running the queue if you want the queue data
@@ -1445,7 +1451,7 @@ class QueueModelTestCase(unittest.IsolatedAsyncioTestCase):
                     f"elapsed time={dt:0.1f}"
                 ) from e
 
-    async def wait_running(self, sal_index):
+    async def wait_running(self, sal_index: int) -> None:
         """Wait for the specified script to report that it is running.
 
         Parameters

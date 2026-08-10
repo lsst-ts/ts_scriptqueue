@@ -21,11 +21,14 @@
 
 __all__ = ["BlockInfo"]
 
+import logging
 import os
 import re
 from collections import deque
 
 from lsst.ts.utils import ImageNameServiceClient
+
+from .type_hints import ScriptInfoProtocol
 
 BLOCK_REGEX = re.compile(r"(?P<block_test_case>BLOCK-T)?(?P<block>BLOCK-)?(?P<id>[0-9]*)")
 
@@ -47,20 +50,20 @@ class BlockInfo:
         How many scripts are part of this block.
     """
 
-    def __init__(self, log, block_id, block_size):
+    def __init__(self, log: logging.Logger, block_id: str, block_size: int) -> None:
         self.log = log.getChild("BlockInfo")
         self.block_id = block_id
         self.block_size = block_size
 
         block_match = BLOCK_REGEX.match(block_id)
-        if block_match.span()[1] == 0:
+        if block_match is None or block_match.span()[1] == 0:
             raise ValueError(f"{block_id} has the wrong format, should be BLOCK-N or BLOCK-TN.")
 
         self._block_ticket_id = abs(int(block_match.groupdict()["id"]))
         self._block_type = "BlockT" if block_match.groupdict()["block_test_case"] is not None else "Block"
 
-        self._block_uid = None
-        self.scripts_info = deque(maxlen=int(block_size))
+        self._block_uid: str | None = None
+        self.scripts_info: deque[ScriptInfoProtocol] = deque(maxlen=int(block_size))
 
         self.image_server_url = os.environ.get("IMAGE_SERVER_URL")
         if self.image_server_url is None:
@@ -69,7 +72,7 @@ class BlockInfo:
                 "Block indexing functionality will not work."
             )
 
-    def get_block_uid(self):
+    def get_block_uid(self) -> str:
         """Retrieve block uid.
 
         Returns
@@ -77,12 +80,12 @@ class BlockInfo:
         block_uid : `str`
             Block unique id.
         """
-        if not self.has_uid():
+        if self._block_uid is None:
             raise RuntimeError("Block uid has not been set yet, call set_block_uid first.")
 
         return self._block_uid
 
-    def has_uid(self):
+    def has_uid(self) -> bool:
         """Check if block uid was set.
 
         Returns
@@ -92,7 +95,7 @@ class BlockInfo:
         """
         return self._block_uid is not None
 
-    async def set_block_uid(self):
+    async def set_block_uid(self) -> None:
         """Retrieve and set the block unique id from the name server."""
 
         if self._block_uid is not None:
@@ -105,12 +108,12 @@ class BlockInfo:
         _, data = await image_server_client.get_next_obs_id(num_images=1)
         self._block_uid = data[0]
 
-    def add(self, script_info):
+    def add(self, script_info: ScriptInfoProtocol) -> None:
         """Add Script to the block.
 
         Parameters
         ----------
-        script_info : `ScriptInfo`
+        script_info : `ScriptInfoProtocol`
             ScriptInfo for the script to add to the block.
         """
         if self._block_uid is None:
@@ -127,7 +130,7 @@ class BlockInfo:
         self.scripts_info.append(script_info)
         script_info.set_block_index(index)
 
-    def done(self):
+    def done(self) -> bool:
         """Check if block is done.
 
         A block is considered done is all the scripts that

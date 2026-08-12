@@ -374,6 +374,25 @@ class ScriptQueueTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCa
             assert list(queue_data.pastSalIndices[0 : queue_data.pastLength]) == list(past_sal_indices)
         return queue_data
 
+    async def wait_script_state(self, sal_index: int, script_state: ScriptState) -> BaseMsgType:
+        """Wait until script process state matches the provided process state.
+
+        Parameters
+        ----------
+        script_state : `ScriptProcessState`
+            Expected process state.
+
+        Returns
+        -------
+        script : `BaseMsgType`
+            The sample scriopt event.
+        """
+        data = await self.assert_next_sample(self.remote.evt_script)
+        while not (data.scriptSalIndex == sal_index and data.scriptState == script_state):
+            data = await self.assert_next_sample(self.remote.evt_script)
+
+        return data
+
     async def assert_next_next_visit(self, sal_index: int) -> BaseMsgType:
         """Assert that the next nextVisit event is for the specified index
         and return the event data.
@@ -904,7 +923,7 @@ class ScriptQueueTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCa
         """
         await self.check_bin_script_initial_state(cmdline_args=())
 
-    async def test_process_state(self) -> None:
+    async def test_script_state(self) -> None:
         """Test the processState value of the queue event."""
         async with self.make_csc(initial_state=salobj.State.DISABLED):
             await self.assert_next_sample(
@@ -913,7 +932,7 @@ class ScriptQueueTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCa
                 subsystemVersions="",
             )
 
-            make_add_kwargs = MakeAddKwargs(descr="test_process_state")
+            make_add_kwargs = MakeAddKwargs(descr="test_script_state")
 
             await self.assert_next_queue(enabled=False, running=True)
 
@@ -1464,6 +1483,179 @@ class ScriptQueueTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCa
                 current_sal_index=0,
                 sal_indices=[],
                 past_sal_indices={I0, I0 + 2, I0 + 3, I0 + 1},
+            )
+
+    async def test_next_visit_start_time(self) -> None:
+        """Test the next visit event start time feature."""
+        async with self.make_csc(initial_state=salobj.State.DISABLED):
+            make_add_kwargs = MakeAddKwargs(descr="test_next_visit_start_time")
+            await self.assert_next_queue(enabled=False, running=True)
+
+            await self.remote.cmd_enable.start(timeout=STD_TIMEOUT)
+            await self.assert_next_queue(enabled=True, running=True)
+
+            # Pause the queue so we know what to expect of queue state.
+            await self.remote.cmd_pause.start(timeout=STD_TIMEOUT)
+            await self.assert_next_queue(running=False)
+
+            # Queue 4 scripts: enough to test different start times.
+            sal_indices = []
+            wait_times = [10, 15, 21, 25]
+            for i in range(4):
+                sal_indices.append(I0 + i)
+                add_kwargs = make_add_kwargs(config=f"wait_time: {wait_times[i]}")
+                await self.remote.cmd_add.set_start(**add_kwargs, timeout=STD_TIMEOUT)
+                await self.assert_next_queue(sal_indices=sal_indices)
+
+            await self.wait_configured(*sal_indices)
+            await self.remote.cmd_resume.start(timeout=STD_TIMEOUT)
+            await self.assert_next_queue(running=True, sal_indices=sal_indices)
+
+            next_visit = await self.assert_next_next_visit(sal_index=I0)
+            await self.assert_next_queue(
+                running=True,
+                current_sal_index=I0,
+                sal_indices=[I0 + 1, I0 + 2, I0 + 3],
+            )
+            script_data = await self.wait_script_state(sal_index=I0, script_state=ScriptState.RUNNING)
+            assert next_visit.startTime == pytest.approx(script_data.timestampRunStart, abs=1.0)
+
+            next_visit = await self.assert_next_next_visit(sal_index=I0 + 1)
+            await self.assert_next_queue(
+                running=True,
+                current_sal_index=I0 + 1,
+                sal_indices=[I0 + 2, I0 + 3],
+                past_sal_indices=[I0],
+            )
+            script_data = await self.wait_script_state(sal_index=I0 + 1, script_state=ScriptState.RUNNING)
+            assert next_visit.startTime == pytest.approx(script_data.timestampRunStart, abs=1.0)
+
+            next_visit = await self.assert_next_next_visit(sal_index=I0 + 2)
+            await self.assert_next_queue(
+                running=True,
+                current_sal_index=I0 + 2,
+                sal_indices=[I0 + 3],
+                past_sal_indices=[I0 + 1, I0],
+            )
+            script_data = await self.wait_script_state(sal_index=I0 + 2, script_state=ScriptState.RUNNING)
+            assert next_visit.startTime == pytest.approx(script_data.timestampRunStart, abs=1.0)
+
+            next_visit = await self.assert_next_next_visit(sal_index=I0 + 3)
+            await self.assert_next_queue(
+                running=True,
+                current_sal_index=I0 + 3,
+                sal_indices=[],
+                past_sal_indices=[I0 + 2, I0 + 1, I0],
+            )
+            script_data = await self.wait_script_state(sal_index=I0 + 3, script_state=ScriptState.RUNNING)
+            assert next_visit.startTime == pytest.approx(script_data.timestampRunStart, abs=1.0)
+
+            await self.assert_next_queue(
+                running=True,
+                current_sal_index=0,
+                sal_indices=[],
+                past_sal_indices=[I0 + 3, I0 + 2, I0 + 1, I0],
+            )
+
+            # wait a few seconds and add another script.
+            await asyncio.sleep(5)
+            sal_indices.append(I0 + 4)
+            add_kwargs = make_add_kwargs(config="wait_time: 10")
+            await self.remote.cmd_add.set_start(**add_kwargs, timeout=STD_TIMEOUT)
+
+            next_visit = await self.assert_next_next_visit(sal_index=I0 + 4)
+            await self.assert_next_queue(
+                running=True,
+                current_sal_index=0,
+                sal_indices=[I0 + 4],
+                past_sal_indices=[I0 + 3, I0 + 2, I0 + 1, I0],
+            )
+            await self.assert_next_queue(
+                running=True,
+                current_sal_index=I0 + 4,
+                sal_indices=[],
+                past_sal_indices=[I0 + 3, I0 + 2, I0 + 1, I0],
+            )
+            script_data = await self.wait_script_state(sal_index=I0 + 4, script_state=ScriptState.RUNNING)
+            assert next_visit.startTime == pytest.approx(script_data.timestampRunStart, abs=1.0)
+
+            await self.assert_next_queue(
+                running=True,
+                current_sal_index=0,
+                sal_indices=[],
+                past_sal_indices=[I0 + 4, I0 + 3, I0 + 2, I0 + 1, I0],
+            )
+
+            # I will now add 3 scripts, wait until the first one executes for a
+            # bit, then stop the script at the top of the waiting queue, the
+            # next visit.
+
+            past_sal_indices = list(range(I0 + 4, I0 - 1, -1))
+
+            # Pause the queue so we know what to expect of queue state.
+            await self.remote.cmd_pause.start(timeout=STD_TIMEOUT)
+            await self.assert_next_queue(
+                running=False,
+                past_sal_indices=past_sal_indices,
+            )
+
+            # Queue 3 scripts
+            sal_indices = []
+            wait_times = [10, 15, 20]
+            for i in range(3):
+                sal_indices.append(I0 + 5 + i)
+                add_kwargs = make_add_kwargs(config=f"wait_time: {wait_times[i]}")
+                await self.remote.cmd_add.set_start(**add_kwargs, timeout=STD_TIMEOUT)
+                await self.assert_next_queue(
+                    sal_indices=sal_indices,
+                    past_sal_indices=past_sal_indices,
+                )
+
+            await self.wait_configured(*sal_indices)
+            await self.remote.cmd_resume.start(timeout=STD_TIMEOUT)
+            next_visit = await self.assert_next_next_visit(sal_index=I0 + 5)
+            await self.assert_next_queue(
+                running=True,
+                sal_indices=sal_indices,
+                past_sal_indices=past_sal_indices,
+            )
+
+            await self.assert_next_next_visit(sal_index=I0 + 6)
+            await self.assert_next_queue(
+                running=True,
+                current_sal_index=I0 + 5,
+                sal_indices=[I0 + 6, I0 + 7],
+                past_sal_indices=past_sal_indices,
+            )
+            script_data = await self.wait_script_state(sal_index=I0 + 5, script_state=ScriptState.RUNNING)
+            assert next_visit.startTime == pytest.approx(script_data.timestampRunStart, abs=1.0)
+
+            stop_data = self.make_stop_data(stop_indices=[I0 + 6], terminate=False)
+            await self.remote.cmd_stopScripts.start(stop_data, timeout=STD_TIMEOUT)
+            await self.assert_next_next_visit_canceled(sal_index=I0 + 6)
+            next_visit = await self.assert_next_next_visit(sal_index=I0 + 7)
+            past_sal_indices.insert(0, I0 + 6)
+            await self.assert_next_queue(
+                running=True,
+                current_sal_index=I0 + 5,
+                sal_indices=[I0 + 7],
+                past_sal_indices=past_sal_indices,
+            )
+
+            past_sal_indices.insert(0, I0 + 5)
+            await self.assert_next_queue(
+                running=True,
+                current_sal_index=I0 + 7,
+                sal_indices=[],
+                past_sal_indices=past_sal_indices,
+            )
+            script_data = await self.wait_script_state(sal_index=I0 + 7, script_state=ScriptState.RUNNING)
+            assert next_visit.startTime == pytest.approx(script_data.timestampRunStart, abs=1.0)
+
+            past_sal_indices.insert(0, I0 + 7)
+            await self.assert_next_queue(
+                running=True,
+                past_sal_indices=past_sal_indices,
             )
 
     async def test_show_available_scripts(self) -> None:

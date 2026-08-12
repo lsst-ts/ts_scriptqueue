@@ -1,0 +1,3 @@
+documenteer[pipelines,guide]
+sphinxext-rediraffe
+

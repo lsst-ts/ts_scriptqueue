@@ -31,6 +31,7 @@ from typing import Any
 import numpy as np
 
 from lsst.ts import salobj
+from lsst.ts.utils import current_tai
 from lsst.ts.xml.enums.ScriptQueue import SalIndex
 from lsst.ts.xml.sal_enums import State
 from lsst.ts.xml.type_hints import BaseMsgType
@@ -388,9 +389,28 @@ class ScriptQueue(salobj.BaseCsc):
             for key, value in self.get_data_dict(script_info.metadata).items()
             if key not in self.base_field_names
         }
+
+        if self.model.current_script is None or self.model.current_script == script_info:
+            next_visit_start_time = current_tai()
+        else:
+            duration = (
+                self.model.current_script.metadata.duration
+                if self.model.current_script.metadata is not None
+                else 0.0
+            )
+            next_visit_start_time = self.model.current_script.timestamp_run_start + duration
+            next_visit_start_time_minimum = current_tai()
+
+            next_visit_start_time = (
+                next_visit_start_time
+                if next_visit_start_time > next_visit_start_time_minimum
+                else next_visit_start_time_minimum
+            )
+
         await self.evt_nextVisit.set_write(
             scriptSalIndex=script_info.index,
             groupId=script_info.group_id,
+            startTime=next_visit_start_time,
             **metadata_dict,
             force_output=True,
         )
@@ -463,6 +483,7 @@ class ScriptQueue(salobj.BaseCsc):
                 f"process_state={script_info.process_state}, "
                 f"script_state={script_info.script_state}"
             )
+
         await self.evt_script.set_write(
             cmdId=script_info.seq_num,
             scriptSalIndex=script_info.index,

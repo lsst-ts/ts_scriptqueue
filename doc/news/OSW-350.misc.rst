@@ -1,0 +1,1 @@
+Added support for type checking with mypy.

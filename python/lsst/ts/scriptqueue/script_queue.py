@@ -31,6 +31,7 @@ from typing import Any
 import numpy as np
 
 from lsst.ts import salobj
+from lsst.ts.utils import current_tai
 from lsst.ts.xml.enums.ScriptQueue import SalIndex
 from lsst.ts.xml.sal_enums import State
 from lsst.ts.xml.type_hints import BaseMsgType
@@ -114,6 +115,8 @@ class ScriptQueue(salobj.BaseCsc):
             max_sal_index=max_sal_index,
             verbose=verbose,
         )
+
+        self.next_visit_start_time = 0.0
 
     def _get_scripts_path(self, patharg: str | os.PathLike | None, is_standard: bool) -> os.PathLike:
         """Get the scripts path from the ``standardpath`` or ``externalpath``
@@ -388,9 +391,22 @@ class ScriptQueue(salobj.BaseCsc):
             for key, value in self.get_data_dict(script_info.metadata).items()
             if key not in self.base_field_names
         }
+        if self.next_visit_start_time == 0.0:
+            self.next_visit_start_time = current_tai()
+        else:
+            next_visit_start_time = self.next_visit_start_time + self.evt_nextVisit.data.duration
+            next_visit_start_time_minimum = current_tai()
+
+            self.next_visit_start_time = (
+                next_visit_start_time
+                if next_visit_start_time > next_visit_start_time_minimum
+                else next_visit_start_time_minimum
+            )
+
         await self.evt_nextVisit.set_write(
             scriptSalIndex=script_info.index,
             groupId=script_info.group_id,
+            startTime=self.next_visit_start_time,
             **metadata_dict,
             force_output=True,
         )
@@ -406,6 +422,8 @@ class ScriptQueue(salobj.BaseCsc):
             groupId=script_info.group_id,
             force_output=True,
         )
+        if self.evt_nextVisit.data is not None:
+            self.next_visit_start_time -= self.evt_nextVisit.data.duration
 
     async def put_queue(self) -> None:
         """Output the queued scripts as a ``queue`` event.

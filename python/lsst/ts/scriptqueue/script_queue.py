@@ -119,9 +119,21 @@ class ScriptQueue(salobj.BaseCsc):
 
         self.ran_script_sal_indices: deque[int] = deque(maxlen=MAX_HISTORY)
         self.ran_script_run_start_time_drift: deque[float] = deque(maxlen=MAX_HISTORY)
-        self.next_visit_time_drift_correction: float = 0.0
+        self.next_visit_time_drift_correction_values: deque[float] = deque(maxlen=10)
         self.next_visit_start_time: deque[float] = deque(maxlen=MAX_HISTORY)
         self.next_visit_start_time_drift_tol = 1.0
+
+    @property
+    def next_visit_time_drift_correction(self) -> float:
+        """The next_visit_time_drift_correction property."""
+        return (
+            (
+                sum(self.next_visit_time_drift_correction_values)
+                / len(self.next_visit_time_drift_correction_values)
+            )
+            if self.next_visit_time_drift_correction_values
+            else 0.0
+        )
 
     def _get_scripts_path(self, patharg: str | os.PathLike | None, is_standard: bool) -> os.PathLike:
         """Get the scripts path from the ``standardpath`` or ``externalpath``
@@ -405,13 +417,15 @@ class ScriptQueue(salobj.BaseCsc):
             if self.ran_script_run_start_time_drift:
                 if abs(self.ran_script_run_start_time_drift[-1]) > self.next_visit_start_time_drift_tol:
                     self.log.info(
-                        f"Current time drift: {self.next_visit_time_drift_correction}s. "
-                        f"Last script (index={self.ran_script_sal_indices[-1]}) time drift: "
-                        f"{self.ran_script_run_start_time_drift[-1]}s. "
+                        f"Current time drift correction: {self.next_visit_time_drift_correction:.2f}s. "
+                        f"Last script (index={self.ran_script_sal_indices[-1]:.2f}) time drift: "
+                        f"{self.ran_script_run_start_time_drift[-1]:.2f}s. "
                         "Updating time drift correction."
                     )
-                    self.next_visit_time_drift_correction += self.ran_script_run_start_time_drift[-1]
-            next_visit_start_time += self.next_visit_time_drift_correction
+                    self.next_visit_time_drift_correction_values.append(
+                        self.ran_script_run_start_time_drift[-1]
+                    )
+            # next_visit_start_time += self.next_visit_time_drift_correction
 
             self.next_visit_start_time.append(
                 next_visit_start_time

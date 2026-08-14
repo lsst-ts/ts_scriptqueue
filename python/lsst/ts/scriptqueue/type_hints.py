@@ -54,6 +54,9 @@ class ScriptInfoProtocol(Protocol):
     @property
     def process_state(self) -> ScriptProcessState: ...
 
+    @property
+    def running(self) -> bool: ...
+
 
 class AsyncScriptInfoBoolCallback(Protocol):
     def __call__(self, script_info: ScriptInfoProtocol, force_output: bool = False) -> Awaitable[None]: ...

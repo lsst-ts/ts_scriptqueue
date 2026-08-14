@@ -25,6 +25,7 @@ import argparse
 import asyncio
 import os
 import subprocess
+from collections import deque
 from pathlib import Path
 from typing import Any
 
@@ -37,7 +38,7 @@ from lsst.ts.xml.sal_enums import State
 from lsst.ts.xml.type_hints import BaseMsgType
 
 from . import __version__, utils
-from .queue_model import QueueModel
+from .queue_model import MAX_HISTORY, QueueModel
 from .script_info import ScriptInfo
 from .type_hints import ScriptInfoProtocol
 
@@ -116,7 +117,10 @@ class ScriptQueue(salobj.BaseCsc):
             verbose=verbose,
         )
 
-        self.next_visit_start_time = 0.0
+        self.ran_script_sal_indices: deque[int] = deque(maxlen=MAX_HISTORY)
+        self.ran_script_run_start_time_drift: deque[float] = deque(maxlen=MAX_HISTORY)
+        self.next_visit_start_time: deque[float] = deque(maxlen=MAX_HISTORY)
+        self.next_visit_start_time_drift_tol = 1.0
 
     def _get_scripts_path(self, patharg: str | os.PathLike | None, is_standard: bool) -> os.PathLike:
         """Get the scripts path from the ``standardpath`` or ``externalpath``
@@ -391,13 +395,21 @@ class ScriptQueue(salobj.BaseCsc):
             for key, value in self.get_data_dict(script_info.metadata).items()
             if key not in self.base_field_names
         }
-        if self.next_visit_start_time == 0.0:
-            self.next_visit_start_time = current_tai()
+        if not self.next_visit_start_time:
+            self.next_visit_start_time.append(current_tai())
         else:
-            next_visit_start_time = self.next_visit_start_time + self.evt_nextVisit.data.duration
+            next_visit_start_time = self.next_visit_start_time[-1] + self.evt_nextVisit.data.duration
             next_visit_start_time_minimum = current_tai()
 
-            self.next_visit_start_time = (
+            if self.ran_script_run_start_time_drift:
+                if abs(self.ran_script_run_start_time_drift[-1]) > self.next_visit_start_time_drift_tol:
+                    self.log.info(
+                        f"Time drift: {self.ran_script_run_start_time_drift[-1]}s. "
+                        "Applying time drift correction."
+                    )
+                    next_visit_start_time -= self.ran_script_run_start_time_drift[-1]
+
+            self.next_visit_start_time.append(
                 next_visit_start_time
                 if next_visit_start_time > next_visit_start_time_minimum
                 else next_visit_start_time_minimum
@@ -406,7 +418,7 @@ class ScriptQueue(salobj.BaseCsc):
         await self.evt_nextVisit.set_write(
             scriptSalIndex=script_info.index,
             groupId=script_info.group_id,
-            startTime=self.next_visit_start_time,
+            startTime=self.next_visit_start_time[-1],
             **metadata_dict,
             force_output=True,
         )
@@ -422,8 +434,8 @@ class ScriptQueue(salobj.BaseCsc):
             groupId=script_info.group_id,
             force_output=True,
         )
-        if self.evt_nextVisit.data is not None:
-            self.next_visit_start_time -= self.evt_nextVisit.data.duration
+        if self.next_visit_start_time:
+            self.next_visit_start_time[-1] -= self.evt_nextVisit.data.duration
 
     async def put_queue(self) -> None:
         """Output the queued scripts as a ``queue`` event.
@@ -495,6 +507,15 @@ class ScriptQueue(salobj.BaseCsc):
             scriptState=script_info.script_state,
             force_output=force_output,
         )
+        if (
+            self.next_visit_start_time
+            and script_info.running
+            and script_info.index not in self.ran_script_sal_indices
+        ):
+            self.ran_script_sal_indices.append(script_info.index)
+            self.ran_script_run_start_time_drift.append(
+                script_info.timestamp_run_start - self.next_visit_start_time[-1]
+            )
 
     @classmethod
     def add_arguments(cls, parser: argparse.ArgumentParser) -> None:

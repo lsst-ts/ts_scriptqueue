@@ -119,6 +119,7 @@ class ScriptQueue(salobj.BaseCsc):
 
         self.ran_script_sal_indices: deque[int] = deque(maxlen=MAX_HISTORY)
         self.ran_script_run_start_time_drift: deque[float] = deque(maxlen=MAX_HISTORY)
+        self.next_visit_time_drift_correction: float = 0.0
         self.next_visit_start_time: deque[float] = deque(maxlen=MAX_HISTORY)
         self.next_visit_start_time_drift_tol = 1.0
 
@@ -404,10 +405,12 @@ class ScriptQueue(salobj.BaseCsc):
             if self.ran_script_run_start_time_drift:
                 if abs(self.ran_script_run_start_time_drift[-1]) > self.next_visit_start_time_drift_tol:
                     self.log.info(
-                        f"Time drift: {self.ran_script_run_start_time_drift[-1]}s. "
-                        "Applying time drift correction."
+                        f"Current time drift: {self.next_visit_time_drift_correction}s. "
+                        f"Last visit time drift: {self.ran_script_run_start_time_drift[-1]}s. "
+                        "Updating time drift correction."
                     )
-                    next_visit_start_time -= self.ran_script_run_start_time_drift[-1]
+                    self.next_visit_time_drift_correction += self.ran_script_run_start_time_drift[-1]
+            next_visit_start_time -= self.next_visit_time_drift_correction
 
             self.next_visit_start_time.append(
                 next_visit_start_time
@@ -514,7 +517,7 @@ class ScriptQueue(salobj.BaseCsc):
         ):
             self.ran_script_sal_indices.append(script_info.index)
             self.ran_script_run_start_time_drift.append(
-                script_info.timestamp_run_start - self.next_visit_start_time[-1]
+                round(script_info.timestamp_run_start - self.next_visit_start_time[-1], 2)
             )
 
     @classmethod

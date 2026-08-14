@@ -407,7 +407,7 @@ class ScriptQueue(salobj.BaseCsc):
                     self.log.info(
                         f"Current time drift: {self.next_visit_time_drift_correction}s. "
                         f"Last script (index={self.ran_script_sal_indices[-1]}) time drift: "
-                        "{self.ran_script_run_start_time_drift[-1]}s. "
+                        f"{self.ran_script_run_start_time_drift[-1]}s. "
                         "Updating time drift correction."
                     )
                     self.next_visit_time_drift_correction += self.ran_script_run_start_time_drift[-1]

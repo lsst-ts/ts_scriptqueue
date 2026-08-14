@@ -411,7 +411,7 @@ class ScriptQueue(salobj.BaseCsc):
                         "Updating time drift correction."
                     )
                     self.next_visit_time_drift_correction += self.ran_script_run_start_time_drift[-1]
-            next_visit_start_time -= self.next_visit_time_drift_correction
+            next_visit_start_time += self.next_visit_time_drift_correction
 
             self.next_visit_start_time.append(
                 next_visit_start_time

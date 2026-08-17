@@ -33,7 +33,7 @@ from lsst.ts.utils import current_tai
 from lsst.ts.xml.enums.Script import ScriptState
 from lsst.ts.xml.enums.ScriptQueue import ScriptProcessState
 
-from .type_hints import Indexed
+from .type_hints import Indexed, ScriptMetadataProtocol
 
 _CONFIGURE_TIMEOUT = 60  # Time limit for the configure command (seconds)
 _SET_GROUP_ID_TIMEOUT = 5  # Time limit for setGroupId command (seconds)
@@ -113,7 +113,7 @@ class ScriptInfo:
         self.group_id = ""
         self.verbose = verbose
         # Most recent value of script metadata; None until set.
-        self.metadata: str | None = None
+        self.metadata: ScriptMetadataProtocol | None = None
         # The most recent state reported by the Script,
         # or 0 if the script is not yet loaded.
         self.script_state = 0

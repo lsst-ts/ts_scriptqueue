@@ -30,10 +30,14 @@ class Indexed(Protocol):
     index: int
 
 
+class ScriptMetadataProtocol(Protocol):
+    duration: float
+
+
 class ScriptInfoProtocol(Protocol):
     index: int
     group_id: str
-    metadata: str | None
+    metadata: ScriptMetadataProtocol | None
     script_state: int
     seq_num: int
     path: str

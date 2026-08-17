@@ -116,8 +116,6 @@ class ScriptQueue(salobj.BaseCsc):
             verbose=verbose,
         )
 
-        self.next_visit_start_time = 0.0
-
     def _get_scripts_path(self, patharg: str | os.PathLike | None, is_standard: bool) -> os.PathLike:
         """Get the scripts path from the ``standardpath`` or ``externalpath``
         constructor argument.
@@ -391,13 +389,19 @@ class ScriptQueue(salobj.BaseCsc):
             for key, value in self.get_data_dict(script_info.metadata).items()
             if key not in self.base_field_names
         }
-        if self.next_visit_start_time == 0.0:
-            self.next_visit_start_time = current_tai()
+
+        if self.model.current_script is None or self.model.current_script == script_info:
+            next_visit_start_time = current_tai()
         else:
-            next_visit_start_time = self.next_visit_start_time + self.evt_nextVisit.data.duration
+            duration = (
+                self.model.current_script.metadata.duration
+                if self.model.current_script.metadata is not None
+                else 0.0
+            )
+            next_visit_start_time = self.model.current_script.timestamp_run_start + duration
             next_visit_start_time_minimum = current_tai()
 
-            self.next_visit_start_time = (
+            next_visit_start_time = (
                 next_visit_start_time
                 if next_visit_start_time > next_visit_start_time_minimum
                 else next_visit_start_time_minimum
@@ -406,7 +410,7 @@ class ScriptQueue(salobj.BaseCsc):
         await self.evt_nextVisit.set_write(
             scriptSalIndex=script_info.index,
             groupId=script_info.group_id,
-            startTime=self.next_visit_start_time,
+            startTime=next_visit_start_time,
             **metadata_dict,
             force_output=True,
         )
@@ -422,8 +426,6 @@ class ScriptQueue(salobj.BaseCsc):
             groupId=script_info.group_id,
             force_output=True,
         )
-        if self.evt_nextVisit.data is not None:
-            self.next_visit_start_time -= self.evt_nextVisit.data.duration
 
     async def put_queue(self) -> None:
         """Output the queued scripts as a ``queue`` event.
@@ -481,6 +483,7 @@ class ScriptQueue(salobj.BaseCsc):
                 f"process_state={script_info.process_state}, "
                 f"script_state={script_info.script_state}"
             )
+
         await self.evt_script.set_write(
             cmdId=script_info.seq_num,
             scriptSalIndex=script_info.index,

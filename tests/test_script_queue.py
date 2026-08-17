@@ -790,7 +790,7 @@ class ScriptQueueTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCa
             (salobj.State.DISABLED, SalIndex.MAIN_TEL),
             (salobj.State.ENABLED, SalIndex.AUX_TEL),
         ):
-            salobj.set_random_lsst_dds_partition_prefix()
+            salobj.set_test_topic_subname()
             with self.subTest(initial_state=initial_state, index=index):
                 await self.check_bin_script(
                     name="ScriptQueue",
@@ -1768,7 +1768,7 @@ class ScriptQueueTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCa
 
 class CmdLineTestCase(unittest.IsolatedAsyncioTestCase):
     def setUp(self) -> None:
-        salobj.set_random_lsst_dds_partition_prefix()
+        salobj.set_test_topic_subname()
         self.index = 1
         try:
             self.default_standardpath = scriptqueue.get_default_scripts_dir(is_standard=True)

@@ -31,7 +31,7 @@ import os
 import time
 
 
-def find_public_scripts(root):
+def find_public_scripts(root: str) -> list[str]:
     """Find all public scripts in the specified root path.
 
     Public scripts are executable files whose names do not start
@@ -55,7 +55,9 @@ def find_public_scripts(root):
     return [os.path.relpath(exe, root) for exe in executables]
 
 
-def configure_logging(verbose=0, console_format=None, filename=None):
+def configure_logging(
+    verbose: int = 0, console_format: str | None = None, filename: str | None = None
+) -> None:
     """Configure the logging for the system.
 
     Parameters
@@ -89,13 +91,14 @@ def configure_logging(verbose=0, console_format=None, filename=None):
     ch.setFormatter(logging.Formatter(console_format))
     logging.getLogger().addHandler(ch)
 
-    log_file = logging.FileHandler(filename)
-    log_file.setFormatter(logging.Formatter(log_format))
-    log_file.setLevel(file_detail)
-    logging.getLogger().addHandler(log_file)
+    if filename is not None:
+        log_file = logging.FileHandler(filename)
+        log_file.setFormatter(logging.Formatter(log_format))
+        log_file.setLevel(file_detail)
+        logging.getLogger().addHandler(log_file)
 
 
-def generate_logfile(basename="scriptqueue"):
+def generate_logfile(basename: str = "scriptqueue") -> str:
     """Generate a log file name based on current time."""
     timestr = time.strftime("%Y-%m-%d_%H:%M:%S")
     log_path = os.path.expanduser("~/.{}/log".format(basename))
@@ -105,7 +108,7 @@ def generate_logfile(basename="scriptqueue"):
     return logfilename
 
 
-def get_default_scripts_dir(is_standard):
+def get_default_scripts_dir(is_standard: bool) -> os.PathLike:
     """Return the default directory for the specified kind of scripts.
 
     Parameters

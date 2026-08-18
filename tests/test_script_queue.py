@@ -25,14 +25,18 @@ import logging
 import os
 import shutil
 import unittest
-from unittest.mock import patch
+from typing import Any, Iterable, Sequence
+from unittest.mock import Mock, patch
 
 import pytest
 import yaml
+
 from lsst.ts import salobj, scriptqueue, utils
 from lsst.ts.xml import subsystems
 from lsst.ts.xml.enums.Script import ScriptState
 from lsst.ts.xml.enums.ScriptQueue import Location, SalIndex, ScriptProcessState
+from lsst.ts.xml.sal_enums import State
+from lsst.ts.xml.type_hints import BaseMsgType
 
 try:
     from lsst.ts import standardscripts
@@ -58,10 +62,10 @@ class MakeKWargs:
     Call the functor with optional overrides.
     """
 
-    def __init__(self, **defaults):
+    def __init__(self, **defaults: Any) -> None:
         self.defaults = defaults
 
-    def __call__(self, **kwargs):
+    def __call__(self, **kwargs: Any) -> Any:
         ret = copy.copy(self.defaults)
         ret.update(kwargs)
         return ret
@@ -85,11 +89,11 @@ class MakeAddKwargs(MakeKWargs):
 
     def __init__(
         self,
-        isStandard="True",
-        path="script1",
-        config="wait_time: 0.1",
-        descr="a description",
-    ):
+        isStandard: bool = True,
+        path: str = "script1",
+        config: str = "wait_time: 0.1",
+        descr: str = "a description",
+    ) -> None:
         super().__init__(
             isStandard=isStandard,
             path=path,
@@ -101,7 +105,7 @@ class MakeAddKwargs(MakeKWargs):
 
 
 class ScriptQueueConstructorTestCase(unittest.IsolatedAsyncioTestCase):
-    def setUp(self):
+    def setUp(self) -> None:
         salobj.set_test_topic_subname()
         try:
             self.default_standardpath = scriptqueue.get_default_scripts_dir(is_standard=True)
@@ -118,7 +122,7 @@ class ScriptQueueConstructorTestCase(unittest.IsolatedAsyncioTestCase):
         self.testdata_externalpath = os.path.join(self.datadir, "external")
         self.badpath = os.path.join(self.datadir, "not_a_directory")
 
-    async def asyncTearDown(self):
+    async def asyncTearDown(self) -> None:
         topic_subname = os.environ["LSST_TOPIC_SUBNAME"]
 
         delete_topics = await salobj.delete_topics.DeleteTopics.new()
@@ -144,7 +148,7 @@ class ScriptQueueConstructorTestCase(unittest.IsolatedAsyncioTestCase):
         standardscripts is None or externalscripts is None,
         "Could not import ts_standardscripts and/or ts_externalscripts.",
     )
-    async def test_default_paths(self):
+    async def test_default_paths(self) -> None:
         async with (
             scriptqueue.ScriptQueue(index=SalIndex.MAIN_TEL) as queue,
             salobj.Remote(domain=queue.domain, name="ScriptQueue", index=SalIndex.MAIN_TEL) as remote,
@@ -159,7 +163,7 @@ class ScriptQueueConstructorTestCase(unittest.IsolatedAsyncioTestCase):
             assert self.testdata_standardpath != self.default_standardpath
             assert self.testdata_externalpath != self.default_externalpath
 
-    async def test_explicit_paths(self):
+    async def test_explicit_paths(self) -> None:
         async with (
             scriptqueue.ScriptQueue(
                 index=SalIndex.MAIN_TEL,
@@ -178,7 +182,7 @@ class ScriptQueueConstructorTestCase(unittest.IsolatedAsyncioTestCase):
         standardscripts is None,
         "Could not import ts_standardscripts.",
     )
-    async def test_default_standard_path(self):
+    async def test_default_standard_path(self) -> None:
         async with (
             scriptqueue.ScriptQueue(
                 index=SalIndex.MAIN_TEL, externalpath=self.testdata_externalpath
@@ -195,7 +199,7 @@ class ScriptQueueConstructorTestCase(unittest.IsolatedAsyncioTestCase):
         externalscripts is None,
         "Could not import ts_externalscripts.",
     )
-    async def test_default_external_path(self):
+    async def test_default_external_path(self) -> None:
         async with (
             scriptqueue.ScriptQueue(
                 index=SalIndex.MAIN_TEL, standardpath=self.testdata_standardpath
@@ -208,7 +212,7 @@ class ScriptQueueConstructorTestCase(unittest.IsolatedAsyncioTestCase):
             assert os.path.samefile(rootDir_data.standard, self.testdata_standardpath)
             assert os.path.samefile(rootDir_data.external, self.default_externalpath)
 
-    def test_invalid_paths(self):
+    def test_invalid_paths(self) -> None:
         with pytest.raises(ValueError):
             scriptqueue.ScriptQueue(
                 index=SalIndex.MAIN_TEL,
@@ -230,14 +234,16 @@ class ScriptQueueConstructorTestCase(unittest.IsolatedAsyncioTestCase):
 
 
 class ScriptQueueTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
-    def setUp(self):
+    def setUp(self) -> None:
         super().setUp()
         datadir = os.path.abspath(os.path.join(os.path.dirname(__file__), "data"))
         self.standardpath = os.path.join(datadir, "standard")
         self.externalpath = os.path.join(datadir, "external")
         self.events_oldest_timestamp = utils.current_tai()
 
-    def basic_make_csc(self, initial_state, config_dir=None, simulation_mode=0):
+    def basic_make_csc(
+        self, initial_state: State, config_dir: str | None = None, simulation_mode: int = 0
+    ) -> scriptqueue.ScriptQueue:
         csc = scriptqueue.ScriptQueue(
             index=SalIndex.MAIN_TEL,
             initial_state=initial_state,
@@ -247,13 +253,13 @@ class ScriptQueueTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCa
         )
         return csc
 
-    async def asyncTearDown(self):
+    async def asyncTearDown(self) -> None:
         try:
             await super().asyncTearDown()
         except AssertionError:
             pass
 
-    def make_stop_data(self, stop_indices, terminate):
+    def make_stop_data(self, stop_indices: list[int], terminate: bool) -> BaseMsgType:
         """Make data for the stopScripts command.
 
         Parameters
@@ -273,13 +279,13 @@ class ScriptQueueTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCa
 
     async def assert_next_queue(
         self,
-        enabled=True,
-        running=False,
-        current_sal_index=0,
-        sal_indices=(),
-        past_sal_indices=(),
-        verbose=False,
-    ):
+        enabled: bool = True,
+        running: bool = False,
+        current_sal_index: int = 0,
+        sal_indices: Iterable[int] = [],
+        past_sal_indices: Iterable[int] = [],
+        verbose: bool = False,
+    ) -> BaseMsgType:
         """Get the next queue event and check values.
 
         The defaults are appropriate to an enabled, paused queue
@@ -368,7 +374,26 @@ class ScriptQueueTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCa
             assert list(queue_data.pastSalIndices[0 : queue_data.pastLength]) == list(past_sal_indices)
         return queue_data
 
-    async def assert_next_next_visit(self, sal_index):
+    async def wait_script_state(self, sal_index: int, script_state: ScriptState) -> BaseMsgType:
+        """Wait until script process state matches the provided process state.
+
+        Parameters
+        ----------
+        script_state : `ScriptProcessState`
+            Expected process state.
+
+        Returns
+        -------
+        script : `BaseMsgType`
+            The sample scriopt event.
+        """
+        data = await self.assert_next_sample(self.remote.evt_script)
+        while not (data.scriptSalIndex == sal_index and data.scriptState == script_state):
+            data = await self.assert_next_sample(self.remote.evt_script)
+
+        return data
+
+    async def assert_next_next_visit(self, sal_index: int) -> BaseMsgType:
         """Assert that the next nextVisit event is for the specified index
         and return the event data.
 
@@ -386,7 +411,7 @@ class ScriptQueueTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCa
         assert data.groupId != ""
         return data
 
-    async def assert_next_next_visit_canceled(self, sal_index):
+    async def assert_next_next_visit_canceled(self, sal_index: int) -> None:
         """Assert that the next nextVisitCanceled event
         is for the specified index.
 
@@ -403,7 +428,7 @@ class ScriptQueueTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCa
 
     @patch("lsst.ts.utils.ImageNameServiceClient.get_next_obs_id")
     @patch.dict(os.environ, {"IMAGE_SERVER_URL": "mytemp"})
-    async def test_add_block(self, mock_get):
+    async def test_add_block(self, mock_get: Mock) -> None:
         """Test adding scripts that are part of a block."""
 
         mock_get.side_effect = [
@@ -411,7 +436,7 @@ class ScriptQueueTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCa
             (0, ["BL1_O_20240228_000002"]),
         ]
         is_standard = False
-        path = "script1"
+        path = "script7"
         config = "wait_time: 1"  # give showScript time to run
         make_add_kwargs = MakeAddKwargs(
             isStandard=is_standard, path=path, config=config, descr="test_add_block"
@@ -501,10 +526,10 @@ class ScriptQueueTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCa
             assert "BL1_O_20240228_000001" in block_ids
             assert "BL1_O_20240228_000002" in block_ids
 
-    async def test_add_remove(self):
+    async def test_add_remove(self) -> None:
         """Test add, remove and showScript."""
         is_standard = False
-        path = "script1"
+        path = "script7"
         config = "wait_time: 1"  # give showScript time to run
         make_add_kwargs = MakeAddKwargs(
             isStandard=is_standard, path=path, config=config, descr="test_add_remove"
@@ -698,7 +723,7 @@ class ScriptQueueTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCa
             with pytest.raises(salobj.AckError):
                 await self.remote.cmd_showScript.set_start(scriptSalIndex=3579, timeout=STD_TIMEOUT)
 
-    async def check_add_log_level(self, log_level):
+    async def check_add_log_level(self, log_level: int) -> None:
         """Test script log level when adding a script to the script queue."""
         async with (
             self.make_csc(initial_state=salobj.State.ENABLED),
@@ -714,7 +739,7 @@ class ScriptQueueTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCa
             await self.remote.cmd_add.set_start(
                 logLevel=log_level,
                 isStandard=False,
-                path="script1",
+                path="script7",
                 config="",
                 location=Location.LAST,
                 descr="test_add_log_level",
@@ -750,7 +775,7 @@ class ScriptQueueTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCa
             await self.assert_next_queue(enabled=True, running=True, current_sal_index=I0)
             await self.assert_next_queue(enabled=True, running=True, past_sal_indices=[I0])
 
-    async def get_next_sample(self, topic):
+    async def get_next_sample(self, topic: salobj.topics.ReadTopic) -> BaseMsgType:
         sample = await topic.next(flush=False, timeout=STD_TIMEOUT)
         while sample.private_sndStamp <= self.events_oldest_timestamp:
             print(f"Discarding old {sample=}.")
@@ -758,14 +783,14 @@ class ScriptQueueTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCa
 
         return sample
 
-    async def check_bin_script_initial_state(self, cmdline_args):
+    async def check_bin_script_initial_state(self, cmdline_args: Sequence[str]) -> None:
         for initial_state, index in (
             (None, SalIndex.MAIN_TEL),
             (salobj.State.STANDBY, SalIndex.AUX_TEL),
             (salobj.State.DISABLED, SalIndex.MAIN_TEL),
             (salobj.State.ENABLED, SalIndex.AUX_TEL),
         ):
-            salobj.set_random_lsst_dds_partition_prefix()
+            salobj.set_test_topic_subname()
             with self.subTest(initial_state=initial_state, index=index):
                 await self.check_bin_script(
                     name="ScriptQueue",
@@ -775,18 +800,18 @@ class ScriptQueueTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCa
                     cmdline_args=cmdline_args,
                 )
 
-    async def test_add_nonzero_log_level(self):
+    async def test_add_nonzero_log_level(self) -> None:
         """Test addding a script with a non-zero log level."""
         # pick a level that does not match the default
         # to make it easier to see that the level has changed
         log_level = logging.INFO - 1
         await self.check_add_log_level(log_level=log_level)
 
-    async def test_add_zero_log_level(self):
+    async def test_add_zero_log_level(self) -> None:
         """Test addding a script with log level 0, meaning don't change it."""
         await self.check_add_log_level(log_level=0)
 
-    async def test_add_and_pause(self):
+    async def test_add_and_pause(self) -> None:
         """Test adding a script with a pause checkpoint."""
         async with (
             self.make_csc(initial_state=salobj.State.DISABLED),
@@ -800,7 +825,7 @@ class ScriptQueueTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCa
             await self.remote.cmd_add.set_start(
                 pauseCheckpoint="start",
                 isStandard=False,
-                path="script1",
+                path="script7",
                 config="",
                 location=Location.LAST,
                 descr="test_add",
@@ -828,7 +853,7 @@ class ScriptQueueTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCa
             await script_remote.cmd_resume.start(timeout=STD_TIMEOUT)
             await self.assert_next_queue(running=True, past_sal_indices=[I0])
 
-    async def test_add_and_stop(self):
+    async def test_add_and_stop(self) -> None:
         """Test adding a script with a stop checkpoint."""
         async with (
             self.make_csc(initial_state=salobj.State.DISABLED),
@@ -842,7 +867,7 @@ class ScriptQueueTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCa
             await self.remote.cmd_add.set_start(
                 stopCheckpoint="start",
                 isStandard=False,
-                path="script1",
+                path="script7",
                 config="",
                 location=Location.LAST,
                 descr="test_add",
@@ -867,7 +892,7 @@ class ScriptQueueTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCa
 
             await self.assert_next_queue(running=True, past_sal_indices=[I0])
 
-    async def test_bin_script_state_with_test_scripts(self):
+    async def test_bin_script_state_with_test_scripts(self) -> None:
         """Test the --state argument of run_script_queue
 
         Note that other bin script tests are in a separate class below,
@@ -887,7 +912,7 @@ class ScriptQueueTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCa
         standardscripts is None or externalscripts is None,
         "Could not import ts_standardscripts and/or ts_externalscripts.",
     )
-    async def test_bin_script_state(self):
+    async def test_bin_script_state(self) -> None:
         """Test the --state argument of run_script_queue
 
         Note that other bin script tests are in a separate class below,
@@ -898,7 +923,7 @@ class ScriptQueueTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCa
         """
         await self.check_bin_script_initial_state(cmdline_args=())
 
-    async def test_process_state(self):
+    async def test_script_state(self) -> None:
         """Test the processState value of the queue event."""
         async with self.make_csc(initial_state=salobj.State.DISABLED):
             await self.assert_next_sample(
@@ -907,7 +932,7 @@ class ScriptQueueTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCa
                 subsystemVersions="",
             )
 
-            make_add_kwargs = MakeAddKwargs(descr="test_process_state")
+            make_add_kwargs = MakeAddKwargs(descr="test_script_state")
 
             await self.assert_next_queue(enabled=False, running=True)
 
@@ -1015,7 +1040,7 @@ class ScriptQueueTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCa
             assert script_data2.processState == ScriptProcessState.DONE
             assert script_data2.scriptState == ScriptState.DONE
 
-    async def test_unloadable_script(self):
+    async def test_unloadable_script(self) -> None:
         """Test adding a script that fails while loading."""
         async with self.make_csc(initial_state=salobj.State.DISABLED):
             await self.assert_next_queue(enabled=False, running=True)
@@ -1043,7 +1068,7 @@ class ScriptQueueTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCa
 
             await self.assert_next_queue(enabled=True, running=True, past_sal_indices=[I0])
 
-    async def test_move(self):
+    async def test_move(self) -> None:
         """Test move, pause and showQueue"""
         async with self.make_csc(initial_state=salobj.State.DISABLED):
             await self.assert_next_queue(enabled=False, running=True)
@@ -1206,7 +1231,7 @@ class ScriptQueueTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCa
                 queue_data = await self.remote.evt_queue.next(flush=False, timeout=STD_TIMEOUT)
             assert queue_data.length == 0
 
-    async def test_requeue(self):
+    async def test_requeue(self) -> None:
         """Test requeue, move and terminate"""
         async with self.make_csc(initial_state=salobj.State.DISABLED):
             await self.assert_next_queue(enabled=False, running=True)
@@ -1390,7 +1415,7 @@ class ScriptQueueTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCa
                 past_sal_indices=[I0 + 9, I0 + 2, I0 + 1] + stopped_scripts,
             )
 
-    async def test_next_visit_canceled(self):
+    async def test_next_visit_canceled(self) -> None:
         """Test the nextVisitCanceled event."""
         async with self.make_csc(initial_state=salobj.State.DISABLED):
             make_add_kwargs = MakeAddKwargs(descr="test_next_visit_canceled")
@@ -1460,7 +1485,180 @@ class ScriptQueueTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCa
                 past_sal_indices={I0, I0 + 2, I0 + 3, I0 + 1},
             )
 
-    async def test_show_available_scripts(self):
+    async def test_next_visit_start_time(self) -> None:
+        """Test the next visit event start time feature."""
+        async with self.make_csc(initial_state=salobj.State.DISABLED):
+            make_add_kwargs = MakeAddKwargs(descr="test_next_visit_start_time")
+            await self.assert_next_queue(enabled=False, running=True)
+
+            await self.remote.cmd_enable.start(timeout=STD_TIMEOUT)
+            await self.assert_next_queue(enabled=True, running=True)
+
+            # Pause the queue so we know what to expect of queue state.
+            await self.remote.cmd_pause.start(timeout=STD_TIMEOUT)
+            await self.assert_next_queue(running=False)
+
+            # Queue 4 scripts: enough to test different start times.
+            sal_indices = []
+            wait_times = [10, 15, 21, 25]
+            for i in range(4):
+                sal_indices.append(I0 + i)
+                add_kwargs = make_add_kwargs(config=f"wait_time: {wait_times[i]}")
+                await self.remote.cmd_add.set_start(**add_kwargs, timeout=STD_TIMEOUT)
+                await self.assert_next_queue(sal_indices=sal_indices)
+
+            await self.wait_configured(*sal_indices)
+            await self.remote.cmd_resume.start(timeout=STD_TIMEOUT)
+            await self.assert_next_queue(running=True, sal_indices=sal_indices)
+
+            next_visit = await self.assert_next_next_visit(sal_index=I0)
+            await self.assert_next_queue(
+                running=True,
+                current_sal_index=I0,
+                sal_indices=[I0 + 1, I0 + 2, I0 + 3],
+            )
+            script_data = await self.wait_script_state(sal_index=I0, script_state=ScriptState.RUNNING)
+            assert next_visit.startTime == pytest.approx(script_data.timestampRunStart, abs=1.0)
+
+            next_visit = await self.assert_next_next_visit(sal_index=I0 + 1)
+            await self.assert_next_queue(
+                running=True,
+                current_sal_index=I0 + 1,
+                sal_indices=[I0 + 2, I0 + 3],
+                past_sal_indices=[I0],
+            )
+            script_data = await self.wait_script_state(sal_index=I0 + 1, script_state=ScriptState.RUNNING)
+            assert next_visit.startTime == pytest.approx(script_data.timestampRunStart, abs=1.0)
+
+            next_visit = await self.assert_next_next_visit(sal_index=I0 + 2)
+            await self.assert_next_queue(
+                running=True,
+                current_sal_index=I0 + 2,
+                sal_indices=[I0 + 3],
+                past_sal_indices=[I0 + 1, I0],
+            )
+            script_data = await self.wait_script_state(sal_index=I0 + 2, script_state=ScriptState.RUNNING)
+            assert next_visit.startTime == pytest.approx(script_data.timestampRunStart, abs=1.0)
+
+            next_visit = await self.assert_next_next_visit(sal_index=I0 + 3)
+            await self.assert_next_queue(
+                running=True,
+                current_sal_index=I0 + 3,
+                sal_indices=[],
+                past_sal_indices=[I0 + 2, I0 + 1, I0],
+            )
+            script_data = await self.wait_script_state(sal_index=I0 + 3, script_state=ScriptState.RUNNING)
+            assert next_visit.startTime == pytest.approx(script_data.timestampRunStart, abs=1.0)
+
+            await self.assert_next_queue(
+                running=True,
+                current_sal_index=0,
+                sal_indices=[],
+                past_sal_indices=[I0 + 3, I0 + 2, I0 + 1, I0],
+            )
+
+            # wait a few seconds and add another script.
+            await asyncio.sleep(5)
+            sal_indices.append(I0 + 4)
+            add_kwargs = make_add_kwargs(config="wait_time: 10")
+            await self.remote.cmd_add.set_start(**add_kwargs, timeout=STD_TIMEOUT)
+
+            next_visit = await self.assert_next_next_visit(sal_index=I0 + 4)
+            await self.assert_next_queue(
+                running=True,
+                current_sal_index=0,
+                sal_indices=[I0 + 4],
+                past_sal_indices=[I0 + 3, I0 + 2, I0 + 1, I0],
+            )
+            await self.assert_next_queue(
+                running=True,
+                current_sal_index=I0 + 4,
+                sal_indices=[],
+                past_sal_indices=[I0 + 3, I0 + 2, I0 + 1, I0],
+            )
+            script_data = await self.wait_script_state(sal_index=I0 + 4, script_state=ScriptState.RUNNING)
+            assert next_visit.startTime == pytest.approx(script_data.timestampRunStart, abs=1.0)
+
+            await self.assert_next_queue(
+                running=True,
+                current_sal_index=0,
+                sal_indices=[],
+                past_sal_indices=[I0 + 4, I0 + 3, I0 + 2, I0 + 1, I0],
+            )
+
+            # I will now add 3 scripts, wait until the first one executes for a
+            # bit, then stop the script at the top of the waiting queue, the
+            # next visit.
+
+            past_sal_indices = list(range(I0 + 4, I0 - 1, -1))
+
+            # Pause the queue so we know what to expect of queue state.
+            await self.remote.cmd_pause.start(timeout=STD_TIMEOUT)
+            await self.assert_next_queue(
+                running=False,
+                past_sal_indices=past_sal_indices,
+            )
+
+            # Queue 3 scripts
+            sal_indices = []
+            wait_times = [10, 15, 20]
+            for i in range(3):
+                sal_indices.append(I0 + 5 + i)
+                add_kwargs = make_add_kwargs(config=f"wait_time: {wait_times[i]}")
+                await self.remote.cmd_add.set_start(**add_kwargs, timeout=STD_TIMEOUT)
+                await self.assert_next_queue(
+                    sal_indices=sal_indices,
+                    past_sal_indices=past_sal_indices,
+                )
+
+            await self.wait_configured(*sal_indices)
+            await self.remote.cmd_resume.start(timeout=STD_TIMEOUT)
+            next_visit = await self.assert_next_next_visit(sal_index=I0 + 5)
+            await self.assert_next_queue(
+                running=True,
+                sal_indices=sal_indices,
+                past_sal_indices=past_sal_indices,
+            )
+
+            await self.assert_next_next_visit(sal_index=I0 + 6)
+            await self.assert_next_queue(
+                running=True,
+                current_sal_index=I0 + 5,
+                sal_indices=[I0 + 6, I0 + 7],
+                past_sal_indices=past_sal_indices,
+            )
+            script_data = await self.wait_script_state(sal_index=I0 + 5, script_state=ScriptState.RUNNING)
+            assert next_visit.startTime == pytest.approx(script_data.timestampRunStart, abs=1.0)
+
+            stop_data = self.make_stop_data(stop_indices=[I0 + 6], terminate=False)
+            await self.remote.cmd_stopScripts.start(stop_data, timeout=STD_TIMEOUT)
+            await self.assert_next_next_visit_canceled(sal_index=I0 + 6)
+            next_visit = await self.assert_next_next_visit(sal_index=I0 + 7)
+            past_sal_indices.insert(0, I0 + 6)
+            await self.assert_next_queue(
+                running=True,
+                current_sal_index=I0 + 5,
+                sal_indices=[I0 + 7],
+                past_sal_indices=past_sal_indices,
+            )
+
+            past_sal_indices.insert(0, I0 + 5)
+            await self.assert_next_queue(
+                running=True,
+                current_sal_index=I0 + 7,
+                sal_indices=[],
+                past_sal_indices=past_sal_indices,
+            )
+            script_data = await self.wait_script_state(sal_index=I0 + 7, script_state=ScriptState.RUNNING)
+            assert next_visit.startTime == pytest.approx(script_data.timestampRunStart, abs=1.0)
+
+            past_sal_indices.insert(0, I0 + 7)
+            await self.assert_next_queue(
+                running=True,
+                past_sal_indices=past_sal_indices,
+            )
+
+    async def test_show_available_scripts(self) -> None:
         """Test the showAvailableScripts command."""
         async with self.make_csc(initial_state=salobj.State.DISABLED):
             # Make sure showAvailableScripts fails when not enabled.
@@ -1489,7 +1687,7 @@ class ScriptQueueTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCa
                     "subdir/subsubdir/script4",
                 ]
             )
-            expected_ext_set = set(["script1", "script5", "subdir/script3", "subdir/script6"])
+            expected_ext_set = set(["script7", "script5", "subdir/script8", "subdir/script6"])
             for available_scripts in (available_scripts0, available_scripts1):
                 standard_set = set(available_scripts.standard.split(":"))
                 external_set = set(available_scripts.external.split(":"))
@@ -1502,11 +1700,11 @@ class ScriptQueueTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCa
             with pytest.raises(salobj.AckError):
                 await self.remote.cmd_showAvailableScripts.start(timeout=STD_TIMEOUT)
 
-    async def test_show_schema(self):
+    async def test_show_schema(self) -> None:
         """Test the showSchema command."""
         async with self.make_csc(initial_state=salobj.State.DISABLED):
             is_standard = False
-            path = "script1"
+            path = "script7"
             await self.assert_next_queue(enabled=False, running=True)
             self.remote.cmd_showSchema.set(isStandard=is_standard, path=path)
 
@@ -1524,7 +1722,7 @@ class ScriptQueueTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCa
             schema = yaml.safe_load(data.configSchema)
             assert schema == salobj.TestScript.get_schema()
 
-    async def test_show_queue(self):
+    async def test_show_queue(self) -> None:
         """Test the showQueue command."""
         async with self.make_csc(initial_state=salobj.State.DISABLED):
             await self.assert_next_queue(enabled=False, running=True)
@@ -1552,7 +1750,7 @@ class ScriptQueueTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCa
             with pytest.raises(salobj.AckError):
                 await self.remote.cmd_showQueue.start(timeout=STD_TIMEOUT)
 
-    async def wait_configured(self, *sal_indices):
+    async def wait_configured(self, *sal_indices: int) -> None:
         """Wait for the specified scripts to be configured.
 
         Call this before running the queue if you want the queue data
@@ -1569,8 +1767,8 @@ class ScriptQueueTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCa
 
 
 class CmdLineTestCase(unittest.IsolatedAsyncioTestCase):
-    def setUp(self):
-        salobj.set_random_lsst_dds_partition_prefix()
+    def setUp(self) -> None:
+        salobj.set_test_topic_subname()
         self.index = 1
         try:
             self.default_standardpath = scriptqueue.get_default_scripts_dir(is_standard=True)
@@ -1588,7 +1786,7 @@ class CmdLineTestCase(unittest.IsolatedAsyncioTestCase):
         self.badpath = os.path.join(self.datadir, "not_a_directory")
         self.events_oldest_timestamp = utils.current_tai()
 
-    async def get_next_sample(self, topic):
+    async def get_next_sample(self, topic: salobj.topics.ReadTopic) -> BaseMsgType:
         sample = await topic.next(flush=False, timeout=STD_TIMEOUT)
         while sample.private_sndStamp <= self.events_oldest_timestamp:
             print(f"Discarding old {sample=}.")
@@ -1596,7 +1794,7 @@ class CmdLineTestCase(unittest.IsolatedAsyncioTestCase):
 
         return sample
 
-    async def test_run_with_standard_and_external(self):
+    async def test_run_with_standard_and_external(self) -> None:
         exe_name = "run_script_queue"
         exe_path = shutil.which(exe_name)
         if exe_path is None:
@@ -1640,7 +1838,7 @@ class CmdLineTestCase(unittest.IsolatedAsyncioTestCase):
         standardscripts is None or externalscripts is None,
         "Could not import ts_standardscripts and/or ts_externalscripts.",
     )
-    async def test_run_default_standard_external(self):
+    async def test_run_default_standard_external(self) -> None:
         exe_name = "run_script_queue"
         exe_path = shutil.which(exe_name)
         if exe_path is None:

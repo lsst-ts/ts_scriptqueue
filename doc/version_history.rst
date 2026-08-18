@@ -8,6 +8,27 @@ Version History
 
 .. towncrier release notes start
 
+v2.14.3 (2026-08-18)
+====================
+
+New Features
+------------
+
+- Added estimated start time to the next visit event in script_queue.py. (`OSW-350 <https://rubinobs.atlassian.net//browse/OSW-350>`_)
+
+
+Documentation
+-------------
+
+- Update documentation build. (`OSW-350 <https://rubinobs.atlassian.net//browse/OSW-350>`_)
+
+
+Other Changes and Additions
+---------------------------
+
+- Added support for type checking with mypy. (`OSW-350 <https://rubinobs.atlassian.net//browse/OSW-350>`_)
+
+
 v2.14.2
 -------
 
